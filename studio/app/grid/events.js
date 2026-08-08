@@ -11,6 +11,7 @@ import {
   unmarkSchemaRowDeleted,
 } from "../schema/core.js";
 import { renderSelection } from "./view.js";
+import { showContextMenu } from "../../components/contextMenu.js";
 
 export const bindGridEvents = () => {
   document.addEventListener("mouseup", () => {
@@ -34,25 +35,6 @@ export const bindGridEvents = () => {
 
     e.preventDefault();
     const rowIdx = parseInt(rowHeader.dataset.rowIdx);
-
-    document.getElementById("custom-context-menu")?.remove();
-
-    const menu = document.createElement("div");
-    menu.id = "custom-context-menu";
-    menu.className = "context-menu";
-    menu.style.top = `${e.clientY}px`;
-    menu.style.left = `${e.clientX}px`;
-
-    menu.innerHTML = /* html */ `
-      <div class="context-menu-item" id="cmenu-duplicate">
-         <span class="material-symbols-outlined" style="font-size:16px;">content_copy</span> Duplicate Row(s)
-      </div>
-      <div class="context-menu-item danger" id="cmenu-delete">
-         <span class="material-symbols-outlined" style="font-size:16px;">delete</span> Delete Row(s)
-      </div>
-    `;
-
-    document.body.appendChild(menu);
 
     const handleContextMenuAction = (actionType) => {
       let rowsToProcess = [rowIdx];
@@ -118,21 +100,22 @@ export const bindGridEvents = () => {
           window.SchemaGrid.currentTransaction = null;
         }
       }
-      menu.remove();
     };
 
-    document.getElementById("cmenu-duplicate").onclick = () =>
-      handleContextMenuAction("duplicate");
-    document.getElementById("cmenu-delete").onclick = () =>
-      handleContextMenuAction("delete");
-
-    const closeMenu = (e2) => {
-      if (!menu.contains(e2.target)) {
-        menu.remove();
-        document.removeEventListener("click", closeMenu);
+    showContextMenu(e, [
+      {
+        label: 'Duplicate Row(s)',
+        icon: 'content_copy',
+        action: () => handleContextMenuAction("duplicate")
+      },
+      'divider',
+      {
+        label: 'Delete Row(s)',
+        icon: 'delete',
+        danger: true,
+        action: () => handleContextMenuAction("delete")
       }
-    };
-    setTimeout(() => document.addEventListener("click", closeMenu), 0);
+    ]);
   });
 
   document.addEventListener("keydown", (e) => {

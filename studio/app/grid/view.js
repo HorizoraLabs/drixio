@@ -113,82 +113,8 @@ export function bindCellSelection(
     }
   });
 
-  // Handle Context Menu for Row Deletion
-  tableContainer.addEventListener("contextmenu", (e) => {
-    const rowHeader = e.target.closest("td.row-header");
-    if (!rowHeader) return;
-
-    const r = parseInt(rowHeader.dataset.rowIdx);
-    const s = gridState.selection;
-    const minR = Math.min(s.startRow, s.endRow);
-    const maxR = Math.max(s.startRow, s.endRow);
-
-    // Ensure the right-clicked row is within the current selection
-    if (s.startRow !== -1 && r >= minR && r <= maxR) {
-      e.preventDefault();
-      showContextMenu(e.pageX, e.pageY, gridState, tableId);
-    }
-  });
-}
-
-function showContextMenu(x, y, gridState, tableId) {
-  let menu = document.getElementById("grid-context-menu");
-  if (!menu) {
-    menu = document.createElement("div");
-    menu.id = "grid-context-menu";
-    menu.className = "context-menu";
-    document.body.appendChild(menu);
-
-    // Hide context menu on click anywhere
-    document.addEventListener("click", () => {
-      menu.style.display = "none";
-    });
+    // Handle Context Menu for Row Deletion is now in grid/events.js
   }
-
-  const s = gridState.selection;
-  const minR = Math.min(s.startRow, s.endRow);
-  const maxR = Math.max(s.startRow, s.endRow);
-  const rowCount = maxR - minR + 1;
-
-  menu.innerHTML = /* html */ `
-    <div class="menu-item delete-action">
-      <span class="material-symbols-outlined">delete</span>
-      Delete ${rowCount} Row${rowCount > 1 ? "s" : ""}
-    </div>
-  `;
-
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  menu.style.display = "block";
-
-  menu.querySelector(".delete-action").onclick = (e) => {
-    e.stopPropagation();
-    menu.style.display = "none";
-
-    // Find all primary keys or row indices for the selected rows
-    const trs = document.querySelectorAll(
-      `#${tableId} tbody tr:not(.ghost-row-tr)`,
-    );
-    for (let i = minR; i <= maxR; i++) {
-      const tr = trs[i];
-      if (!tr) continue;
-
-      const firstDataCell = tr.querySelector("td.data-cell");
-      if (firstDataCell) {
-        let pkValue = firstDataCell.dataset.pk;
-        if (pkValue !== "undefined" && pkValue != null) {
-          if (!gridState.pendingDeletes) gridState.pendingDeletes = new Set();
-          gridState.pendingDeletes.add(pkValue);
-          tr.classList.add("row-deleted");
-        }
-      }
-    }
-
-    // Trigger UI updates (like enabling save button)
-    const saveBtn = document.getElementById("btn-save-changes");
-    if (saveBtn) saveBtn.classList.add("has-changes");
-  };
-}
 
 export function bindColumnResizer(th, gridState) {
   const resizer = document.createElement("div");

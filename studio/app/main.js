@@ -5,6 +5,7 @@ import { initSidebar } from "../components/sidebar.js";
 import { loadTableData, saveDataGridEdits } from "./data/view.js";
 import { loadTableSchema, saveSchemaEdits } from "./schema/view.js";
 import { loadSqlConsole } from "./console/view.js";
+import { loadErd } from "./erd/view.js";
 import { fetchConfig } from "../lib/api.js";
 import { initTheme } from "../components/theme.js";
 import { initToast } from "../components/toast.js";
@@ -210,7 +211,7 @@ window.renderCurrentView = function (whereClause = "", preserveState = false) {
     }
   } else if (window.AppState.currentTab === "erd-btn") {
     if (!container.hasChildNodes()) {
-      container.innerHTML = /* html */ `<div style='padding:24px; color: var(--color-text-soft);'>ERD Visualization coming soon!</div>`;
+      loadErd(container);
     }
   } else if (window.AppState.currentTab === "status-btn") {
     if (!container.hasChildNodes()) {

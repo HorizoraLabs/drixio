@@ -13,7 +13,7 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
   if (headerTableName) headerTableName.textContent = tableName + " (Schema)";
 
   const renderTarget = container || document.getElementById("main-content");
-  renderTarget.innerHTML = "<div style='padding:24px;'>Loading Schema...</div>";
+  renderTarget.innerHTML = "<div class='p-6'>Loading Schema...</div>";
 
   try {
     const [res, indexesRes] = await Promise.all([
@@ -59,9 +59,9 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
               <span class="material-symbols-outlined">search</span>
               <span>Search</span>
             </div>
-            <input type="text" id="schema-search-val-${tableName}" class="filter-input" placeholder="Search name or type..." style="width: 250px;" value="${window.SchemaGrid.filterText}" />
+            <input type="text" id="schema-search-val-${tableName}" class="filter-input" placeholder="Search name or type..." class="w-250" value="${window.SchemaGrid.filterText}" />
           </div>
-          <div style="flex:1;"></div>
+          <div class="flex-1"></div>
           <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)"><span class="material-symbols-outlined">refresh</span></button>
         </div>
         <div id="schema-grid-container-${tableName}" class="table-container"></div>
@@ -121,9 +121,9 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
             sortArrow = window.SchemaGrid.sortState.asc ? "▲" : "▼";
           }
           tableHtml += `<th class="sortable" data-col-key="${cKey}">
-                     <div style="display: flex; justify-content: space-between; align-items: center;">
+                     <div class="flex justify-between items-center">
                         <div>${columnLabels[i]}</div>
-                        <div class="sort-arrow" style="font-size:10px; opacity:0.8; margin-left: 8px; width: 12px; text-align: right;">${sortArrow}</div>
+                        <div class="sort-arrow" class="text-10 opacity-80 ml-2 w-12 text-right">${sortArrow}</div>
                      </div>
                    </th>`;
         });
@@ -145,7 +145,7 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                     window.SchemaGrid.pendingIndexEdits.dropped.length;
                   const total = idxCount + addedCount - droppedCount;
 
-                  tableHtml += `<td class="data-cell manage-indexes-cell" rowspan="${numRows}" style="text-align:center; vertical-align:middle; cursor:pointer; color:var(--color-brand-500); font-weight:500; border-left: 1px solid var(--color-border);">
+                  tableHtml += `<td class="data-cell manage-indexes-cell" rowspan="${numRows}" class="text-center align-middle cursor-pointer font-medium border-l text-brand">
                     Manage Indexes (${total})
                   </td>`;
                 }
@@ -168,7 +168,7 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
               const safeValForAttr = String(val).replace(/"/g, "&quot;");
               const safeValForHtml =
                 val === ""
-                  ? `<span style="color:var(--color-text-soft)">-</span>`
+                  ? `<span class="text-soft">-</span>`
                   : String(val).replace(/</g, "&lt;");
               tableHtml += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${col.name}" data-col-key="${cKey}" data-original="${safeValForAttr}">${safeValForHtml}</td>`;
             });
@@ -286,9 +286,9 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
           );
         };
     } else {
-      renderTarget.innerHTML = /* html */ `<div style="padding:24px; color:red;">Error: ${res.error}</div>`;
+      renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Error: ${res.error}</div>`;
     }
   } catch (err) {
-    renderTarget.innerHTML = /* html */ `<div style="padding:24px; color:red;">Failed to load schema: ${err.message}</div>`;
+    renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Failed to load schema: ${err.message}</div>`;
   }
 }

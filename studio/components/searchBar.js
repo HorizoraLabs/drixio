@@ -1,4 +1,4 @@
-export const SideBarHTML = `
+export const SideBarHTML = /* html */ `
 <aside>
   <div id="sidebar-header">
     <span class="material-symbols-outlined" id="database-icon"> database </span>

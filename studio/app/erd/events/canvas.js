@@ -171,7 +171,7 @@ export function bindCanvasEvents(wrapper) {
 
       const matches = ERDState.erdData.filter(t => t.table.toLowerCase().includes(query));
       if (matches.length === 0) {
-         searchResults.innerHTML = `<div class="erd-search-item" style="color: var(--color-text-soft);">No results</div>`;
+         searchResults.innerHTML = `<div class="erd-search-item" class="text-soft">No results</div>`;
          searchResults.style.display = "block";
          return;
       }

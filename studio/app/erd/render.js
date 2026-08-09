@@ -9,7 +9,7 @@ export function renderNodes() {
 
   if (!ERDState.erdData || ERDState.erdData.length === 0) {
     nodesLayer.innerHTML = /* html */ `
-      <div style="padding: 24px; color: var(--color-text-soft);">No tables found. Right click to add one.</div>
+      <div class="p-6 text-soft">No tables found. Right click to add one.</div>
     `;
     return;
   }
@@ -78,11 +78,11 @@ export function createNodeElement(schema, x, y) {
 
       return /* html */ `
       <div class="erd-column ${isFkClass} ${isDraftClass}" data-col="${col.name}" data-index="${index}">
-        <div class="erd-col-left" style="flex: 1; display: flex; align-items: center; gap: 8px;">
-           <span class="material-symbols-outlined erd-reorder-handle" draggable="true" style="font-size: 16px; color: ${iconColor}; cursor: grab;">${icon}</span>
+        <div class="erd-col-left" class="flex-1 items-center gap-2">
+           <span class="material-symbols-outlined erd-reorder-handle icon-16 cursor-grab" draggable="true" style="--dynamic-icon-color: ${iconColor}; color: var(--dynamic-icon-color);">${icon}</span>
            <span class="erd-col-name editable-field" data-field="name">${col.name}${col.nullable ? " ?" : ""}</span>
         </div>
-        <div class="erd-col-right" style="display: flex; align-items: center; gap: 6px;">
+        <div class="erd-col-right items-center gap-6px">
            <span class="erd-col-type editable-field" data-field="type">${typeStr}</span>
            ${
              (col.isDraft || schema.isDraft) && !col.isPk
@@ -97,14 +97,14 @@ export function createNodeElement(schema, x, y) {
 
   node.innerHTML = /* html */ `
     <div class="erd-node-header" title="${schema.isDraft ? "Double click to rename" : ""}">
-      <span class="material-symbols-outlined" style="font-size: 16px;">table_chart</span>
-      <span style="font-weight: 600;" class="erd-node-name">${schema.table}</span>
+      <span class="material-symbols-outlined" class="icon-16">table_chart</span>
+      <span class="font-semibold" class="erd-node-name">${schema.table}</span>
     </div>
     <div class="erd-node-body">
       ${columnsHtml}
     </div>
     <div class="erd-add-col-btn">
-      <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Column
+      <span class="material-symbols-outlined" class="icon-16">add</span> Add Column
     </div>
   `;
 

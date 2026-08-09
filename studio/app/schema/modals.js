@@ -33,30 +33,30 @@ export function openIndexModal() {
     display:flex; justify-content:center; align-items:center; z-index:9999;
   `;
   modal.innerHTML = /* html */ `
-    <div style="background:var(--color-bg-primary); width:500px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); overflow:hidden; display:flex; flex-direction:column;">
-      <div style="padding:16px; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Manage Indexes</h3>
-        <button id="close-idx-modal" style="background:none; border:none; color:var(--color-text-primary); cursor:pointer;"><span class="material-symbols-outlined">close</span></button>
+    <div class="modal-container" class="w-500">
+      <div class="modal-header">
+        <h3 class="m-0">Manage Indexes</h3>
+        <button id="close-idx-modal" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div style="padding:16px; max-height:300px; overflow-y:auto;" id="idx-list-container">
+      <div class="modal-body-scroll" id="idx-list-container">
       </div>
-      <div style="padding:16px; border-top:1px solid var(--color-border); background:var(--color-bg-secondary);">
-        <div style="font-weight:500; margin-bottom:8px;">Add New Index</div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <input type="text" id="new-idx-name" placeholder="Index Name (Optional)" style="padding:6px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-primary); color:var(--color-text-primary);" />
-          <select id="new-idx-cols" multiple style="padding:6px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-primary); color:var(--color-text-primary); height:80px;">
+      <div class="modal-section-bg">
+        <div class="font-semibold mb-2">Add New Index</div>
+        <div class="flex-col gap-2">
+          <input type="text" id="new-idx-name" placeholder="Index Name (Optional)" class="modal-input" />
+          <select id="new-idx-cols" multiple class="modal-input" class="h-80">
             ${colOptions}
           </select>
-          <div style="font-size:12px; color:var(--color-text-soft);">Hold Ctrl/Cmd to select multiple columns</div>
-          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <div class="text-12 text-soft">Hold Ctrl/Cmd to select multiple columns</div>
+          <label class="items-center gap-6px cursor-pointer">
             <input type="checkbox" id="new-idx-unique" /> Unique Index
           </label>
-          <button id="add-idx-btn" class="primary" style="align-self:flex-end; padding:6px 16px; border-radius:4px; border:none; cursor:pointer;">Add</button>
+          <button id="add-idx-btn" class="primary" class="btn-primary">Add</button>
         </div>
       </div>
-      <div style="padding:16px; border-top:1px solid var(--color-border); display:flex; justify-content:flex-end; gap:8px;">
-        <button id="cancel-idx-btn" class="secondary" style="padding:6px 16px; border-radius:4px; border:1px solid var(--color-border); cursor:pointer;">Cancel</button>
-        <button id="save-idx-btn" class="primary" style="padding:6px 16px; border-radius:4px; border:none; cursor:pointer;">Save Changes</button>
+      <div class="modal-footer">
+        <button id="cancel-idx-btn" class="secondary" class="btn-secondary">Cancel</button>
+        <button id="save-idx-btn" class="primary" class="btn-primary">Save Changes</button>
       </div>
     </div>
   `;
@@ -70,17 +70,17 @@ export function openIndexModal() {
     let html = activeIndexes
       .map(
         (idx, i) => `
-      <div class="index-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px; background:var(--color-bg-primary); border:1px solid var(--color-border); border-radius:4px;">
-        <div style="flex:1;"><strong>${idx.name || "-"}</strong></div>
-        <div style="flex:2; font-size:12px; color:var(--color-text-secondary);">${idx.columns.join(", ")}</div>
-        <div style="width:60px; font-size:12px; text-align:center;">${idx.isUnique ? "UNIQUE" : ""}</div>
-        <button class="icon-btn delete-idx-btn" data-idx="${i}" style="color:var(--color-error); border:none; background:none; cursor:pointer;"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>
+      <div class="index-row" class="index-row-container">
+        <div class="flex-1"><strong>${idx.name || "-"}</strong></div>
+        <div class="flex-2 text-12 text-secondary">${idx.columns.join(", ")}</div>
+        <div class="w-60 text-12 text-center">${idx.isUnique ? "UNIQUE" : ""}</div>
+        <button class="icon-btn delete-idx-btn" data-idx="${i}" class="text-error btn-icon"><span class="material-symbols-outlined" class="icon-18">delete</span></button>
       </div>
     `,
       )
       .join("");
     if (activeIndexes.length === 0)
-      html = `<div style="padding:16px; text-align:center; color:var(--color-text-secondary);">No indexes yet.</div>`;
+      html = `<div class="p-4 text-center text-secondary">No indexes yet.</div>`;
     document.getElementById("idx-list-container").innerHTML = html;
 
     document.querySelectorAll(".delete-idx-btn").forEach((btn) => {
@@ -191,44 +191,44 @@ export async function openPkFkModal(td, currentText) {
   `;
 
   modal.innerHTML = /* html */ `
-    <div style="background:var(--color-bg-primary); width:400px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); overflow:hidden; display:flex; flex-direction:column;">
-      <div style="padding:16px; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Manage Keys</h3>
-        <button id="close-pkfk-modal" style="background:none; border:none; color:var(--color-text-primary); cursor:pointer;"><span class="material-symbols-outlined">close</span></button>
+    <div class="modal-container" class="w-400">
+      <div class="modal-header">
+        <h3 class="m-0">Manage Keys</h3>
+        <button id="close-pkfk-modal" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+      <div class="modal-body">
+        <label class="items-center gap-2 cursor-pointer">
           <input type="checkbox" id="modal-is-pk" ${isPk ? "checked" : ""} />
           <strong>Primary Key (PK)</strong>
         </label>
         
-        <div style="border-top: 1px solid var(--color-border); margin: 8px 0;"></div>
+        <div class="divider-y"></div>
         
-        <label style="display:flex; align-items:center; gap:8px; cursor:${isNewRow ? "pointer" : "not-allowed"}; opacity:${isNewRow ? "1" : "0.6"};">
+        <label class="flex items-center gap-2 ${isNewRow ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-60'}">
           <input type="checkbox" id="modal-is-fk" ${isFk ? "checked" : ""} ${!isNewRow ? "disabled" : ""} />
           <strong>Foreign Key (FK)</strong>
         </label>
         
-        ${!isNewRow ? `<div style="font-size:11px; color:var(--color-text-soft); margin-top:-12px; margin-left:24px;">Note: FKs can only be added when creating new columns.</div>` : ""}
+        ${!isNewRow ? `<div class="text-11 text-soft mt-n12 ml-24">Note: FKs can only be added when creating new columns.</div>` : ""}
         
-        <div id="fk-settings-container" style="display:${isFk ? "flex" : "none"}; flex-direction:column; gap:8px; padding-left: 24px;">
+        <div id="fk-settings-container" class="flex-col gap-2 pl-6 ${isFk ? 'flex' : 'hidden'}">
           <div>
-            <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:4px;">Target Table</div>
-            <select id="modal-fk-table" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-primary); color:var(--color-text-primary);">
+            <div class="text-12 text-secondary mb-1">Target Table</div>
+            <select id="modal-fk-table" class="modal-input w-full">
               <option value="">Loading tables...</option>
             </select>
           </div>
           <div>
-            <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:4px;">Target Column</div>
-            <select id="modal-fk-col" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-primary); color:var(--color-text-primary);" ${!fkTable ? "disabled" : ""}>
+            <div class="text-12 text-secondary mb-1">Target Column</div>
+            <select id="modal-fk-col" class="modal-input w-full" ${!fkTable ? "disabled" : ""}>
               <option value="">Select a table first</option>
             </select>
           </div>
         </div>
       </div>
-      <div style="padding:16px; border-top:1px solid var(--color-border); background:var(--color-bg-secondary); display:flex; justify-content:flex-end; gap:8px;">
-        <button id="cancel-pkfk-btn" class="secondary" style="padding:6px 16px; border-radius:4px; border:1px solid var(--color-border); cursor:pointer;">Cancel</button>
-        <button id="save-pkfk-btn" class="primary" style="padding:6px 16px; border-radius:4px; border:none; cursor:pointer;">Save</button>
+      <div class="modal-footer">
+        <button id="cancel-pkfk-btn" class="secondary" class="btn-secondary">Cancel</button>
+        <button id="save-pkfk-btn" class="primary" class="btn-primary">Save</button>
       </div>
     </div>
   `;

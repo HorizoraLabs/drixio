@@ -23,6 +23,61 @@ export class PostgresAdapter implements DBAdapter {
     return `"${name.replace(/"/g, '""')}"`;
   }
 
+  async getStatus(): Promise<import("../core/types.js").DatabaseStatus> {
+    try {
+      await this.connectIfNecessary();
+      
+      const dbRes = await this.client.query("SELECT current_database() as db, version() as version");
+      const dbName = dbRes.rows[0]?.db;
+      const version = dbRes.rows[0]?.version?.split(" ")[1] || dbRes.rows[0]?.version; // Try to extract just version number
+
+      let activeConnections = 0;
+      let transactions = 0;
+      let uptime = 0;
+      
+      try {
+         const uptimeRes = await this.client.query("SELECT EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time())) as uptime");
+         uptime = parseInt(uptimeRes.rows[0]?.uptime || "0", 10);
+      } catch (e) {
+         // ignore
+      }
+      
+      // requires pg_stat_database permission but usually available
+      try {
+         const statRes = await this.client.query("SELECT sum(numbackends) as conns, sum(xact_commit + xact_rollback) as txs FROM pg_stat_database");
+         activeConnections = parseInt(statRes.rows[0]?.conns || "0", 10);
+         transactions = parseInt(statRes.rows[0]?.txs || "0", 10);
+      } catch (e) {
+         // ignore if no permission
+      }
+
+      let sizeBytes = 0;
+      try {
+         const sizeRes = await this.client.query("SELECT pg_database_size(current_database()) as size");
+         sizeBytes = parseInt(sizeRes.rows[0]?.size || "0", 10);
+      } catch (e) {
+         // ignore
+      }
+
+      return {
+        status: "connected",
+        dbType: "postgres",
+        dbName,
+        version,
+        activeConnections,
+        sizeBytes,
+        transactions,
+        uptime
+      };
+    } catch (e: any) {
+      return {
+        status: "error",
+        dbType: "postgres"
+      };
+    }
+  }
+
+
   async getTables(): Promise<string[]> {
     await this.connectIfNecessary();
     const query = `

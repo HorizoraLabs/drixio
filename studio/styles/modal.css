@@ -1,0 +1,230 @@
+/* ==================== CONTEXT MENU ==================== */
+/* ==================== MODAL EDITOR ==================== */
+.cell-expand-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--color-text-soft);
+  background-color: var(--color-bg-primary);
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px var(--color-border) solid;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+  transition: all 0.1s;
+}
+
+.cell-expand-btn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+#modal-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-editor-container {
+  background-color: var(--color-bg-primary);
+  /* Fallback if browser doesn't support backdrop-filter */
+  background-color: rgba(var(--color-bg-primary), 0.85);
+  /* But wait, --color-bg-primary is hex, we can't easily rgba it without changing variables. 
+     Instead, we use a separate glass variable or just rely on transparency */
+  background: var(--color-bg-primary);
+  border-radius: 12px;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  width: 600px;
+  max-width: 90vw;
+  height: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px var(--color-border) solid;
+  color: var(--color-text);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-header .material-symbols-outlined {
+  color: var(--color-primary);
+}
+
+#modal-textarea {
+  flex: 1;
+  border: none;
+  resize: none;
+  padding: 20px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 13px;
+  color: var(--color-text);
+  outline: none;
+  background-color: var(--color-bg-secondary-dark);
+}
+
+#modal-textarea:focus {
+  background-color: var(--color-bg-primary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px var(--color-border) solid;
+  background-color: var(--color-bg-secondary);
+}
+
+.modal-footer button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px var(--color-border) solid;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text);
+  transition: all 0.2s;
+}
+
+.modal-footer button:active {
+  transform: scale(0.97);
+}
+
+.modal-footer button:hover {
+  background-color: var(--color-bg-secondary-dark);
+}
+
+.modal-footer button.primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+.modal-footer button.primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state .icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+}
+
+.empty-state .material-symbols-outlined {
+  font-size: 36px;
+}
+
+.empty-state h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-top: 32px;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 500px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+
+/* ==================== DYNAMIC MODALS ==================== */
+.modal-overlay {
+  position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5);
+  display:flex; justify-content:center; align-items:center; z-index:9999;
+}
+
+.modal-container {
+  background:var(--color-bg-primary); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); overflow:hidden; display:flex; flex-direction:column;
+}
+
+.modal-header {
+  padding:16px; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; align-items:center;
+}
+
+.modal-close-btn {
+  background:none; border:none; color:var(--color-text-primary); cursor:pointer;
+}
+
+.modal-body-scroll {
+  padding:16px; max-height:300px; overflow-y:auto;
+}
+
+.modal-body {
+  padding:16px; display:flex; flex-direction:column; gap:16px;
+}
+
+.modal-section-bg {
+  padding:16px; border-top:1px solid var(--color-border); background:var(--color-bg-secondary);
+}
+
+.modal-input {
+  padding:6px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-primary); color:var(--color-text-primary);
+}
+
+.btn-primary {
+  padding:6px 16px; border-radius:4px; border:none; cursor:pointer; background:var(--color-primary); color:#fff;
+}
+
+.btn-secondary {
+  padding:6px 16px; border-radius:4px; border:1px solid var(--color-border); cursor:pointer; background:var(--color-bg-primary); color:var(--color-text-primary);
+}
+
+.modal-footer {
+  padding:16px; border-top:1px solid var(--color-border); display:flex; justify-content:flex-end; gap:8px;
+}
+
+.index-row-container {
+  display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px; background:var(--color-bg-primary); border:1px solid var(--color-border); border-radius:4px;
+}

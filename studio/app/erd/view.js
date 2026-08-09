@@ -18,26 +18,24 @@ export async function loadErd(container) {
   if (!document.getElementById("erd-wrapper")) {
     // Initial workspace creation
     container.innerHTML = /* html */ `
-      <div id="erd-wrapper" class="erd-grid-bg" style="width: 100%; height: 100%; overflow: auto; background-color: var(--color-bg-secondary); position: relative; user-select: none;">
-        <div id="erd-workspace" style="position: relative; width: 4000px; height: 4000px; transform-origin: 0 0;">
-          <svg id="erd-svg-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;"></svg>
-          <div id="erd-nodes-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></div>
+      <div id="erd-wrapper" class="erd-grid-bg erd-workspace-container">
+        <div id="erd-workspace" class="erd-workspace-canvas">
+          <svg id="erd-svg-layer" class="erd-svg-layer"></svg>
+          <div id="erd-nodes-layer" class="erd-nodes-layer"></div>
         </div>
-        
-        <!-- Minimap & Search Container -->
-        <div style="position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 100; pointer-events: none;">
+        <div class="erd-controls-container">
           <!-- Search -->
-          <div class="erd-search-container" style="pointer-events: auto;">
+          <div class="erd-search-container" class="pointer-events-auto">
             <span class="material-symbols-outlined search-icon">search</span>
             <input type="text" id="erd-search-input" placeholder="Search tables..." autocomplete="off">
-            <div id="erd-search-results" class="erd-search-results" style="display: none;"></div>
+            <div id="erd-search-results" class="erd-search-results hidden"></div>
           </div>
           
           <!-- Zoom Controls -->
-          <div style="display: flex; gap: 8px; justify-content: flex-end; pointer-events: auto;">
-             <button id="btn-erd-zoom-out" class="drixio-btn drixio-btn-secondary" title="Zoom Out" style="padding: 4px; border-radius: 4px; min-width: 32px; height: 32px;"><span class="material-symbols-outlined" style="font-size: 20px;">remove</span></button>
-             <button id="btn-erd-zoom-reset" class="drixio-btn drixio-btn-secondary" title="Reset Zoom" style="padding: 4px; border-radius: 4px; min-width: 32px; height: 32px; font-weight: bold; font-size: 13px;">100%</button>
-             <button id="btn-erd-zoom-in" class="drixio-btn drixio-btn-secondary" title="Zoom In" style="padding: 4px; border-radius: 4px; min-width: 32px; height: 32px;"><span class="material-symbols-outlined" style="font-size: 20px;">add</span></button>
+          <div class="erd-controls-group">
+             <button id="btn-erd-zoom-out" class="drixio-btn drixio-btn-secondary erd-zoom-btn" title="Zoom Out"><span class="material-symbols-outlined" class="icon-20">remove</span></button>
+             <button id="btn-erd-zoom-reset" class="drixio-btn drixio-btn-secondary erd-zoom-text-btn" title="Reset Zoom">100%</button>
+             <button id="btn-erd-zoom-in" class="drixio-btn drixio-btn-secondary erd-zoom-btn" title="Zoom In"><span class="material-symbols-outlined" class="icon-20">add</span></button>
           </div>
           
           <!-- Minimap -->
@@ -105,7 +103,7 @@ export async function loadErd(container) {
   // Show loading indicator
   const nodesLayer = document.getElementById("erd-nodes-layer");
   if (nodesLayer)
-    nodesLayer.innerHTML = `<div style="padding: 24px; color: var(--color-text-soft);">Loading ERD Data...</div>`;
+    nodesLayer.innerHTML = `<div class="p-6 text-soft">Loading ERD Data...</div>`;
 
   const fetchedData = await fetchAllSchemaData();
   ERDState.erdData = fetchedData || [];

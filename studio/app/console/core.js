@@ -68,13 +68,13 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
     <div class="console-history-header">
       <div class="console-history-sql">${sql.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
       <div class="console-history-actions">
-        <button class="icon-btn copy-btn" title="Copy SQL"><span class="material-symbols-outlined" style="font-size: 16px;">content_copy</span></button>
-        <button class="icon-btn rerun-btn" title="Re-run"><span class="material-symbols-outlined" style="font-size: 16px;">refresh</span></button>
+        <button class="icon-btn copy-btn" title="Copy SQL"><span class="material-symbols-outlined" class="icon-16">content_copy</span></button>
+        <button class="icon-btn rerun-btn" title="Re-run"><span class="material-symbols-outlined" class="icon-16">refresh</span></button>
       </div>
     </div>
     <div id="${blockId}-results" class="console-history-results">
       <div class="console-msg-executing">
-        <span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span> Executing...
+        <span class="material-symbols-outlined" class="animate-spin">sync</span> Executing...
       </div>
     </div>
   `;
@@ -105,7 +105,7 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
     const resContainer = document.getElementById(`${blockId}-results`);
 
     if (!res.success) {
-      resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined" style="font-size: 16px; margin-top: 2px;">error</span><span>Error: ${res.error}</span></div>`;
+      resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined" class="icon-16 mt-2px">error</span><span>Error: ${res.error}</span></div>`;
       historyPane.scrollTop = historyPane.scrollHeight;
       return;
     }
@@ -114,7 +114,7 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
     const rowCount = rows.length;
 
     if (rowCount === 0) {
-      resContainer.innerHTML = /* html */ `<div class="console-msg-success"><span class="material-symbols-outlined" style="font-size: 16px;">check_circle</span> Query executed successfully in ${ms}ms. 0 rows returned.</div>`;
+      resContainer.innerHTML = /* html */ `<div class="console-msg-success"><span class="material-symbols-outlined" class="icon-16">check_circle</span> Query executed successfully in ${ms}ms. 0 rows returned.</div>`;
       historyPane.scrollTop = historyPane.scrollHeight;
       return;
     }
@@ -129,11 +129,11 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
 
     statsHeader.innerHTML = /* html */ `
       <div class="console-stats-info">
-        <span class="material-symbols-outlined" style="color: #10b981; font-size: 14px;">check_circle</span> 
+        <span class="material-symbols-outlined" class="text-success icon-14">check_circle</span> 
         <span>${rowCount} rows${limitNotice} &middot; ${ms}ms</span>
       </div>
       <button class="console-export-btn export-btn">
-        <span class="material-symbols-outlined" style="font-size: 14px;">download</span> CSV
+        <span class="material-symbols-outlined" class="icon-14">download</span> CSV
       </button>
     `;
 
@@ -189,8 +189,7 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
         if (val === null) {
           const nullSpan = document.createElement("span");
           nullSpan.textContent = "NULL";
-          nullSpan.style.color = "var(--color-text-soft)";
-          nullSpan.style.fontStyle = "italic";
+          nullSpan.classList.add("text-soft", "italic");
           td.appendChild(nullSpan);
         } else {
           const strVal = String(val);
@@ -212,7 +211,7 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
   } catch (e) {
     const resContainer = document.getElementById(`${blockId}-results`);
     if (resContainer) {
-      resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined" style="font-size: 16px; margin-top: 2px;">error</span><span>Error: ${e.message}</span></div>`;
+      resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined" class="icon-16 mt-2px">error</span><span>Error: ${e.message}</span></div>`;
       historyPane.scrollTop = historyPane.scrollHeight;
     }
   }

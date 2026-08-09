@@ -1,0 +1,222 @@
+/* ==================== SIDEBAR ==================== */
+aside {
+  display: flex;
+  flex-direction: column;
+  width: 256px;
+  height: 100vh;
+  border-right: 1px var(--color-border) solid;
+}
+
+#sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0px 16px;
+  height: 64px;
+  border-bottom: 1px var(--color-border-soft) solid;
+}
+
+#database-icon {
+  color: var(--color-primary);
+  font-size: 26px;
+}
+
+#brand-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  font-weight: bolder;
+  padding: 0;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+#brand-subtitle {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  height: 100%;
+  line-height: 1;
+  font-weight: normal;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+
+#sidebar-content {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 24px;
+  flex: 1;
+}
+
+#search-bar {
+  background-color: var(--color-bg-secondary);
+  display: flex;
+  align-items: center;
+  border: 1px var(--color-border) solid;
+  border-radius: 8px;
+  overflow: hidden;
+  outline: none;
+  padding: 0px 4px;
+  transition: all 100ms linear;
+}
+
+#search-bar:focus-within {
+  border: 1px var(--color-primary) solid;
+  box-shadow: var(--ring-primary-2);
+  background-color: var(--color-bg-primary);
+  transform: scale(1.02);
+}
+
+#search-icon {
+  font-size: 20px;
+  color: var(--color-text-soft);
+  margin: 0px 3px 0px 6px;
+  transition: all 100ms linear;
+}
+
+#search-bar:focus-within #search-icon {
+  color: var(--color-primary);
+  transform: scale(1.15);
+}
+
+#search-input {
+  width: 100%;
+  outline: none;
+  border: none;
+  height: 34px;
+  font-size: 12px;
+  background-color: transparent;
+  color: var(--color-text);
+}
+
+#search-input::placeholder {
+  color: var(--color-text-soft);
+}
+
+#table-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#table-nav::-webkit-scrollbar {
+  width: 4px;
+}
+#table-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+#table-nav::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+#table-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-soft);
+}
+
+.table-btn {
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border: 1px transparent solid;
+  border-radius: 8px;
+  outline: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border: 1px transparent solid;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+
+.table-btn:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.table-btn:active {
+  transform: scale(0.97);
+}
+
+.table-btn.active {
+  background-color: var(--color-primary-active);
+  border: 1px var(--color-primary) solid;
+  color: var(--color-btn-active-text);
+  font-weight: 600;
+}
+
+.table-btn-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+  background-color: var(--color-bg-secondary-dark);
+  color: var(--color-text-secondary);
+  font-size: 8px;
+  min-height: 16px;
+  min-width: 16px;
+  padding: 1px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.table-btn.active .table-btn-badge {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+#not-found-msg {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-soft);
+}
+
+#sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-top: 1px var(--color-border-soft) solid;
+  margin-top: auto;
+  max-height: fit-content;
+}
+
+/* ==================== THEME TOGGLE ==================== */
+#theme-toggle {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+#theme-toggle:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+#theme-toggle:active {
+  transform: scale(0.9);
+}

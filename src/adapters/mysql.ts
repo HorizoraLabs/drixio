@@ -24,6 +24,49 @@ export class MysqlAdapter implements DBAdapter {
     return `\`${name.replace(/`/g, "``")}\``;
   }
 
+  async getStatus(): Promise<import("../core/types.js").DatabaseStatus> {
+    try {
+      const pool = await this.getPool();
+      
+      const [dbRow] = await pool.query("SELECT DATABASE() as db, VERSION() as version");
+      const dbName = (dbRow as any[])[0]?.db;
+      const version = (dbRow as any[])[0]?.version;
+
+      const [statusRows] = await pool.query("SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected', 'Queries', 'Uptime')");
+      let activeConnections = 0;
+      let queries = 0;
+      let uptime = 0;
+      for (const row of (statusRows as any[])) {
+        if (row.Variable_name === 'Threads_connected') activeConnections = parseInt(row.Value, 10);
+        if (row.Variable_name === 'Queries') queries = parseInt(row.Value, 10);
+        if (row.Variable_name === 'Uptime') uptime = parseInt(row.Value, 10);
+      }
+
+      let sizeBytes = 0;
+      if (dbName) {
+        const [sizeRow] = await pool.query("SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?", [dbName]);
+        sizeBytes = parseInt((sizeRow as any[])[0]?.size || "0", 10);
+      }
+
+      return {
+        status: "connected",
+        dbType: "mysql",
+        dbName,
+        version,
+        activeConnections,
+        sizeBytes,
+        queries,
+        uptime
+      };
+    } catch (e: any) {
+      return {
+        status: "error",
+        dbType: "mysql"
+      };
+    }
+  }
+
+
   async getTables(): Promise<string[]> {
     const pool = await this.getPool();
     const [rows] = await pool.query("SHOW TABLES;");

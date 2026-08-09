@@ -1,4 +1,4 @@
-import { fetchTables, fetchTableSchema } from "../../lib/api.js";
+import { fetchTables, fetchTableSchema, executeRawQuery as runQuery } from "../../lib/api.js";
 
 export async function fetchAllSchemaData() {
   const res = await fetchTables();
@@ -32,7 +32,7 @@ export function savePositions(positions) {
 }
 
 export async function saveErdDrafts(erdData) {
-  const { runQuery } = await import("../../lib/api.js");
+
   const queries = [];
 
   erdData.forEach((schema) => {

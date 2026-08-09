@@ -1,16 +1,17 @@
 import { HeaderHTML } from "../components/header.js";
-import { SideBarHTML } from "../components/search-bar.js";
+import { SideBarHTML } from "../components/searchBar.js";
 import { TabHTML } from "../components/tab.js";
 import { initSidebar } from "../components/sidebar.js";
 import { loadTableData, saveDataGridEdits } from "./data/view.js";
 import { loadTableSchema, saveSchemaEdits } from "./schema/view.js";
 import { loadSqlConsole } from "./console/view.js";
 import { loadErd } from "./erd/view.js";
+import { loadStatusDashboard, refreshStatusDashboard } from "./status/view.js";
 import { fetchConfig } from "../lib/api.js";
 import { initTheme } from "../components/theme.js";
 import { initToast } from "../components/toast.js";
 import { bindGridEvents } from "./grid/events.js";
-
+import { getFilterQuery } from "./data/utils.js";
 const header = document.getElementById("header-container");
 const sidebar = document.getElementById("sidebar-container");
 const tab = document.getElementById("tab-container");
@@ -18,6 +19,124 @@ const tab = document.getElementById("tab-container");
 header.innerHTML = HeaderHTML;
 sidebar.innerHTML = SideBarHTML;
 tab.innerHTML = TabHTML;
+
+// Setup Export Dropdown
+const exportBtn = document.getElementById("export-btn");
+const exportDropdown = document.getElementById("export-dropdown");
+
+  if (exportBtn && exportDropdown) {
+    exportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      exportDropdown.classList.toggle("hidden");
+
+      // Dynamic visibility based on current tab
+      const isDataTab = window.AppState.currentTab === "data-btn";
+      const isConsoleTab = window.AppState.currentTab === "console-btn";
+
+      document.querySelectorAll(".data-tab-only").forEach((el) => {
+        el.style.display = isDataTab ? "list-item" : "none";
+      });
+      document.querySelectorAll(".console-tab-only").forEach((el) => {
+        el.style.display = isConsoleTab ? "list-item" : "none";
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!exportBtn.contains(e.target) && !exportDropdown.contains(e.target)) {
+        exportDropdown.classList.add("hidden");
+      }
+    });
+
+    const triggerExport = (endpoint, format, useQueries = false) => {
+      exportDropdown.classList.add("hidden");
+      if (endpoint === "/query/export") {
+        const sqlEditor = document.querySelector("#sql-editor textarea") || document.querySelector("#sql-editor");
+        let sql = "";
+        if (sqlEditor && sqlEditor.value) sql = sqlEditor.value;
+        if (!sql && window.ViewCache && window.ViewCache.lastQuery) sql = window.ViewCache.lastQuery;
+        
+        if (!sql) {
+           alert("No SQL query found to export.");
+           return;
+        }
+        
+        fetch(`/api/query/export?format=${format}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql })
+        }).then(res => res.blob()).then(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `query_result_${new Date().getTime()}.${format}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }).catch(err => alert("Failed to export query: " + err));
+        return;
+      }
+
+      let url = `${endpoint}?format=${format}`;
+      if (useQueries && window.DataGrid) {
+        const whereClause = getFilterQuery ? getFilterQuery() : "";
+        const orderCol = window.DataGrid.sortState?.col || "";
+        const orderAsc = window.DataGrid.sortState?.asc ?? true;
+        url += `&where=${encodeURIComponent(whereClause)}&orderCol=${orderCol}&orderAsc=${orderAsc}`;
+      }
+      window.open(url, "_blank");
+    };
+
+    document.getElementById("export-data-csv-btn")?.addEventListener("click", () => {
+      if (window.AppState.currentTable) triggerExport(`/api/tables/${window.AppState.currentTable}/export`, "csv");
+    });
+
+    document.getElementById("export-data-json-btn")?.addEventListener("click", () => {
+      if (window.AppState.currentTable) triggerExport(`/api/tables/${window.AppState.currentTable}/export`, "json");
+    });
+
+    document.getElementById("export-data-filtered-csv-btn")?.addEventListener("click", () => {
+      if (window.AppState.currentTable) triggerExport(`/api/tables/${window.AppState.currentTable}/export`, "csv", true);
+    });
+
+    document.getElementById("export-data-filtered-json-btn")?.addEventListener("click", () => {
+      if (window.AppState.currentTable) triggerExport(`/api/tables/${window.AppState.currentTable}/export`, "json", true);
+    });
+
+    document.getElementById("export-schema-dict-btn")?.addEventListener("click", () => {
+      window.open(`/api/database/dictionary`, "_blank");
+      exportDropdown.classList.add("hidden");
+    });
+
+    document.getElementById("export-schema-sql-btn")?.addEventListener("click", () => {
+      window.open(`/api/database/schema-only`, "_blank");
+      exportDropdown.classList.add("hidden");
+    });
+
+    document.getElementById("export-console-csv-btn")?.addEventListener("click", () => {
+      triggerExport(`/api/query/export`, "csv");
+    });
+
+    document.getElementById("export-console-json-btn")?.addEventListener("click", () => {
+      triggerExport(`/api/query/export`, "json");
+    });
+
+    document.getElementById("export-erd-json-btn")?.addEventListener("click", () => {
+      const data = localStorage.getItem("drixio_erd_drafts");
+      if (!data) { alert("No ERD layout found to export."); return; }
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `erd_layout_${new Date().getTime()}.json`;
+      a.click();
+      exportDropdown.classList.add("hidden");
+    });
+
+    document.getElementById("export-db-sql-btn")?.addEventListener("click", () => {
+      window.open(`/api/database/export`, "_blank");
+      exportDropdown.classList.add("hidden");
+    });
+  }
 
 window.AppState = {
   currentTable: null,
@@ -29,6 +148,10 @@ window.AppState = {
 fetchConfig().then((res) => {
   if (res && res.success && res.data) {
     window.AppState.dbType = res.data.dbType;
+    if (res.data.dbName) {
+      const dbNameEl = document.getElementById("db-name");
+      if (dbNameEl) dbNameEl.textContent = res.data.dbName;
+    }
   }
 });
 
@@ -215,7 +338,9 @@ window.renderCurrentView = function (whereClause = "", preserveState = false) {
     }
   } else if (window.AppState.currentTab === "status-btn") {
     if (!container.hasChildNodes()) {
-      container.innerHTML = /* html */ `<div style='padding:24px; color: var(--color-text-soft);'>Database Status Dashboard coming soon!</div>`;
+      loadStatusDashboard(container);
+    } else {
+      refreshStatusDashboard();
     }
   }
 

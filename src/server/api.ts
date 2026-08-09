@@ -1,13 +1,47 @@
 import { Hono } from "hono";
-import { DBConfig } from "../core/types.js";
+import { DBConfig, DBAdapter } from "../core/types.js";
 import { createDBAdapter } from "../core/factory.js";
+import { spawn } from "node:child_process";
+import { Readable } from "node:stream";
+
+function nodeToWebStream(nodeStream: Readable) {
+  return new ReadableStream({
+    start(controller) {
+      nodeStream.on('data', chunk => controller.enqueue(chunk));
+      nodeStream.on('end', () => controller.close());
+      nodeStream.on('error', err => controller.error(err));
+    },
+    cancel() {
+      nodeStream.destroy();
+    }
+  });
+}
 
 export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
   const api = new Hono();
   
-  // Middleware to lazily create adapter per request or use a global one
-  // For simplicity, we create one for the API lifecycle
+  // Helper to lazily create adapter per request or use a global one
   const adapter = createDBAdapter(dbConfig as any);
+
+  const getDbName = () => {
+    let dbName = "database";
+    if (dbConfig.targetUrl) {
+      if (dbConfig.type === "sqlite") {
+        dbName = dbConfig.targetUrl.replace("file:", "").split(/[/\\]/).pop() || dbName;
+      } else {
+        dbName = dbConfig.targetUrl.split("/").pop()?.split("?")[0] || dbName;
+      }
+    }
+    // Remove extension if sqlite
+    dbName = dbName.replace(/\.sqlite$|\.db$/, "");
+    return dbName.replace(/[^a-zA-Z0-9_-]/g, ""); 
+  };
+
+  const getDatetimeStr = () => {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  };
 
   api.get("/tables", async (c) => {
     try {
@@ -19,8 +53,39 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
   });
 
   api.get("/config", (c) => {
-    return c.json({ success: true, data: { dbType: dbConfig.type } });
+    let dbName = "Database";
+    if (dbConfig.targetUrl) {
+      if (dbConfig.type === "sqlite") {
+        dbName = dbConfig.targetUrl.replace("file:", "").split(/[/\\]/).pop() || dbName;
+      } else {
+        dbName = dbConfig.targetUrl.split("/").pop()?.split("?")[0] || "Database";
+      }
+    }
+    return c.json({ success: true, data: { dbType: dbConfig.type, dbName } });
   });
+
+  api.get("/status", async (c) => {
+    try {
+      const status = await adapter.getStatus();
+      
+      // Calculate total tables
+      const tables = await adapter.getTables();
+      (status as any).totalTables = tables.length;
+      
+      // Attach OS metrics for SQLite (which is local)
+      if (status.dbType === 'sqlite') {
+        const os = await import("node:os");
+        status.osMemTotal = os.totalmem();
+        status.osMemUsed = os.totalmem() - os.freemem();
+        status.osCpuUsage = os.loadavg()[0]; // 1 minute load avg
+      }
+      
+      return c.json({ success: true, data: status });
+    } catch (e: any) {
+      return c.json({ success: false, error: e.message }, 500);
+    }
+  });
+
 
   api.get("/tables/stats", async (c) => {
     try {
@@ -98,5 +163,201 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
     }
   });
 
+  api.get("/tables/:name/export", async (c) => {
+    const tableName = c.req.param("name");
+    const format = c.req.query("format") || "csv";
+    const whereClause = c.req.query("where") || "";
+    const orderCol = c.req.query("orderCol");
+    const orderAscStr = c.req.query("orderAsc");
+    
+    let orderBy = undefined;
+    if (orderCol) {
+      orderBy = { col: orderCol, asc: orderAscStr !== "false" };
+    }
+    
+    try {
+      const data = await adapter.getData(tableName, 100000, 0, whereClause, orderBy);
+      const rows = data.rows || [];
+      const timestamp = getDatetimeStr();
+      const exportFilename = `${tableName}_export_${timestamp}`;
+      
+      if (format === "json") {
+        const jsonStr = JSON.stringify(rows, null, 2);
+        c.header("Content-Disposition", `attachment; filename="${exportFilename}.json"`);
+        c.header("Content-Type", "application/json");
+        return c.body(jsonStr);
+      } else {
+        // Simple CSV converter
+        let csvStr = "";
+        if (rows.length > 0) {
+          const headers = Object.keys(rows[0]);
+          const headerStr = headers.join(",");
+          const rowStrs = rows.map(r => {
+            return headers.map(h => {
+              let val = r[h];
+              if (val === null || val === undefined) val = "";
+              val = String(val);
+              if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+                val = `"${val.replace(/"/g, '""')}"`;
+              }
+              return val;
+            }).join(",");
+          });
+          csvStr = [headerStr, ...rowStrs].join("\n");
+        }
+        
+        c.header("Content-Disposition", `attachment; filename="${exportFilename}.csv"`);
+        c.header("Content-Type", "text/csv");
+        return c.body(csvStr);
+      }
+    } catch (e: any) {
+      return c.text(`Export Failed: ${e.message}`, 500);
+    }
+  });
+
+  api.get("/database/export", async (c) => {
+    try {
+      const type = dbConfig.type;
+      const url = dbConfig.targetUrl;
+      let child;
+      let filename = "backup.sql";
+      
+      // Native Dump Wrapper Promise
+      const executeNativeDump = (cmd: string, args: string[], envName: string) => {
+        return new Promise<ReadableStream>((resolve, reject) => {
+          const cp = spawn(cmd, args);
+          let started = false;
+          cp.on('error', (err: any) => {
+             if (!started) reject(new Error(`Native tool '${cmd}' not found. Please install ${envName}.`));
+          });
+          // Wait briefly to ensure it spawned successfully
+          setTimeout(() => {
+             if (!cp.killed) {
+               started = true;
+               resolve(nodeToWebStream(cp.stdout));
+             }
+          }, 100);
+        });
+      };
+
+      try {
+        let stream;
+        const baseName = getDbName();
+        const timeStr = getDatetimeStr();
+        filename = `${baseName}_backup_${timeStr}.sql`;
+
+        if (type === "sqlite") {
+          const dbPath = url.replace("file:", "");
+          stream = await executeNativeDump("sqlite3", [dbPath, ".dump"], "SQLite CLI");
+        } else if (type === "mysql") {
+          const parsed = new URL(url);
+          const user = parsed.username;
+          const pass = parsed.password;
+          const host = parsed.hostname;
+          const port = parsed.port || "3306";
+          const dbname = parsed.pathname.substring(1);
+          stream = await executeNativeDump("mysqldump", ["-u", user, `-p${pass}`, "-h", host, "-P", port, dbname], "MySQL Client");
+        } else if (type === "postgres") {
+          stream = await executeNativeDump("pg_dump", [url], "PostgreSQL CLI");
+        } else {
+          throw new Error("Unsupported database type for native export");
+        }
+        
+        c.header("Content-Disposition", `attachment; filename="${filename}"`);
+        c.header("Content-Type", "application/sql");
+        return c.body(stream);
+      } catch (err: any) {
+        // Fallback to JS dump for SQLite if native tool is missing
+        if (type === "sqlite" && err.message.includes("Native tool")) {
+          const sql = await generateSqliteDump(adapter);
+          const baseName = getDbName();
+          const timeStr = getDatetimeStr();
+          c.header("Content-Disposition", `attachment; filename="${baseName}_backup_${timeStr}.sql"`);
+          c.header("Content-Type", "application/sql");
+          return c.body(sql);
+        }
+        throw err;
+      }
+    } catch (e: any) {
+      const errorHtml = `<html><body><h3>Database Export Failed</h3><p>${e.message}</p></body></html>`;
+      c.header("Content-Type", "text/html");
+      return c.body(errorHtml);
+    }
+  });
+
+  api.get("/database/dictionary", async (c) => {
+    try {
+      const dbName = getDbName();
+      let md = `# Data Dictionary: ${dbName}\\n\\n`;
+      const tables = await adapter.getTables();
+      for (const t of tables) {
+         md += `## Table: \`${t}\`\\n\\n`;
+         md += `| Column | Type | PK | Nullable |\\n|---|---|---|---|\\n`;
+         const schema = await adapter.getSchema(t);
+         for (const col of schema) {
+           md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} |\\n`;
+         }
+         md += `\\n`;
+      }
+      c.header("Content-Disposition", `attachment; filename="${dbName}_dictionary_${getDatetimeStr()}.md"`);
+      c.header("Content-Type", "text/markdown");
+      return c.body(md);
+    } catch (e: any) {
+      return c.text(`Data Dictionary Export Failed: ${e.message}`, 500);
+    }
+  });
+
+  api.get("/database/schema-only", async (c) => {
+    try {
+      const type = dbConfig.type;
+      const url = dbConfig.targetUrl;
+      const filename = `${getDbName()}_schema_${getDatetimeStr()}.sql`;
+
+      if (type === "sqlite") {
+        let sqlDump = "-- Drixio SQLite Schema Dump\\n\\n";
+        const tablesResult = await adapter.query("SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+        for (const row of tablesResult.rows) {
+          if (row.sql) sqlDump += `${row.sql};\\n\\n`;
+        }
+        c.header("Content-Disposition", `attachment; filename="${filename}"`);
+        c.header("Content-Type", "application/sql");
+        return c.body(sqlDump);
+      } else {
+        // For Postgres/MySQL we could implement native spawn, but for now we'll return an error or build one.
+        // The user only strictly requested DB dump. Schema only for SQLite works via sqlite_master. 
+        // For MySQL/Postgres we can just send back a message or basic DDL.
+        return c.text("Schema-only export for this DB type currently requires manual DDL extraction. Coming soon!", 501);
+      }
+    } catch (e: any) {
+      return c.text(`Schema Export Failed: ${e.message}`, 500);
+    }
+  });
+
   app.route("/api", api);
+}
+
+// Fallback SQL generator for SQLite
+async function generateSqliteDump(adapter: DBAdapter): Promise<string> {
+  let sqlDump = "-- Drixio SQLite Fallback Backup\\n\\n";
+  try {
+    const tablesResult = await adapter.query("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+    for (const row of tablesResult.rows) {
+      if (!row.sql) continue;
+      sqlDump += `${row.sql};\\n\\n`;
+      const data = await adapter.query(`SELECT * FROM ${adapter.quoteIdentifier(row.name as string)}`);
+      for (const d of data.rows) {
+        const keys = Object.keys(d).map(k => adapter.quoteIdentifier(k)).join(", ");
+        const vals = Object.values(d).map(v => {
+          if (v === null) return "NULL";
+          if (typeof v === "number") return v;
+          return `'${String(v).replace(/'/g, "''")}'`;
+        }).join(", ");
+        sqlDump += `INSERT INTO ${adapter.quoteIdentifier(row.name as string)} (${keys}) VALUES (${vals});\\n`;
+      }
+      sqlDump += "\\n";
+    }
+  } catch (e) {
+    sqlDump += `-- Error generating backup: ${e}\\n`;
+  }
+  return sqlDump;
 }

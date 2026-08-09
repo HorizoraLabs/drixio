@@ -26,6 +26,38 @@ export class SqliteAdapter implements DBAdapter {
     return `"${name.replace(/"/g, '""')}"`;
   }
 
+  async getStatus(): Promise<import("../core/types.js").DatabaseStatus> {
+    try {
+      const db = await this.getDb();
+      
+      const vQuery = db.prepare("SELECT sqlite_version() as v");
+      const vRow = vQuery.get() as { v: string };
+      
+      const fs = await import("node:fs");
+      const stats = fs.statSync(this.dbPath);
+
+      // Extract filename as dbName
+      const path = await import("node:path");
+      const dbName = path.basename(this.dbPath);
+
+      return {
+        status: "connected",
+        dbType: "sqlite",
+        dbName,
+        version: vRow?.v,
+        activeConnections: 1, // SQLite is single file, essentially 1 active connection for the app
+        sizeBytes: stats.size,
+        uptime: process.uptime()
+      };
+    } catch (e: any) {
+      return {
+        status: "error",
+        dbType: "sqlite"
+      };
+    }
+  }
+
+
   async getTables(): Promise<string[]> {
     const db = await this.getDb();
     const results = db

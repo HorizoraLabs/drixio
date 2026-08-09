@@ -1,0 +1,17 @@
+/* ==================== RESIZER ==================== */
+.resizer {
+  position: absolute;
+  top: 0;
+  right: -4px; /* Wider hit area */
+  width: 8px;
+  cursor: col-resize;
+  user-select: none;
+  height: 100%;
+  z-index: 10;
+}
+.resizer:hover,
+.resizer:active {
+  background-color: var(--color-primary);
+  opacity: 0.5;
+}
+

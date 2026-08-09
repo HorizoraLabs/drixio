@@ -1,4 +1,4 @@
-export const TabHTML = `
+export const TabHTML = /* html */ `
 <nav id="tab-nav">
   <button
     type="button"
@@ -20,7 +20,7 @@ export const TabHTML = `
     Schema (Table)
   </button>
 
-  <div style="flex: 1;"></div>
+  <div class="flex-1"></div>
 
   <button class="tab-btn" onclick="handleSwitchTab('status-btn')" id="status-btn">
     <span class="material-symbols-outlined" id="status-icon"> database </span>

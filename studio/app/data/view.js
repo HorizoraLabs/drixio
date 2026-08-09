@@ -21,7 +21,7 @@ export async function loadTableData(
 
   const renderTarget = container || document.getElementById("main-content");
   if (!preserveState) {
-    renderTarget.innerHTML = "<div style='padding:24px;'>Loading...</div>";
+    renderTarget.innerHTML = "<div class='p-6'>Loading...</div>";
   }
 
   try {
@@ -97,7 +97,7 @@ export async function loadTableData(
               </select>
               <input type="text" id="filter-val-${tableName}" class="filter-input" placeholder="Enter value..." />
             </div>
-            <div style="flex:1;"></div>
+            <div class="flex-1"></div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)"><span class="material-symbols-outlined">refresh</span></button>
           </div>
           <div class="table-container" id="data-grid-container-${tableName}"></div>
@@ -113,19 +113,19 @@ export async function loadTableData(
         let typeLabel = "";
         if (colSchema) {
           if (colSchema.isPk)
-            pkLabel = ` <span style="opacity:0.5; font-size:10px;">(PK)</span>`;
+            pkLabel = ` <span class="opacity-50 text-10">(PK)</span>`;
           if (colSchema.name.toLowerCase().includes("id") && !colSchema.isPk)
-            pkLabel = ` <span style="opacity:0.5; font-size:10px;">(FK)</span>`;
-          typeLabel = `<br><span style="font-weight:normal; opacity:0.7; font-size:10px; font-family:monospace;">${colSchema.type}</span>`;
+            pkLabel = ` <span class="opacity-50 text-10">(FK)</span>`;
+          typeLabel = `<br><span class="font-normal opacity-70 text-10 font-mono">${colSchema.type}</span>`;
         }
         let sortArrow = "";
         if (window.DataGrid.sortState.col === col) {
           sortArrow = window.DataGrid.sortState.asc ? "▲" : "▼";
         }
-        tableHtml += `<th class="sortable" data-col="${col}" style="cursor:pointer; user-select:none;">
-                   <div style="display: flex; justify-content: space-between; align-items: center;">
+        tableHtml += `<th class="sortable" data-col="${col}" class="cursor-pointer select-none">
+                   <div class="flex justify-between items-center">
                       <div>${col}${pkLabel}${typeLabel}</div>
-                      <div class="sort-arrow" style="font-size:10px; opacity:0.8; margin-left: 8px; width: 12px; text-align: right;">${sortArrow}</div>
+                      <div class="sort-arrow" class="text-10 opacity-80 ml-2 w-12 text-right">${sortArrow}</div>
                    </div>
                  </th>`;
       });
@@ -337,9 +337,9 @@ export async function loadTableData(
         }, 50);
       }
     } else {
-      renderTarget.innerHTML = /* html */ `<div style="padding:24px; color:red;">Error: ${res.error}</div>`;
+      renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Error: ${res.error}</div>`;
     }
   } catch (err) {
-    renderTarget.innerHTML = /* html */ `<div style="padding:24px; color:red;">Failed to load data: ${err.message}</div>`;
+    renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Failed to load data: ${err.message}</div>`;
   }
 }

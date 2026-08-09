@@ -226,7 +226,7 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
 
   td.innerHTML =
     newVal ||
-    (td.dataset.insertIndex !== undefined ? "+ New" : `<span style="color:var(--color-text-soft)">-</span>`);
+    (td.dataset.insertIndex !== undefined ? "+ New" : `<span class="text-soft">-</span>`);
 
   if (td.dataset.insertIndex !== undefined) {
     const idx = parseInt(td.dataset.insertIndex);

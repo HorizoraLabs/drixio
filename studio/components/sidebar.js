@@ -12,7 +12,7 @@ export async function initSidebar() {
         btn.type = "button";
         btn.className = "table-btn";
         btn.dataset.table = tableName;
-        btn.innerHTML = /* html */ `<span>${tableName}</span><span class="table-btn-badge" id="badge-${tableName}" style="display:none;"></span>`;
+        btn.innerHTML = /* html */ `<span>${tableName}</span><span class="table-btn-badge" id="badge-${tableName}" class="hidden"></span>`;
         btn.onclick = () => {
           window.AppState.currentTable = tableName;
           window.AppState.currentTableBtnElement = btn;

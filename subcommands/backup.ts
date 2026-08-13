@@ -43,18 +43,27 @@ export async function runBackupCommand(dbConfig: DBConfig) {
     for (const table of tables) {
       try {
         const schema = await adapter.getSchema(table);
-        const data = await adapter.getData(table, 9999999, 0);
+        // Fetch data in batches to avoid OOM on large tables
+        const batchSize = 1000;
+        let batchOffset = 0;
+        const allRows: Record<string, any>[] = [];
+        let lastBatch;
+        do {
+          lastBatch = await adapter.getData(table, batchSize, batchOffset);
+          allRows.push(...lastBatch.rows);
+          batchOffset += batchSize;
+        } while (lastBatch.rows.length === batchSize);
 
         const dumpObj = {
           table: table,
           schema: schema,
-          totalRows: data.rows.length,
-          data: data.rows
+          totalRows: allRows.length,
+          data: allRows
         };
 
         const fp = path.join(backupDir, `${table}.json`);
         await fs.writeFile(fp, JSON.stringify(dumpObj, null, 2), "utf-8");
-        console.log(pc.green(`✔ Dumped table: ${table} (${data.rows.length} rows)`));
+        console.log(pc.green(`✔ Dumped table: ${table} (${allRows.length} rows)`));
       } catch (e: any) {
         console.log(pc.red(`✘ Failed to dump table ${table}: ${e.message}`));
       }

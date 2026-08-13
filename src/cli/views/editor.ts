@@ -7,7 +7,7 @@ import {
   runBeginnerEdit,
   runBeginnerDelete,
   runExpertMode,
-} from "../wizards/dataOps.js";
+} from "../wizards/dataEditor.js";
 import { drawTable } from "../ui/table.js";
 import { printCustomDashboard } from "../ui/logo.js";
 
@@ -208,15 +208,14 @@ export async function viewTables(dbConfig: DBConfigProps) {
                   c.type.toLowerCase().includes("text"),
               );
               if (strCols.length > 0) {
-                // If dialect is Postgres, ILIKE is better, but LIKE is standard. We will use LIKE for simplicity, or ILIKE for PG.
                 const likeOp = dbConfig.type === "postgres" ? "ILIKE" : "LIKE";
                 const conditions = strCols.map(
                   (c) =>
-                    `"${c.name}" ${likeOp} '%${searchVal.replace(/'/g, "''")}%'`,
+                    `${adapter.quoteIdentifier(c.name)} ${likeOp} '%${searchVal.replace(/'/g, "''")}%'`,
                 );
                 currentWhere = conditions.join(" OR ");
               } else {
-                currentWhere = `"${schema[0].name}" = '${searchVal}'`; // fallback
+                currentWhere = `${adapter.quoteIdentifier(schema[0].name)} = '${searchVal}'`;
               }
             }
             currentPage = 1;
@@ -227,12 +226,25 @@ export async function viewTables(dbConfig: DBConfigProps) {
         if (action === "exportCsv" || action === "exportJson") {
           try {
             console.log(pc.yellow("\nExporting data..."));
-            const allData = await adapter.getData(
-              selectedTable,
-              9999999,
-              0,
-              currentWhere,
-            );
+            // Fetch all rows in batches to avoid OOM on large tables
+            const batchSize = 1000;
+            let batchOffset = 0;
+            const allExportRows: Record<string, any>[] = [];
+            let exportColumns: string[] = [];
+            let lastBatch;
+            do {
+              lastBatch = await adapter.getData(
+                selectedTable,
+                batchSize,
+                batchOffset,
+                currentWhere,
+              );
+              if (exportColumns.length === 0) exportColumns = lastBatch.columns;
+              allExportRows.push(...lastBatch.rows);
+              batchOffset += batchSize;
+            } while (lastBatch.rows.length === batchSize);
+
+            const allData = { columns: exportColumns, rows: allExportRows };
             const fs = await import("fs/promises");
             const path = await import("path");
 

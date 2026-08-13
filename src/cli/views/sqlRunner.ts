@@ -5,10 +5,10 @@ import pc from "picocolors";
 import { DBConfig } from "../../core/types.js";
 import { createDBAdapter } from "../../core/factory.js";
 
-export async function runSqlWriter(dbConfig: DBConfig) {
+export async function runSqlRunner(dbConfig: DBConfig) {
   console.log(
     pc.green(
-      "\nInitiating SQL table writer for experts. Please ensure database connection is properly configured.",
+      "\nInitiating SQL runner for experts. Please ensure database connection is properly configured.",
     ),
   );
   if (dbConfig.type === "unknown") {

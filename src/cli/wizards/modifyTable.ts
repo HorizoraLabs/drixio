@@ -45,7 +45,6 @@ export async function runModifyTable(
   action: "add" | "rename" | "modify" | "delete",
 ) {
   const adapter = createDBAdapter(dbConfig as any);
-  const dialect = getDialect(dbConfig.type as any);
 
   try {
     const tables = await adapter.getTables();
@@ -65,6 +64,7 @@ export async function runModifyTable(
       const existingColumns = schema.map(c => c.name);
       const { col } = await promptColumnSchema(adapter, hasPk, existingColumns);
       if (col) {
+        const dialect = getDialect(dbConfig.type as any);
         const colSql = dialect.buildCreateTable("tmp", [col])
           .split("\n")[1]
           .trim()
@@ -113,18 +113,41 @@ export async function runModifyTable(
       const { col } = await promptColumnSchema(adapter, hasPk, existingColumns, targetCol);
       
       if (col) {
-        const colDef = dialect.buildCreateTable("tmp", [col])
-          .split("\n")[1]
-          .trim()
-          .replace(/,$/, "");
-          
         let sql = "";
         if (dbConfig.type === "postgres") {
-          // Postgres ALTER COLUMN syntax is complex, simplified version:
-          // We will extract just the type and defaults. This is a best-effort approach.
+          // Map wizard type names to Postgres SQL types
+          const pgTypeMap: Record<string, string> = {
+            Integer: "INTEGER",
+            Text: "TEXT",
+            Boolean: "BOOLEAN",
+            Decimal: "NUMERIC",
+            DateTime: "TIMESTAMP",
+            Enum: "TEXT",
+          };
+          const pgType = pgTypeMap[col.type] ?? "TEXT";
+          // Build separate ALTER statements for type, nullability, and default
+          const statements: string[] = [
+            `ALTER TABLE "${targetTable}" ALTER COLUMN "${col.name}" TYPE ${pgType} USING "${col.name}"::${pgType}`,
+          ];
+          if (!col.nullable && !col.isPk) {
+            statements.push(`ALTER TABLE "${targetTable}" ALTER COLUMN "${col.name}" SET NOT NULL`);
+          } else {
+            statements.push(`ALTER TABLE "${targetTable}" ALTER COLUMN "${col.name}" DROP NOT NULL`);
+          }
+          if (col.defaultValue && col.defaultValue !== "AutoInc" && !col.defaultValue.startsWith("FK ->")) {
+            const defVal = col.defaultValue === "Timestamp" ? "CURRENT_TIMESTAMP" : col.defaultValue;
+            statements.push(`ALTER TABLE "${targetTable}" ALTER COLUMN "${col.name}" SET DEFAULT ${defVal}`);
+          } else {
+            statements.push(`ALTER TABLE "${targetTable}" ALTER COLUMN "${col.name}" DROP DEFAULT`);
+          }
+          sql = statements.join(";\n");
           console.log(pc.yellow("Note: Complex constraint modifications might require raw SQL in Postgres."));
-          sql = `ALTER TABLE "${targetTable}" ALTER COLUMN ${colDef.replace(col.name, `"${col.name}" TYPE`)}`;
         } else if (dbConfig.type === "mysql") {
+          const dialect = getDialect(dbConfig.type as any);
+          const colDef = dialect.buildCreateTable("tmp", [col])
+            .split("\n")[1]
+            .trim()
+            .replace(/,$/, "");
           sql = `ALTER TABLE \`${targetTable}\` MODIFY COLUMN ${colDef}`;
         }
 

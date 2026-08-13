@@ -68,7 +68,18 @@ export async function runExportCommand(dbConfig: DBConfig, args: string[], optio
           console.log(pc.green(`✔ Exported Schema (CSV): ${table}`));
         }
       } else {
-        const data = await adapter.getData(table, 9999999, 0);
+        const batchSize = 1000;
+        let batchOffset = 0;
+        const allExportRows: Record<string, any>[] = [];
+        let exportColumns: string[] = [];
+        let lastBatch;
+        do {
+          lastBatch = await adapter.getData(table, batchSize, batchOffset);
+          if (exportColumns.length === 0) exportColumns = lastBatch.columns;
+          allExportRows.push(...lastBatch.rows);
+          batchOffset += batchSize;
+        } while (lastBatch.rows.length === batchSize);
+        const data = { columns: exportColumns, rows: allExportRows };
         if (format === "json") {
           const fp = path.join(exportDir, `${table}_data.json`);
           await fs.writeFile(fp, JSON.stringify(data.rows, null, 2), "utf-8");

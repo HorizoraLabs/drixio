@@ -101,7 +101,8 @@ export class PostgresAdapter implements DBAdapter {
                 ON kcu.constraint_name = tc.constraint_name 
               WHERE tc.constraint_type = 'PRIMARY KEY' 
                 AND kcu.table_name = c.table_name 
-                AND kcu.column_name = c.column_name) as is_pk,
+                AND kcu.column_name = c.column_name
+                AND kcu.table_schema = c.table_schema) as is_pk,
              (SELECT ccu.table_name || '.' || ccu.column_name
               FROM information_schema.table_constraints tc 
               JOIN information_schema.key_column_usage kcu
@@ -110,10 +111,12 @@ export class PostgresAdapter implements DBAdapter {
                 ON ccu.constraint_name = tc.constraint_name
               WHERE tc.constraint_type = 'FOREIGN KEY' 
                 AND tc.table_name = c.table_name
+                AND tc.table_schema = c.table_schema
                 AND kcu.column_name = c.column_name
               LIMIT 1) as fk_target
       FROM information_schema.columns c
-      WHERE c.table_name = $1;
+      WHERE c.table_name = $1 AND c.table_schema = 'public'
+      ORDER BY c.ordinal_position;
     `;
     const res = await this.client.query(query, [tableName]);
 
@@ -160,7 +163,7 @@ export class PostgresAdapter implements DBAdapter {
           i.relname, a.attnum;
     `;
     
-    const res = await this.client!.query(query, [tableName]);
+    const res = await this.client.query(query, [tableName]);
     const rows = res.rows;
     
     const indexMap = new Map<string, import("../core/types.js").IndexSchema>();

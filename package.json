@@ -1,6 +1,6 @@
 {
   "name": "drixio",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "A lightweight interactive TUI database client",
   "bin": {
     "drixio": "dist/cli.js"
@@ -34,6 +34,9 @@
   ],
   "author": "TerKSDev",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "type": "module",
   "publishConfig": {
     "access": "public"

@@ -74,7 +74,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       
       // Attach OS metrics for SQLite (which is local)
       if (status.dbType === 'sqlite') {
-        const os = await import("node:os");
+        let modOs = "node:os";
+        const os = await import(modOs);
         status.osMemTotal = os.totalmem();
         status.osMemUsed = os.totalmem() - os.freemem();
         status.osCpuUsage = os.loadavg()[0]; // 1 minute load avg
@@ -176,8 +177,19 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
     }
     
     try {
-      const data = await adapter.getData(tableName, 100000, 0, whereClause, orderBy);
-      const rows = data.rows || [];
+      // Fetch data in batches to avoid OOM on large tables
+      const batchSize = 1000;
+      let batchOffset = 0;
+      const allRows: Record<string, any>[] = [];
+      let exportColumns: string[] = [];
+      let lastBatch;
+      do {
+        lastBatch = await adapter.getData(tableName, batchSize, batchOffset, whereClause, orderBy);
+        if (exportColumns.length === 0) exportColumns = lastBatch.columns;
+        allRows.push(...lastBatch.rows);
+        batchOffset += batchSize;
+      } while (lastBatch.rows.length === batchSize);
+      const rows = allRows;
       const timestamp = getDatetimeStr();
       const exportFilename = `${tableName}_export_${timestamp}`;
       
@@ -288,16 +300,16 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
   api.get("/database/dictionary", async (c) => {
     try {
       const dbName = getDbName();
-      let md = `# Data Dictionary: ${dbName}\\n\\n`;
+      let md = `# Data Dictionary: ${dbName}\n\n`;
       const tables = await adapter.getTables();
       for (const t of tables) {
-         md += `## Table: \`${t}\`\\n\\n`;
-         md += `| Column | Type | PK | Nullable |\\n|---|---|---|---|\\n`;
+         md += `## Table: \`${t}\`\n\n`;
+         md += `| Column | Type | PK | Nullable |\n|---|---|---|---|\n`;
          const schema = await adapter.getSchema(t);
          for (const col of schema) {
-           md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} |\\n`;
+           md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} |\n`;
          }
-         md += `\\n`;
+         md += `\n`;
       }
       c.header("Content-Disposition", `attachment; filename="${dbName}_dictionary_${getDatetimeStr()}.md"`);
       c.header("Content-Type", "text/markdown");
@@ -314,10 +326,10 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       const filename = `${getDbName()}_schema_${getDatetimeStr()}.sql`;
 
       if (type === "sqlite") {
-        let sqlDump = "-- Drixio SQLite Schema Dump\\n\\n";
+        let sqlDump = "-- Drixio SQLite Schema Dump\n\n";
         const tablesResult = await adapter.query("SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
         for (const row of tablesResult.rows) {
-          if (row.sql) sqlDump += `${row.sql};\\n\\n`;
+          if (row.sql) sqlDump += `${row.sql};\n\n`;
         }
         c.header("Content-Disposition", `attachment; filename="${filename}"`);
         c.header("Content-Type", "application/sql");
@@ -338,12 +350,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
 // Fallback SQL generator for SQLite
 async function generateSqliteDump(adapter: DBAdapter): Promise<string> {
-  let sqlDump = "-- Drixio SQLite Fallback Backup\\n\\n";
+  let sqlDump = "-- Drixio SQLite Fallback Backup\n\n";
   try {
     const tablesResult = await adapter.query("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
     for (const row of tablesResult.rows) {
       if (!row.sql) continue;
-      sqlDump += `${row.sql};\\n\\n`;
+      sqlDump += `${row.sql};\n\n`;
       const data = await adapter.query(`SELECT * FROM ${adapter.quoteIdentifier(row.name as string)}`);
       for (const d of data.rows) {
         const keys = Object.keys(d).map(k => adapter.quoteIdentifier(k)).join(", ");
@@ -352,12 +364,12 @@ async function generateSqliteDump(adapter: DBAdapter): Promise<string> {
           if (typeof v === "number") return v;
           return `'${String(v).replace(/'/g, "''")}'`;
         }).join(", ");
-        sqlDump += `INSERT INTO ${adapter.quoteIdentifier(row.name as string)} (${keys}) VALUES (${vals});\\n`;
+        sqlDump += `INSERT INTO ${adapter.quoteIdentifier(row.name as string)} (${keys}) VALUES (${vals});\n`;
       }
-      sqlDump += "\\n";
+      sqlDump += "\n";
     }
   } catch (e) {
-    sqlDump += `-- Error generating backup: ${e}\\n`;
+    sqlDump += `-- Error generating backup: ${e}\n`;
   }
   return sqlDump;
 }

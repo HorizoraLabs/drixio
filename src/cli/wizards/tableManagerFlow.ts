@@ -2,7 +2,7 @@ import pc from "picocolors";
 import { DBConfig } from "../../core/types.js";
 import { selectTableManager } from "../menus/tableManager.js";
 import { runWizard } from "./buildTable.js";
-import { runSqlWriter } from "../views/sqlWriter.js";
+import { runSqlRunner } from "../views/sqlRunner.js";
 import { runDropTable, runModifyTable } from "./modifyTable.js";
 import { select, Separator } from "@inquirer/prompts";
 import { printCustomDashboard } from "../ui/logo.js";
@@ -80,7 +80,7 @@ export async function runTableManagerFlow(dbConfig: DBConfig) {
           ],
         });
         if (createMethod === "wizard") await runWizard(dbConfig);
-        else if (createMethod === "sql") await runSqlWriter(dbConfig);
+        else if (createMethod === "sql") await runSqlRunner(dbConfig);
         break;
       case "modify":
         await handleModifyMenu(dbConfig);

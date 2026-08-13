@@ -11,11 +11,13 @@ export class SqliteAdapter implements DBAdapter {
 
   private async getDb(): Promise<DatabaseSync> {
     if (!this.db) {
-      const fs = await import("node:" + "fs");
+      let modFs = "node:fs";
+      const fs = await import(modFs);
       if (!fs.existsSync(this.dbPath)) {
         throw new Error(`Failed to found database file at: ${this.dbPath}`);
       }
-      const sqlite = await import("node:" + "sqlite");
+      let mod = "node:sqlite";
+      const sqlite = await import(mod);
       this.db = new sqlite.DatabaseSync(this.dbPath);
     }
     return this.db!;
@@ -33,11 +35,13 @@ export class SqliteAdapter implements DBAdapter {
       const vQuery = db.prepare("SELECT sqlite_version() as v");
       const vRow = vQuery.get() as { v: string };
       
-      const fs = await import("node:fs");
+      let modFs = "node:fs";
+      const fs = await import(modFs);
       const stats = fs.statSync(this.dbPath);
 
       // Extract filename as dbName
-      const path = await import("node:path");
+      let modPath = "node:path";
+      const path = await import(modPath);
       const dbName = path.basename(this.dbPath);
 
       return {

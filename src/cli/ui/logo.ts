@@ -66,9 +66,12 @@ export function printCustomDashboard(
   );
 }
 
+// Injected at build time by tsup define - always matches package.json version
+declare const __DRIXIO_VERSION__: string;
+
 export function printDashboard(dbConfig: DBConfigProps) {
   const headerTitle =
-    " Lightweight Interactive TUI Database Client  •  v1.1.5 ";
+    ` Lightweight Interactive TUI Database Client  •  v${__DRIXIO_VERSION__} `;
 
   let dbTypeVal = "None";
   let targetVal = "-";

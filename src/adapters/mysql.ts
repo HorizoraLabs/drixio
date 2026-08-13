@@ -171,9 +171,7 @@ export class MysqlAdapter implements DBAdapter {
     if (orderBy) {
       sql += ` ORDER BY ${this.quoteIdentifier(orderBy.col)} ${orderBy.asc ? "ASC" : "DESC"}`;
     }
-    sql += ` LIMIT ${limit} OFFSET ${offset}`;
-
-    const [rows] = await pool.query(sql);
+    const [rows] = await pool.query(sql + " LIMIT ? OFFSET ?", [limit, offset]);
     return { columns, rows: rows as Record<string, any>[] };
   }
 

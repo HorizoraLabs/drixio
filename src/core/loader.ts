@@ -18,9 +18,14 @@ export async function detectDatabase(databaseUrl?: string): Promise<DBConfig> {
       type = "sqlite";
     }
 
+    // Resolve relative SQLite paths to absolute
+    let targetUrl = databaseUrl.replace("file:", "");
+    if (type === "sqlite" && !path.isAbsolute(targetUrl)) {
+      targetUrl = path.resolve(cwd, targetUrl);
+    }
     return {
       type,
-      targetUrl: databaseUrl.replace("file:", ""),
+      targetUrl,
       source: "manual",
     };
   }
@@ -120,9 +125,14 @@ export async function detectDatabase(databaseUrl?: string): Promise<DBConfig> {
           url.endsWith(".db") ||
           url.includes(".sqlite")
         ) {
+          // Strip file: prefix then resolve relative paths to absolute
+          let targetUrl = url.replace("file:", "");
+          if (!path.isAbsolute(targetUrl)) {
+            targetUrl = path.resolve(cwd, targetUrl);
+          }
           return {
             type: "sqlite",
-            targetUrl: url.replace("file:", ""),
+            targetUrl,
             source: ".env",
           };
         } else if (

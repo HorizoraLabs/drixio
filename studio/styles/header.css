@@ -108,7 +108,7 @@ header {
 
 .dropdown-menu {
   position: absolute;
-  top: 44px;
+  top: calc(100% + 5px);
   right: 0;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
@@ -116,10 +116,11 @@ header {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  min-width: 180px;
+  min-width: 200px;
   z-index: 100;
   list-style: none;
   padding: 4px 0;
+  gap: 2px;
   margin: 0;
 }
 
@@ -132,30 +133,31 @@ header {
 }
 
 .dropdown-item {
-  padding: 10px 16px;
+  padding: 12px 14px;
   text-align: left;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--color-text);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400 !important;
+  letter-spacing: 0.5px;
   transition: background 0.2s;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   box-sizing: border-box;
   text-decoration: none;
 }
 
 .dropdown-item .material-symbols-outlined {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .dropdown-item .caret {
   margin-left: auto;
-  font-size: 16px;
+  font-size: 18px;
   color: var(--color-text-soft);
 }
 
@@ -168,6 +170,8 @@ header {
   top: -4px;
   right: 100%;
   margin-right: 4px;
+  width: max-content;
+  min-width: 200px;
   display: none;
 }
 
@@ -178,5 +182,5 @@ header {
 .dropdown-divider {
   height: 1px;
   background: var(--color-border-soft);
-  margin: 4px 0;
+  margin: 2px 0;
 }

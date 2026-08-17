@@ -1,0 +1,9 @@
+.manage-indexes-cell {
+  background-color: var(--color-bg-primary) !important;
+}
+
+.manage-indexes-cell:hover {
+  background-color: var(--color-bg-secondary) !important;
+}
+
+

@@ -279,11 +279,18 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
         c.header("Content-Type", "application/sql");
         return c.body(stream);
       } catch (err: any) {
-        // Fallback to JS dump for SQLite if native tool is missing
-        if (type === "sqlite" && err.message.includes("Native tool")) {
-          const sql = await generateSqliteDump(adapter);
+        // Fallback to JS dump if native tool is missing
+        if (err.message.includes("Native tool")) {
+          let sql = "";
           const baseName = getDbName();
           const timeStr = getDatetimeStr();
+          if (type === "sqlite") {
+            sql = await generateSqliteDump(adapter);
+          } else if (type === "mysql") {
+            sql = await generateMysqlDump(adapter);
+          } else {
+            throw err;
+          }
           c.header("Content-Disposition", `attachment; filename="${baseName}_backup_${timeStr}.sql"`);
           c.header("Content-Type", "application/sql");
           return c.body(sql);
@@ -367,6 +374,49 @@ async function generateSqliteDump(adapter: DBAdapter): Promise<string> {
         sqlDump += `INSERT INTO ${adapter.quoteIdentifier(row.name as string)} (${keys}) VALUES (${vals});\n`;
       }
       sqlDump += "\n";
+    }
+  } catch (e) {
+    sqlDump += `-- Error generating backup: ${e}\n`;
+  }
+  return sqlDump;
+}
+
+// Fallback SQL generator for MySQL
+async function generateMysqlDump(adapter: DBAdapter): Promise<string> {
+  let sqlDump = "-- Drixio MySQL Fallback Backup\n\n";
+  try {
+    const tables = await adapter.getTables();
+    for (const table of tables) {
+      try {
+        const createTableResult = await adapter.query(`SHOW CREATE TABLE ${adapter.quoteIdentifier(table)}`);
+        if (createTableResult.rows && createTableResult.rows.length > 0) {
+          const row = createTableResult.rows[0] as Record<string, any>;
+          const vals = Object.values(row);
+          const createSql = row['Create Table'] || row['Create View'] || (vals.length > 1 ? vals[1] : null);
+          if (createSql) {
+            sqlDump += `${createSql};\n\n`;
+          }
+        }
+        
+        const data = await adapter.query(`SELECT * FROM ${adapter.quoteIdentifier(table)}`);
+        for (const d of data.rows) {
+          const keys = Object.keys(d).map(k => adapter.quoteIdentifier(k)).join(", ");
+          const vals = Object.values(d).map(v => {
+            if (v === null) return "NULL";
+            if (typeof v === "number") return v;
+            let str = String(v);
+            str = str.replace(/\\/g, '\\\\');
+            str = str.replace(/'/g, "''");
+            str = str.replace(/\n/g, '\\n');
+            str = str.replace(/\r/g, '\\r');
+            return `'${str}'`;
+          }).join(", ");
+          sqlDump += `INSERT INTO ${adapter.quoteIdentifier(table)} (${keys}) VALUES (${vals});\n`;
+        }
+        sqlDump += "\n";
+      } catch (tableErr) {
+        sqlDump += `-- Error backing up table ${table}: ${tableErr}\n\n`;
+      }
     }
   } catch (e) {
     sqlDump += `-- Error generating backup: ${e}\n`;

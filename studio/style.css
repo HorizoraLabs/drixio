@@ -11,6 +11,10 @@
 @import url("./styles/status.css");
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+@import url("./styles/searchBar.css");
+@import url("./styles/contextMenu.css");
+@import url("./styles/data.css");
+@import url("./styles/schema.css");
 
 :root {
   --color-bg-primary: #ffffff;
@@ -30,6 +34,7 @@
 
   /* Grid Interactive States (Light) */
   --color-cell-range-bg: #dbeafe;
+  --color-copy-flash: #bfdbfe;
   --color-cell-edited-bg: #fffbeb;
   --color-cell-edited-text: #b45309;
   --color-cell-error-bg: #fef2f2;
@@ -55,6 +60,7 @@
 
   /* Grid Interactive States (Dark) */
   --color-cell-range-bg: rgba(59, 130, 246, 0.15); /* translucent primary */
+  --color-copy-flash: rgba(59, 130, 246, 0.4);
   --color-cell-edited-bg: rgba(245, 158, 11, 0.15);
   --color-cell-edited-text: #fbbf24;
   --color-cell-error-bg: rgba(239, 68, 68, 0.15);

@@ -383,7 +383,7 @@ export const bindGridEvents = () => {
       navigator.clipboard.writeText(tsv.trimEnd());
 
       document.querySelectorAll(".cell-in-range").forEach((td) => {
-        td.style.backgroundColor = "#bfdbfe";
+        td.style.backgroundColor = "var(--color-copy-flash)";
         setTimeout(() => (td.style.backgroundColor = ""), 150);
       });
     }

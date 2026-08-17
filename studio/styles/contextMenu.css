@@ -1,0 +1,64 @@
+.drixio-context-menu {
+  position: fixed;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 180px;
+  z-index: 9999;
+  display: none;
+  font-family: inherit;
+}
+.drixio-context-menu.visible {
+  display: block;
+}
+
+.drixio-context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-text);
+  transition: background-color 0.1s;
+}
+
+.drixio-context-menu-item:hover {
+  background-color: var(--color-cell-range-bg);
+}
+
+.drixio-context-menu-item.danger {
+  color: #ef4444;
+}
+
+.drixio-context-menu-item.danger .material-symbols-outlined {
+  color: #ef4444;
+}
+
+.drixio-context-menu-item.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.drixio-context-menu-item .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--color-text-soft);
+}
+
+.drixio-menu-label {
+  flex: 1;
+}
+
+.drixio-menu-shortcut {
+  font-size: 11px;
+  color: var(--color-text-soft);
+  opacity: 0.7;
+}
+
+.drixio-context-menu-divider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 4px 0;
+}
+

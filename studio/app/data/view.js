@@ -122,10 +122,10 @@ export async function loadTableData(
         if (window.DataGrid.sortState.col === col) {
           sortArrow = window.DataGrid.sortState.asc ? "▲" : "▼";
         }
-        tableHtml += `<th class="sortable" data-col="${col}" class="cursor-pointer select-none">
-                   <div class="flex justify-between items-center">
+        tableHtml += /* html */ `<th class="sortable" data-col="${col}" class="cursor-pointer select-none">
+                   <div class="flex justify-between items-center" style="min-width: 128px;">
                       <div>${col}${pkLabel}${typeLabel}</div>
-                      <div class="sort-arrow" class="text-10 opacity-80 ml-2 w-12 text-right">${sortArrow}</div>
+                      <div class="sort-arrow" class="opacity-80 ml-2 text-right" style="font-size: 8px; margin-left: 32px;">${sortArrow}</div>
                    </div>
                  </th>`;
       });

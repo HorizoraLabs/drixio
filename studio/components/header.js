@@ -70,7 +70,8 @@ export const HeaderHTML = /* html */ `
 
       <li>
         <button id="export-db-sql-btn" class="dropdown-item">
-          <span class="material-symbols-outlined">storage</span> Database Backup (.sql)
+          <span class="material-symbols-outlined">database</span> 
+          Database (.sql)
         </button>
       </li>
     </ul>

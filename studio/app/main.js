@@ -516,6 +516,8 @@ window.handleSwitchTab = function (tab) {
             window.AppState.currentTableBtnElement = firstTableBtn;
             firstTableBtn.classList.add('active');
          }
+      } else {
+         window.updateSidebarActiveTable?.(window.AppState.currentTable);
       }
    }
 
@@ -593,6 +595,8 @@ window.renderCurrentView = function (whereClause = '', preserveState = false) {
             preserveState,
             container,
          );
+      } else {
+         window.updateSidebarActiveTable?.(tableName);
       }
    } else if (window.AppState.currentTab === 'schema-btn') {
       if (window.TableStates[tableName].schemaGrid) {
@@ -607,6 +611,8 @@ window.renderCurrentView = function (whereClause = '', preserveState = false) {
             window.AppState.currentTableBtnElement,
             container,
          );
+      } else {
+         window.updateSidebarActiveTable?.(tableName);
       }
    } else if (window.AppState.currentTab === 'sql-btn') {
       if (!container.hasChildNodes()) {

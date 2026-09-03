@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { DBConfig, DBAdapter } from '../core/types.js';
 import { createDBAdapter } from '../core/factory.js';
+import { previewMockData, generateAndInsertMockData } from '../core/seeder.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 
@@ -162,6 +163,32 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             orderBy,
          );
          return c.json({ success: true, data });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.get('/tables/:name/mock/preview', async (c) => {
+      try {
+         const tableName = c.req.param('name');
+         const data = await previewMockData(adapter, tableName, 3);
+         return c.json({ success: true, data });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/tables/:name/mock', async (c) => {
+      try {
+         const tableName = c.req.param('name');
+         const body = await c.req.json().catch(() => ({}));
+         const count = Math.min(Math.max(Number(body.count) || 10, 1), 1000);
+         const inserted = await generateAndInsertMockData(
+            adapter,
+            tableName,
+            count,
+         );
+         return c.json({ success: true, count: inserted });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

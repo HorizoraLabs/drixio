@@ -1,141 +1,141 @@
 /* ==================== MAIN CONTENT ==================== */
 #main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--color-bg-primary);
-  overflow: hidden; /* Prevent body scroll */
-  min-width: 0;
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   background-color: var(--color-bg-primary);
+   overflow: hidden; /* Prevent body scroll */
+   min-width: 0;
 }
 
 /* ==================== SEAMLESS INTEGRATED TOOLBAR ==================== */
 .toolbar {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-  height: 42px;
-  flex-shrink: 0;
-  background-color: var(--color-bg-primary);
-  padding: 0;
-  box-sizing: border-box;
+   display: flex;
+   align-items: center;
+   border-bottom: 1px solid var(--color-border);
+   height: 42px;
+   flex-shrink: 0;
+   background-color: var(--color-bg-primary);
+   padding: 0;
+   box-sizing: border-box;
 }
 
 .filter-group {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  flex: 1;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-sizing: border-box;
+   display: flex;
+   align-items: center;
+   height: 100%;
+   flex: 1;
+   background: transparent;
+   border: none;
+   border-radius: 0;
+   box-sizing: border-box;
 }
 
 .filter-icon-container {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  background-color: transparent;
-  border-right: 1px solid var(--color-border);
-  height: 100%;
-  font-size: 13px;
-  gap: 6px;
-  user-select: none;
-  flex-shrink: 0;
+   display: flex;
+   align-items: center;
+   padding: 0 16px;
+   background-color: transparent;
+   border-right: 1px solid var(--color-border);
+   height: 100%;
+   font-size: 13px;
+   gap: 6px;
+   user-select: none;
+   flex-shrink: 0;
 }
 
 .filter-icon-container .material-symbols-outlined {
-  font-size: 15px;
-  color: var(--color-text-secondary);
+   font-size: 15px;
+   color: var(--color-text-secondary);
 }
 
 .filter-icon-container span:not(.material-symbols-outlined) {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--color-text-secondary);
+   font-size: 11px;
+   font-weight: 700;
+   text-transform: uppercase;
+   letter-spacing: 0.6px;
+   color: var(--color-text-secondary);
 }
 
 .filter-select {
-  border: none;
-  outline: none;
-  height: 100%;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text);
-  background-color: transparent;
-  border-right: 1px solid var(--color-border);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 0.15s ease;
+   border: none;
+   outline: none;
+   height: 100%;
+   padding: 0 12px;
+   font-size: 12px;
+   font-weight: 500;
+   color: var(--color-text);
+   background-color: transparent;
+   border-right: 1px solid var(--color-border);
+   cursor: pointer;
+   flex-shrink: 0;
+   transition: background-color 0.15s ease;
 }
 
 .filter-select:hover {
-  background-color: var(--color-bg-secondary);
+   background-color: var(--color-bg-secondary);
 }
 
 .filter-select option {
-  background-color: var(--color-bg-primary);
-  color: var(--color-text);
+   background-color: var(--color-bg-primary);
+   color: var(--color-text);
 }
 
 .filter-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  height: 100%;
-  flex: 1;
-  transition: background-color 0.15s ease;
-  margin-right: 8px;
+   position: relative;
+   display: flex;
+   align-items: center;
+   height: 100%;
+   flex: 1;
+   transition: background-color 0.15s ease;
+   margin-right: 8px;
 }
 
 .filter-input {
-  border: none;
-  outline: none;
-  height: 100%;
-  width: 100%;
-  min-width: 0;
-  padding: 0 32px 0 16px;
-  font-size: 12px;
-  background: transparent;
-  font-weight: 400;
-  color: var(--color-text);
-  box-sizing: border-box;
+   border: none;
+   outline: none;
+   height: 100%;
+   width: 100%;
+   min-width: 0;
+   padding: 0 32px 0 16px;
+   font-size: 12px;
+   background: transparent;
+   font-weight: 400;
+   color: var(--color-text);
+   box-sizing: border-box;
 }
 
 .filter-input::placeholder {
-  color: var(--color-text-soft);
+   color: var(--color-text-soft);
 }
 
 .filter-clear-btn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-soft);
-  padding: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  transition: all 0.15s ease;
+   position: absolute;
+   right: 8px;
+   top: 50%;
+   transform: translateY(-50%);
+   background: transparent;
+   border: none;
+   outline: none;
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: var(--color-text-soft);
+   padding: 0;
+   width: 18px;
+   height: 18px;
+   border-radius: 4px;
+   transition: all 0.15s ease;
 }
 
 .filter-clear-btn:hover {
-  color: var(--color-text);
-  background-color: var(--color-bg-secondary);
+   color: var(--color-text);
+   background-color: var(--color-bg-secondary);
 }
 
 .filter-clear-btn .material-symbols-outlined {
-  font-size: 13px;
+   font-size: 13px;
 }
 
 #btn-run-query:active,
@@ -143,43 +143,42 @@
 .btn-primary:active,
 .btn-secondary:active,
 .table-btn:active {
-  transform: scale(0.96);
+   transform: scale(0.96);
 }
 
 #btn-clear-query .material-symbols-outlined {
-  font-size: 16px;
+   font-size: 16px;
 }
 
 .refresh-btn {
-  background-color: var(--color-bg-secondary);
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin-right: 16px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-  flex-shrink: 0;
+   background-color: var(--color-bg-secondary);
+   border-radius: 6px;
+   width: 28px;
+   height: 28px;
+   padding: 0;
+   margin-right: 16px;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   cursor: pointer;
+   border: 1px solid var(--color-border);
+   color: var(--color-text-secondary);
+   transition: all 0.15s ease;
+   box-sizing: border-box;
+   flex-shrink: 0;
 }
 
 .refresh-btn:hover {
-  background-color: var(--color-bg-secondary-dark);
-  color: var(--color-text);
-  border-color: var(--color-text-soft);
+   background-color: var(--color-bg-secondary-dark);
+   color: var(--color-text);
+   border-color: var(--color-text-soft);
 }
 
 .refresh-btn:active {
-  transform: scale(0.92);
+   transform: scale(0.92);
 }
 
 .refresh-btn .material-symbols-outlined {
-  font-size: 18px;
-  margin-bottom: 0.5px;
+   font-size: 18px;
+   margin-bottom: 0.5px;
 }
-

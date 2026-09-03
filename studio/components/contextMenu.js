@@ -16,6 +16,13 @@ function createMenuElement() {
     }
   });
 
+  // Hide on Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menuElement.classList.contains("visible")) {
+      hideContextMenu();
+    }
+  });
+
   // Hide on scroll (capture phase to catch all scrolls)
   window.addEventListener(
     "scroll",
@@ -38,6 +45,7 @@ export function showContextMenu(e, items) {
   createMenuElement();
 
   menuElement.innerHTML = "";
+  menuElement.classList.remove("visible");
 
   items.forEach((item) => {
     if (item.type === "divider" || item === "divider") {
@@ -50,11 +58,12 @@ export function showContextMenu(e, items) {
     const div = document.createElement("div");
     div.className = "drixio-context-menu-item";
     if (item.danger) div.classList.add("danger");
+    if (item.disabled) div.classList.add("disabled");
 
     div.innerHTML = /* html */ `
       ${
         item.icon
-          ? /* html */ `<span class="material-symbols-outlined">${item.icon}</span>`
+          ? /* html */ `<span class="material-symbols-outlined drixio-menu-icon">${item.icon}</span>`
           : ``
       }
       <span class="drixio-menu-label">${item.label}</span>
@@ -66,6 +75,7 @@ export function showContextMenu(e, items) {
     `;
 
     div.addEventListener("click", (ev) => {
+      if (item.disabled) return;
       ev.stopPropagation();
       hideContextMenu();
       if (item.action) item.action();
@@ -74,23 +84,27 @@ export function showContextMenu(e, items) {
     menuElement.appendChild(div);
   });
 
-  menuElement.style.visibility = "hidden";
-  menuElement.classList.add("visible");
-
-  // Wait a tick for layout
+  // Position calculation and smooth animated reveal
   requestAnimationFrame(() => {
     const rect = menuElement.getBoundingClientRect();
     let x = e.clientX;
     let y = e.clientY;
+    let originX = "left";
+    let originY = "top";
 
-    if (x + rect.width > window.innerWidth)
-      x = window.innerWidth - rect.width - 8;
-    if (y + rect.height > window.innerHeight)
-      y = window.innerHeight - rect.height - 8;
+    if (x + rect.width > window.innerWidth - 8) {
+      x = Math.max(8, window.innerWidth - rect.width - 8);
+      originX = "right";
+    }
+    if (y + rect.height > window.innerHeight - 8) {
+      y = Math.max(8, window.innerHeight - rect.height - 8);
+      originY = "bottom";
+    }
 
+    menuElement.style.transformOrigin = `${originY} ${originX}`;
     menuElement.style.left = `${x}px`;
     menuElement.style.top = `${y}px`;
-    menuElement.style.visibility = "visible";
+    menuElement.classList.add("visible");
   });
 }
 

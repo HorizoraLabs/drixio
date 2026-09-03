@@ -59,7 +59,12 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
               <span class="material-symbols-outlined">search</span>
               <span>Search</span>
             </div>
-            <input type="text" id="schema-search-val-${tableName}" class="filter-input" placeholder="Search name or type..." class="w-250" value="${window.SchemaGrid.filterText}" />
+            <div class="filter-input-wrapper">
+              <input type="text" id="schema-search-val-${tableName}" class="filter-input" placeholder="Search name or type..." value="${window.SchemaGrid.filterText}" />
+              <button type="button" id="btn-clear-schema-search-${tableName}" class="filter-clear-btn ${window.SchemaGrid.filterText ? '' : 'hidden'}" title="Clear search">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
           </div>
           <div class="flex-1"></div>
           <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)"><span class="material-symbols-outlined">refresh</span></button>
@@ -102,28 +107,42 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
           "type",
           "isPk",
           "nullable",
+          "isUnique",
           "defaultValue",
           "indexing",
         ];
         const columnLabels = [
           "Name",
           "Type",
-          "PK/FK",
+          "PK / FK",
           "Nullable",
+          "Unique",
           "Default Value",
           "Indexing",
         ];
 
         let tableHtml = `<table class="data-table" id="schema-grid-table-${tableName}"><thead><tr><th class="row-header">#</th>`;
         columns.forEach((cKey, i) => {
-          let sortArrow = "";
+          if (cKey === "indexing") {
+            tableHtml += `<th class="th-indexing" data-col-key="indexing">
+                       <div class="th-content-wrapper">
+                          <span class="th-name">${columnLabels[i]}</span>
+                       </div>
+                     </th>`;
+            return;
+          }
+
+          let sortIcon = "";
           if (window.SchemaGrid.sortState.colKey === cKey) {
-            sortArrow = window.SchemaGrid.sortState.asc ? "▲" : "▼";
+            const iconName = window.SchemaGrid.sortState.asc
+              ? "arrow_upward"
+              : "arrow_downward";
+            sortIcon = `<span class="material-symbols-outlined th-sort-icon">${iconName}</span>`;
           }
           tableHtml += `<th class="sortable" data-col-key="${cKey}">
-                     <div class="flex justify-between items-center">
-                        <div>${columnLabels[i]}</div>
-                        <div class="sort-arrow" class="text-10 opacity-80 ml-2 w-12 text-right">${sortArrow}</div>
+                     <div class="th-content-wrapper">
+                        <span class="th-name">${columnLabels[i]}</span>
+                        ${sortIcon}
                      </div>
                    </th>`;
         });
@@ -145,31 +164,71 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                     window.SchemaGrid.pendingIndexEdits.dropped.length;
                   const total = idxCount + addedCount - droppedCount;
 
-                  tableHtml += `<td class="data-cell manage-indexes-cell" rowspan="${numRows}" class="text-center align-middle cursor-pointer font-medium border-l text-brand">
-                    Manage Indexes (${total})
+                  tableHtml += `<td class="manage-indexes-cell" rowspan="${numRows}">
+                    <div class="manage-indexes-wrapper">
+                      <button type="button" class="btn-manage-indexes" title="Open Index Manager">
+                        <span class="material-symbols-outlined">key</span>
+                        <span>Manage Indexes</span>
+                        <span class="index-count-pill">${total}</span>
+                      </button>
+                    </div>
                   </td>`;
                 }
                 return; // Skip rendering td for cKey === "indexing" if rowIndex > 0
               }
 
               let val = col[cKey];
-              if (cKey === "isPk") {
-                const isPk = val;
-                const isFk = !!col.fkTarget;
-                if (isPk && isFk)
-                  val = `PK, FK (${col.fkTarget.table}.${col.fkTarget.column})`;
-                else if (isPk) val = "PK";
-                else if (isFk)
-                  val = `FK (${col.fkTarget.table}.${col.fkTarget.column})`;
-                else val = "-";
-              } else if (cKey === "nullable") val = val ? "Yes" : "No";
-              else if (val === null || val === undefined) val = "";
+              let safeValForHtml = "";
+              let safeValForAttr = "";
 
-              const safeValForAttr = String(val).replace(/"/g, "&quot;");
-              const safeValForHtml =
-                val === ""
-                  ? `<span class="text-soft">-</span>`
-                  : String(val).replace(/</g, "&lt;");
+              if (cKey === "name") {
+                safeValForAttr = String(val || "").replace(/"/g, "&quot;");
+                safeValForHtml = `<strong>${String(val || "").replace(/</g, "&lt;")}</strong>`;
+              } else if (cKey === "type") {
+                safeValForAttr = String(val || "").replace(/"/g, "&quot;");
+                safeValForHtml = `<span class="schema-type-mono">${String(val || "").replace(/</g, "&lt;")}</span>`;
+              } else if (cKey === "isPk") {
+                const isPk = !!col.isPk;
+                const isFk = !!col.fkTarget;
+                if (isPk && isFk) {
+                  safeValForAttr = `PFK: ${col.fkTarget.table}.${col.fkTarget.column}`;
+                  safeValForHtml = `<span class="col-badge badge-pfk" title="Primary Foreign Key (Composite Key referencing ${col.fkTarget.table}.${col.fkTarget.column})">PFK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}</span>`;
+                } else if (isPk) {
+                  safeValForAttr = "PK";
+                  safeValForHtml = `<span class="col-badge badge-pk">PK</span>`;
+                } else if (isFk) {
+                  safeValForAttr = `FK: ${col.fkTarget.table}.${col.fkTarget.column}`;
+                  safeValForHtml = `<span class="col-badge badge-fk" title="References ${col.fkTarget.table}.${col.fkTarget.column}">FK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}</span>`;
+                } else {
+                  safeValForAttr = "-";
+                  safeValForHtml = `<span class="text-soft">-</span>`;
+                }
+              } else if (cKey === "nullable") {
+                const isPk = !!col.isPk;
+                const isNull = isPk ? false : !!col.nullable;
+                safeValForAttr = isNull ? "Yes" : "No";
+                safeValForHtml = isNull ? `<span class="text-soft">Yes</span>` : `<span class="badge-notnull">No</span>`;
+              } else if (cKey === "isUnique") {
+                const isPk = !!col.isPk;
+                const isUniq = isPk || !!col.isUnique;
+                safeValForAttr = isUniq ? "Yes" : "No";
+                if (isPk) {
+                  safeValForHtml = `<span class="badge-unique-pk" title="Primary Key is always unique"><span class="material-symbols-outlined text-12">lock</span> Yes</span>`;
+                } else if (isUniq) {
+                  safeValForHtml = `<span class="badge-unique">Yes</span>`;
+                } else {
+                  safeValForHtml = `<span class="text-soft">-</span>`;
+                }
+              } else if (cKey === "defaultValue") {
+                safeValForAttr = String(val !== undefined && val !== null ? val : "").replace(/"/g, "&quot;");
+                safeValForHtml = val !== undefined && val !== null && val !== ""
+                  ? `<span class="schema-type-mono text-soft">${String(val).replace(/</g, "&lt;")}</span>`
+                  : `<span class="text-soft">-</span>`;
+              } else {
+                safeValForAttr = String(val || "").replace(/"/g, "&quot;");
+                safeValForHtml = String(val || "").replace(/</g, "&lt;");
+              }
+
               tableHtml += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${col.name}" data-col-key="${cKey}" data-original="${safeValForAttr}">${safeValForHtml}</td>`;
             });
             tableHtml += `</tr>`;
@@ -181,7 +240,8 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
         tableHtml += `<td class="row-header" data-row-idx="${ghostIdx}">*</td>`;
         columns.forEach((cKey, cIdx) => {
           if (cKey === "indexing") return;
-          tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col-key="${cKey}">+ New</td>`;
+          const hint = cIdx === 0 ? `<span class="ghost-cell-hint">+ Add Column</span>` : "";
+          tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col-key="${cKey}">${hint}</td>`;
         });
         tableHtml += `</tr></tbody></table>`;
         tableContainer.innerHTML = tableHtml;
@@ -237,9 +297,23 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
       const searchInput = document.getElementById(
         `schema-search-val-${tableName}`,
       );
+      const clearBtn = document.getElementById(
+        `btn-clear-schema-search-${tableName}`,
+      );
+
+      const updateClearBtn = () => {
+        if (!clearBtn || !searchInput) return;
+        if (searchInput.value.trim() !== "") {
+          clearBtn.classList.remove("hidden");
+        } else {
+          clearBtn.classList.add("hidden");
+        }
+      };
+
       if (searchInput) {
         searchInput.addEventListener("input", (e) => {
           window.SchemaGrid.filterText = e.target.value;
+          updateClearBtn();
           window.SchemaGrid.selection = {
             startRow: -1,
             startCol: -1,
@@ -249,6 +323,18 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
           };
           window.renderSchemaGrid();
         });
+      }
+
+      if (clearBtn) {
+        clearBtn.onclick = () => {
+          if (searchInput) {
+            searchInput.value = "";
+            window.SchemaGrid.filterText = "";
+            updateClearBtn();
+            window.renderSchemaGrid();
+            searchInput.focus();
+          }
+        };
       }
 
       const refreshBtn = document.getElementById(

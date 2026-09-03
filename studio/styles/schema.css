@@ -1,9 +1,207 @@
-.manage-indexes-cell {
-  background-color: var(--color-bg-primary) !important;
+/* Ensure schema tables fit container width without artificial overflow */
+[id^="schema-grid-container-"] .data-table {
+  width: 100%;
+  table-layout: auto;
 }
 
-.manage-indexes-cell:hover {
-  background-color: var(--color-bg-secondary) !important;
+[id^="schema-grid-container-"] .data-table th:last-child,
+[id^="schema-grid-container-"] .data-table td:last-child {
+  width: auto;
+}
+
+/* Indexing Column & Manage Indexes Button Centering */
+.data-table th.th-indexing {
+  width: 220px !important;
+  min-width: 180px !important;
+  text-align: center !important;
+  cursor: default !important;
+  user-select: none;
+}
+
+.data-table th.th-indexing .th-content-wrapper {
+  justify-content: center !important;
+  min-width: unset !important;
+}
+
+.manage-indexes-cell {
+  background-color: var(--color-bg-primary) !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  padding: 16px !important;
+  border-left: 1px solid var(--color-border) !important;
+  width: 220px !important;
+  min-width: 180px !important;
+}
+
+.manage-indexes-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 auto !important;
+}
+
+/* Prevent first row from highlighting when hovering the multi-row manage-indexes cell */
+.data-table tbody tr:has(.manage-indexes-cell:hover) td.data-cell {
+  background-color: transparent !important;
+}
+
+.btn-manage-indexes {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-manage-indexes:hover {
+  background-color: var(--color-primary-active);
+  border-color: var(--color-primary);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.btn-manage-indexes .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--color-primary);
+}
+
+.btn-manage-indexes:hover .material-symbols-outlined {
+  color: #ffffff;
+}
+
+.index-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background-color: rgba(59, 130, 246, 0.15);
+  color: var(--color-primary);
+  border-radius: 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.btn-manage-indexes:hover .index-count-pill {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Monospace Column Type */
+.schema-type-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #60a5fa;
+  letter-spacing: 0.02em;
+}
+
+/* Enlarge PK / FK Badges in Schema Table */
+.data-table td[data-col-key="isPk"] .col-badge {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  line-height: 18px !important;
+  vertical-align: middle;
+}
+
+/* Center Alignment & Compact Widths for Status Columns */
+.data-table th[data-col-key="isUnique"] .th-content-wrapper,
+.data-table th[data-col-key="nullable"] .th-content-wrapper {
+  min-width: 75px !important;
+  width: auto !important;
+  gap: 6px;
+  justify-content: center;
+}
+
+.data-table th[data-col-key="isPk"] .th-content-wrapper {
+  min-width: 100px !important;
+  justify-content: center;
+}
+
+.data-table th[data-col-key="isUnique"],
+.data-table td[data-col-key="isUnique"],
+.data-table th[data-col-key="nullable"],
+.data-table td[data-col-key="nullable"] {
+  width: 90px !important;
+  min-width: 80px !important;
+  padding: 0 8px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.data-table td[data-col-key="isPk"] {
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 0 10px !important;
+}
+
+/* Unique Badges (Centered & Polished) */
+.badge-unique {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background-color: rgba(14, 165, 233, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+.badge-unique-pk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+.badge-unique-pk .material-symbols-outlined {
+  font-size: 13px !important;
+  line-height: 1;
+}
+
+.badge-notnull {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  vertical-align: middle;
 }
 
 

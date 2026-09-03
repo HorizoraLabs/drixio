@@ -87,6 +87,17 @@ export async function saveSchemaEdits() {
         );
       }
     }
+
+    // Handle isUnique for existing columns via Unique Index
+    if (edits.isUnique !== undefined) {
+      const isUniqueVal = edits.isUnique === "Yes" || edits.isUnique === "1" || edits.isUnique === true;
+      const indexName = `idx_${tableName}_${newName}_unique`;
+      if (isUniqueVal) {
+        sqls.push(`CREATE UNIQUE INDEX IF NOT EXISTS "${indexName}" ON "${tableName}" ("${newName}");`);
+      } else {
+        sqls.push(`DROP INDEX IF EXISTS "${indexName}";`);
+      }
+    }
   }
 
   // Handle Inserts
@@ -125,6 +136,10 @@ export async function saveSchemaEdits() {
       row.nullable === "No"
     ) {
       constraints.push("NOT NULL");
+    }
+    const isUniqueStr = String(row.isUnique || "").toUpperCase();
+    if (isUniqueStr === "YES" || isUniqueStr === "1" || isUniqueStr === "TRUE") {
+      constraints.push("UNIQUE");
     }
     if (row.defaultValue) {
       constraints.push(`DEFAULT '${row.defaultValue.replace(/'/g, "''")}'`);
@@ -223,10 +238,12 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
   }
 
   const colKey = td.dataset.colKey;
+  const colIdx = td.dataset.colIdx;
+  const ghostPlaceholder = colIdx === "0" ? `<span class="ghost-cell-hint">+ Add column</span>` : "";
 
   td.innerHTML =
     newVal ||
-    (td.dataset.insertIndex !== undefined ? "+ New" : `<span class="text-soft">-</span>`);
+    (td.dataset.insertIndex !== undefined ? ghostPlaceholder : `<span class="text-soft">-</span>`);
 
   if (td.dataset.insertIndex !== undefined) {
     const idx = parseInt(td.dataset.insertIndex);
@@ -248,7 +265,9 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
         const nextRowIdx = parseInt(td.dataset.rowIdx) + 1;
         tr.innerHTML += `<td class="row-header" data-row-idx="${nextRowIdx}">*</td>`;
         columns.forEach((c, cIdx) => {
-          tr.innerHTML += `<td class="data-cell ghost-row" data-row-idx="${nextRowIdx}" data-col-idx="${cIdx}" data-insert-index="${idx + 1}" data-col-key="${c}">+ New</td>`;
+          if (c === "indexing") return;
+          const hint = cIdx === 0 ? `<span class="ghost-cell-hint">+ Add column</span>` : "";
+          tr.innerHTML += `<td class="data-cell ghost-row" data-row-idx="${nextRowIdx}" data-col-idx="${cIdx}" data-insert-index="${idx + 1}" data-col-key="${c}">${hint}</td>`;
         });
         tbody.appendChild(tr);
       }

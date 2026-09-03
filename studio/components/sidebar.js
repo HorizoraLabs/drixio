@@ -1,21 +1,58 @@
-import { fetchTables, fetchTableStats } from "../lib/api.js";
+import { fetchTables, fetchTableStats, fetchConfig } from "../lib/api.js";
+import { showContextMenu } from "./contextMenu.js";
 
-export async function initSidebar() {
+let isEventsBound = false;
+
+export async function initSidebar(isRefresh = false) {
   try {
-    const res = await fetchTables();
     const tableNav = document.getElementById("table-nav");
-    let notFoundMsg = document.getElementById("not-found-msg");
-    if (notFoundMsg) notFoundMsg.remove();
+    if (!tableNav) return;
+
+    // Show loading skeleton / indication if refresh
+    if (isRefresh) {
+      tableNav.innerHTML = /* html */ `
+        <div class="sidebar-loading-state">
+          <span class="material-symbols-outlined animate-spin icon-18">progress_activity</span>
+          <span>Refreshing tables...</span>
+        </div>
+      `;
+    }
+
+    const res = await fetchTables();
+    tableNav.innerHTML = "";
+
+    // Update database status & type display
+    updateDatabaseStatus();
+
     if (res.success && res.data && res.data.length > 0) {
-      res.data.forEach((tableName) => {
+      const tables = res.data;
+      const countBadge = document.getElementById("table-count-badge");
+      if (countBadge) countBadge.textContent = tables.length.toString();
+
+      tables.forEach((tableName) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "table-btn";
         btn.dataset.table = tableName;
-        btn.innerHTML = /* html */ `<span>${tableName}</span><span class="table-btn-badge" id="badge-${tableName}" class="hidden"></span>`;
+        btn.title = tableName;
+        
+        // Use <i> for icon to maintain backward compatibility with btn.querySelector("span")
+        btn.innerHTML = /* html */ `
+          <div class="table-btn-label">
+            <i class="material-symbols-outlined table-item-icon">table_chart</i>
+            <span class="table-name-text">${tableName}</span>
+            <span class="dirty-indicator-dot hidden" title="Unsaved changes"></span>
+          </div>
+          <span class="table-btn-badge hidden" id="badge-${tableName}"></span>
+        `;
+
         btn.onclick = () => {
           window.AppState.currentTable = tableName;
           window.AppState.currentTableBtnElement = btn;
+
+          // Highlight button
+          document.querySelectorAll(".table-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
 
           if (
             window.AppState.currentTab === "erd-btn" ||
@@ -27,29 +64,343 @@ export async function initSidebar() {
             window.renderCurrentView();
           }
         };
+
+        // Bind Context Menu for Table Actions
+        btn.oncontextmenu = (e) => {
+          showContextMenu(e, [
+            {
+              icon: "content_copy",
+              label: "Copy Table Name",
+              shortcut: "📋",
+              action: async () => {
+                try {
+                  await navigator.clipboard.writeText(tableName);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = tableName;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  ta.remove();
+                }
+                if (window.showToast) {
+                  window.showToast(`Copied "${tableName}"`, "success");
+                }
+              },
+            },
+            {
+              icon: "table_chart",
+              label: "View Data",
+              action: () => {
+                btn.click();
+                window.handleSwitchTab("data-btn");
+              },
+            },
+            {
+              icon: "schema",
+              label: "View Schema",
+              action: () => {
+                btn.click();
+                window.handleSwitchTab("schema-btn");
+              },
+            },
+            { type: "divider" },
+            {
+              icon: "download",
+              label: "Export as CSV",
+              action: () => {
+                window.open(`/api/tables/${tableName}/export?format=csv`, "_blank");
+              },
+            },
+            {
+              icon: "download",
+              label: "Export as JSON",
+              action: () => {
+                window.open(`/api/tables/${tableName}/export?format=json`, "_blank");
+              },
+            },
+          ]);
+        };
+
         tableNav.appendChild(btn);
       });
-      window.handleSwitchTab("data-btn");
 
-      // Fetch stats asynchronously
-      fetchTableStats()
-        .then((statsRes) => {
-          if (statsRes.success && statsRes.data) {
-            Object.entries(statsRes.data).forEach(([tName, count]) => {
-              const badge = document.getElementById(`badge-${tName}`);
-              if (badge) {
-                badge.textContent = Number(count).toLocaleString();
-                badge.style.display = "inline-flex"; // flex so it aligns content center
-              }
-            });
-          }
-        })
-        .catch((e) => console.error("Failed to load table stats:", e));
+      // Preserve active state or select first table
+      if (window.AppState.currentTable) {
+        const activeBtn = document.querySelector(`.table-btn[data-table="${window.AppState.currentTable}"]`);
+        if (activeBtn) {
+          activeBtn.classList.add("active");
+          window.AppState.currentTableBtnElement = activeBtn;
+        }
+      } else if (!isRefresh) {
+        window.handleSwitchTab("data-btn");
+      }
+
+      // Fetch row count stats asynchronously
+      loadTableStats();
+
+      // Trigger search filter in case there's an existing query
+      const searchInput = document.getElementById("search-input");
+      if (searchInput && searchInput.value.trim()) {
+        filterTableList(searchInput.value.trim());
+      }
     } else {
-      tableNav.innerHTML = /* html */ `<div id="not-found-msg">No Tables Found.</div>`;
-      window.handleSwitchTab("data-btn");
+      const countBadge = document.getElementById("table-count-badge");
+      if (countBadge) countBadge.textContent = "0";
+      tableNav.innerHTML = /* html */ `
+        <div id="not-found-msg">
+          <span class="material-symbols-outlined icon-20 text-soft">inventory_2</span>
+          <span>No Tables Found</span>
+        </div>
+      `;
+      if (!isRefresh) {
+        window.handleSwitchTab("data-btn");
+      }
+    }
+
+    if (!isEventsBound) {
+      bindSidebarEvents();
+      isEventsBound = true;
     }
   } catch (err) {
     console.error("Failed to fetch tables:", err);
+    const tableNav = document.getElementById("table-nav");
+    if (tableNav) {
+      tableNav.innerHTML = /* html */ `
+        <div id="not-found-msg" class="text-error">
+          <span class="material-symbols-outlined icon-20">warning</span>
+          <span>Failed to load tables</span>
+        </div>
+      `;
+    }
+    // Mark status as error
+    const dot = document.getElementById("sidebar-db-status-dot");
+    const dbTypeEl = document.getElementById("brand-db-type");
+    if (dot) {
+      dot.classList.remove("status-connected");
+      dot.classList.add("status-error");
+    }
+    if (dbTypeEl) dbTypeEl.textContent = "ERROR";
+  }
+}
+
+async function loadTableStats() {
+  try {
+    const statsRes = await fetchTableStats();
+    if (statsRes.success && statsRes.data) {
+      Object.entries(statsRes.data).forEach(([tName, count]) => {
+        const badge = document.getElementById(`badge-${tName}`);
+        if (badge) {
+          badge.textContent = Number(count).toLocaleString();
+          badge.classList.remove("hidden");
+          badge.style.display = "inline-flex";
+        }
+      });
+    }
+  } catch (e) {
+    console.error("Failed to load table stats:", e);
+  }
+}
+
+async function updateDatabaseStatus() {
+  const dot = document.getElementById("sidebar-db-status-dot");
+  const dbTypeEl = document.getElementById("brand-db-type");
+  try {
+    if (!dbTypeEl) return;
+    
+    if (window.AppState?.dbType) {
+      dbTypeEl.textContent = window.AppState.dbType.toUpperCase();
+      if (dot) {
+        dot.classList.remove("status-error");
+        dot.classList.add("status-connected");
+      }
+      return;
+    }
+
+    const cfg = await fetchConfig();
+    if (cfg?.success && cfg.data?.dbType) {
+      dbTypeEl.textContent = cfg.data.dbType.toUpperCase();
+      if (dot) {
+        dot.classList.remove("status-error");
+        dot.classList.add("status-connected");
+      }
+    } else {
+      if (dot) {
+        dot.classList.remove("status-connected");
+        dot.classList.add("status-error");
+      }
+      if (dbTypeEl) dbTypeEl.textContent = "OFFLINE";
+    }
+  } catch {
+    if (dot) {
+      dot.classList.remove("status-connected");
+      dot.classList.add("status-error");
+    }
+    if (dbTypeEl) dbTypeEl.textContent = "DISCONNECTED";
+  }
+}
+
+function filterTableList(query) {
+  const q = query.toLowerCase().trim();
+  const btns = document.querySelectorAll(".table-btn");
+  let visibleCount = 0;
+
+  btns.forEach((btn) => {
+    const tableName = (btn.dataset.table || "").toLowerCase();
+    if (tableName.includes(q)) {
+      btn.style.display = "flex";
+      visibleCount++;
+    } else {
+      btn.style.display = "none";
+    }
+  });
+
+  const tableNav = document.getElementById("table-nav");
+  let noMatchEl = document.getElementById("sidebar-no-match");
+
+  if (visibleCount === 0 && btns.length > 0) {
+    if (!noMatchEl) {
+      noMatchEl = document.createElement("div");
+      noMatchEl.id = "sidebar-no-match";
+      noMatchEl.className = "sidebar-empty-state";
+      noMatchEl.innerHTML = /* html */ `
+        <span class="material-symbols-outlined icon-20 text-soft">search_off</span>
+        <span>No matching tables</span>
+      `;
+      tableNav?.appendChild(noMatchEl);
+    }
+  } else if (noMatchEl) {
+    noMatchEl.remove();
+  }
+
+  // Update section count badge
+  const countBadge = document.getElementById("table-count-badge");
+  if (countBadge) {
+    countBadge.textContent = visibleCount.toString();
+  }
+}
+
+function bindSidebarEvents() {
+  const searchInput = document.getElementById("search-input");
+  const clearBtn = document.getElementById("search-clear-btn");
+  const refreshBtn = document.getElementById("refresh-tables-btn");
+  const collapseBtn = document.getElementById("sidebar-collapse-btn");
+  const aside = document.getElementById("sidebar-panel");
+
+  // Search input live filtering
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      const val = e.target.value;
+      if (clearBtn) {
+        if (val) clearBtn.classList.remove("hidden");
+        else clearBtn.classList.add("hidden");
+      }
+      filterTableList(val);
+    });
+
+    // Enter key to quickly open first matched table
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const firstVisibleBtn = document.querySelector('.table-btn:not([style*="display: none"])');
+        if (firstVisibleBtn) {
+          firstVisibleBtn.click();
+          searchInput.blur();
+        }
+      }
+    });
+
+    // Clear search button
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        clearBtn.classList.add("hidden");
+        filterTableList("");
+        searchInput.focus();
+      });
+    }
+  }
+
+  // Refresh tables button
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.classList.add("animate-spin");
+      await initSidebar(true);
+      setTimeout(() => {
+        refreshBtn.classList.remove("animate-spin");
+        if (window.showToast) window.showToast("Tables refreshed", "success");
+      }, 300);
+    });
+  }
+
+  // Collapsible sidebar support
+  if (aside) {
+    // Restore collapsed state
+    const isCollapsed = localStorage.getItem("drixio_sidebar_collapsed") === "true";
+    if (isCollapsed) {
+      aside.classList.add("collapsed");
+      updateCollapseIcon(true);
+    }
+
+    if (collapseBtn) {
+      collapseBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        aside.classList.toggle("collapsed");
+        const collapsed = aside.classList.contains("collapsed");
+        localStorage.setItem("drixio_sidebar_collapsed", collapsed.toString());
+        updateCollapseIcon(collapsed);
+      });
+    }
+
+    // Allow clicking the collapsed header to quickly expand
+    const header = document.getElementById("sidebar-header");
+    if (header) {
+      header.addEventListener("click", () => {
+        if (aside.classList.contains("collapsed")) {
+          aside.classList.remove("collapsed");
+          localStorage.setItem("drixio_sidebar_collapsed", "false");
+          updateCollapseIcon(false);
+        }
+      });
+    }
+  }
+
+  // Keyboard shortcut: '/' to focus search, 'Escape' to clear and blur
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "/" &&
+      document.activeElement?.tagName !== "INPUT" &&
+      document.activeElement?.tagName !== "TEXTAREA"
+    ) {
+      e.preventDefault();
+      if (window.AppState?.currentTab === "erd-btn") {
+        const erdSearch = document.getElementById("erd-search-input");
+        if (erdSearch) {
+          erdSearch.focus();
+          erdSearch.select();
+          return;
+        }
+      }
+      searchInput?.focus();
+      searchInput?.select();
+    } else if (e.key === "Escape" && document.activeElement === searchInput) {
+      if (searchInput.value) {
+        searchInput.value = "";
+        clearBtn?.classList.add("hidden");
+        filterTableList("");
+      }
+      searchInput.blur();
+    }
+  });
+}
+
+function updateCollapseIcon(isCollapsed) {
+  const icon = document.getElementById("sidebar-collapse-icon");
+  const header = document.getElementById("sidebar-header");
+  if (icon) {
+    icon.textContent = isCollapsed ? "menu" : "menu_open";
+  }
+  if (header) {
+    header.title = isCollapsed ? "Click to expand sidebar" : "";
   }
 }

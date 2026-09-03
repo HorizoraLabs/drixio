@@ -17,15 +17,53 @@ export function bindSchemaCellEditor(tableContainer, columns) {
     const isNewRow = td.dataset.insertIndex !== undefined;
 
     const rawText =
-      td.textContent === "-" || td.textContent === "+ New" || td.textContent === "No" || td.textContent === "null"
+      isNewRow || td.textContent === "-" || td.textContent === "+ New" || td.textContent.includes("Add column") || td.textContent === "+ Add Row" || td.textContent === "null"
         ? ""
-        : td.textContent === "Yes" ? "1" : td.textContent;
+        : (td.textContent.trim().startsWith("Yes") ? "1" : (td.textContent.trim() === "No" ? "" : td.textContent));
 
     let inputEl;
     if (colKey === "isPk") {
       openPkFkModal(td, td.textContent);
       return;
     } else if (colKey === "nullable") {
+      const origColName = td.dataset.pk;
+      const colSchema = window.SchemaGrid?.schema?.find((c) => c.name === origColName);
+      const isPk = colSchema ? colSchema.isPk : false;
+      const newRowPk = isNewRow && window.SchemaGrid?.pendingInserts?.[parseInt(td.dataset.insertIndex)]?.isPk;
+
+      if (isPk || newRowPk) {
+        if (window.showToast) {
+          window.showToast("Primary Key cannot be nullable.", "error");
+        } else {
+          alert("Primary Key cannot be nullable.");
+        }
+        return;
+      }
+
+      inputEl = document.createElement("select");
+      const opts = ["No", "Yes"];
+      opts.forEach((opt) => {
+        const op = document.createElement("option");
+        op.value = opt;
+        op.textContent = opt;
+        if ((opt === "Yes" && rawText === "1") || (opt === "No" && rawText === "")) op.selected = true;
+        inputEl.appendChild(op);
+      });
+    } else if (colKey === "isUnique") {
+      const origColName = td.dataset.pk;
+      const colSchema = window.SchemaGrid?.schema?.find((c) => c.name === origColName);
+      const isPk = colSchema ? colSchema.isPk : false;
+      const newRowPk = isNewRow && window.SchemaGrid?.pendingInserts?.[parseInt(td.dataset.insertIndex)]?.isPk;
+
+      if (isPk || newRowPk) {
+        if (window.showToast) {
+          window.showToast("Primary Key is always unique and locked.", "error");
+        } else {
+          alert("Primary Key is always unique and locked.");
+        }
+        return;
+      }
+
       inputEl = document.createElement("select");
       const opts = ["No", "Yes"];
       opts.forEach((opt) => {

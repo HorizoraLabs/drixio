@@ -41,15 +41,11 @@
 
 .modal-editor-container {
   background-color: var(--color-bg-primary);
-  /* Fallback if browser doesn't support backdrop-filter */
-  background-color: rgba(var(--color-bg-primary), 0.85);
-  /* But wait, --color-bg-primary is hex, we can't easily rgba it without changing variables. 
-     Instead, we use a separate glass variable or just rely on transparency */
-  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.1),
-    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    0 20px 25px -5px rgba(0, 0, 0, 0.2),
+    0 10px 10px -5px rgba(0, 0, 0, 0.1);
   width: 600px;
   max-width: 90vw;
   height: 500px;
@@ -222,9 +218,215 @@
 }
 
 .modal-footer {
-  padding:16px; border-top:1px solid var(--color-border); display:flex; justify-content:flex-end; gap:8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background-color: var(--color-bg-secondary);
 }
 
-.index-row-container {
-  display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px; background:var(--color-bg-primary); border:1px solid var(--color-border); border-radius:4px;
+/* ==================== MODERN INDEX MODAL ==================== */
+.idx-modal-container {
+  width: 540px;
+  max-width: 92vw;
+  max-height: 85vh;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.4);
+}
+
+.idx-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-soft);
+  margin-bottom: 8px;
+}
+
+.idx-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+
+.idx-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: var(--color-bg-secondary-dark);
+}
+
+.idx-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.idx-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.idx-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idx-cols-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.idx-col-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+}
+
+.idx-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-soft);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.idx-del-btn:hover {
+  background-color: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.idx-del-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Column Chips Selector */
+.idx-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.idx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.idx-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.idx-chip.selected {
+  background-color: var(--color-primary-active);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .idx-chip.selected {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+.idx-chip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  line-height: 1.5;
+  text-align: center;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.btn-add-idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  align-self: flex-start;
+}
+
+.btn-add-idx:hover {
+  background-color: var(--color-primary-active);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-add-idx .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.idx-clear-btn {
+  background: transparent !important;
+  border: none !important;
+  padding: 2px 6px !important;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.idx-clear-btn:hover {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  color: #60a5fa;
+  text-decoration: none;
 }

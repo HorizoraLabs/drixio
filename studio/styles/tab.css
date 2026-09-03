@@ -1,43 +1,144 @@
-/* ==================== TAB ==================== */
+/* ==================== PLAN A: MODERN GITHUB/VERCEL STYLE TAB NAV ==================== */
 #tab-nav {
   display: flex;
-  border-bottom: 1px var(--color-border) solid;
-  height: 48px;
-  gap: 24px;
-  padding: 0px 32px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border);
+  height: 42px;
+  padding: 0 24px;
+  background-color: var(--color-bg-primary);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  gap: 16px;
 }
 
-.tab-btn {
-  background-color: transparent;
+/* ==================== LEFT: TABLE-SCOPED UNDERLINE TABS ==================== */
+.table-tabs {
   display: flex;
   align-items: center;
-  padding: 0px 6px;
   height: 100%;
-  border-top: none;
-  border-left: none;
-  border-right: none;
-  border-bottom: 2px transparent solid;
-  outline: none;
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 300;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 100ms linear;
-  gap: 8px;
+  gap: 20px;
 }
 
-.tab-btn:hover {
-  border-bottom: 2px var(--color-border) solid;
+.table-tabs .tab-btn {
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 4px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  gap: 8px;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.table-tabs .tab-btn:hover {
+  color: var(--color-text);
+  border-bottom-color: var(--color-border);
+}
+
+.table-tabs .tab-btn.isCurrentTab {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--color-primary);
+}
+
+[data-theme="dark"] .table-tabs .tab-btn.isCurrentTab {
+  color: #60a5fa;
+  border-bottom-color: #3b82f6;
+}
+
+.table-tabs .tab-btn .tab-icon {
+  font-size: 17px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  transition: color 0.15s ease;
+}
+
+.table-tabs .tab-btn:hover .tab-icon {
   color: var(--color-text);
 }
 
-.tab-btn.isCurrentTab {
-  border-bottom: 2px var(--color-primary) solid;
+.table-tabs .tab-btn.isCurrentTab .tab-icon {
   color: var(--color-primary);
 }
 
-.tab-btn .material-symbols-outlined {
-  font-size: 16px;
+[data-theme="dark"] .table-tabs .tab-btn.isCurrentTab .tab-icon {
+  color: #60a5fa;
 }
 
+/* ==================== RIGHT: GLOBAL WORKSPACE TOOLS ==================== */
+.global-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.global-tools .tool-btn {
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  gap: 6px;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.global-tools .tool-btn:hover {
+  color: var(--color-text);
+  background-color: var(--color-bg-secondary);
+}
+
+.global-tools .tool-btn:active {
+  transform: scale(0.96);
+}
+
+.global-tools .tool-btn.isCurrentTab {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-primary);
+  border-color: var(--color-border);
+  font-weight: 600;
+}
+
+[data-theme="dark"] .global-tools .tool-btn.isCurrentTab {
+  background-color: #1e293b;
+  color: #60a5fa;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.global-tools .tool-btn .tab-icon {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  transition: color 0.15s ease;
+}
+
+.global-tools .tool-btn:hover .tab-icon {
+  color: var(--color-text);
+}
+
+.global-tools .tool-btn.isCurrentTab .tab-icon {
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .global-tools .tool-btn.isCurrentTab .tab-icon {
+  color: #60a5fa;
+}

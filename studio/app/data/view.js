@@ -88,17 +88,23 @@ export async function loadTableData(
               <select id="filter-col-${tableName}" class="filter-select">${columnOptions}</select>
               <select id="filter-op-${tableName}" class="filter-select">
                 <option value="=">=</option>
-                <option value=">">></option>
-                <option value="<"><</option>
-                <option value=">=">>=</option>
-                <option value="<="><=</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value=">=">&gt;=</option>
+                <option value="<=">&lt;=</option>
                 <option value="LIKE">LIKE</option>
                 <option value="!=">!=</option>
               </select>
-              <input type="text" id="filter-val-${tableName}" class="filter-input" placeholder="Enter value..." />
+              <div class="filter-input-wrapper">
+                <input type="text" id="filter-val-${tableName}" class="filter-input" placeholder="Filter value..." />
+                <button type="button" id="btn-clear-filter-${tableName}" class="filter-clear-btn hidden" title="Clear filter">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
             </div>
-            <div class="flex-1"></div>
-            <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)"><span class="material-symbols-outlined">refresh</span></button>
+            <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
+              <span class="material-symbols-outlined">refresh</span>
+            </button>
           </div>
           <div class="table-container" id="data-grid-container-${tableName}"></div>
         `;
@@ -109,23 +115,37 @@ export async function loadTableData(
       tableHtml += `<th class="row-header">#</th>`;
       columns.forEach((col) => {
         const colSchema = schema.find((c) => c.name === col);
-        let pkLabel = "";
-        let typeLabel = "";
+        let pkBadge = "";
+        let typeText = colSchema?.type || "";
         if (colSchema) {
-          if (colSchema.isPk)
-            pkLabel = ` <span class="opacity-50 text-10">(PK)</span>`;
-          if (colSchema.name.toLowerCase().includes("id") && !colSchema.isPk)
-            pkLabel = ` <span class="opacity-50 text-10">(FK)</span>`;
-          typeLabel = `<br><span class="font-normal opacity-70 text-10 font-mono">${colSchema.type}</span>`;
+          const isPk = !!colSchema.isPk;
+          const isFk = !!colSchema.fkTarget;
+          if (isPk && isFk) {
+            pkBadge = `<span class="col-badge badge-pfk" title="Primary Foreign Key (referencing ${colSchema.fkTarget.table}.${colSchema.fkTarget.column})">PFK</span>`;
+          } else if (isPk) {
+            pkBadge = `<span class="col-badge badge-pk" title="Primary Key">PK</span>`;
+          } else if (isFk || colSchema.name.toLowerCase().includes("id")) {
+            pkBadge = `<span class="col-badge badge-fk" title="Foreign Key">FK</span>`;
+          }
         }
-        let sortArrow = "";
-        if (window.DataGrid.sortState.col === col) {
-          sortArrow = window.DataGrid.sortState.asc ? "▲" : "▼";
+        let sortIcon = "";
+        let isSorted = window.DataGrid.sortState.col === col;
+        if (isSorted) {
+          const arrowName = window.DataGrid.sortState.asc ? "arrow_upward" : "arrow_downward";
+          sortIcon = `<span class="material-symbols-outlined th-sort-icon">${arrowName}</span>`;
         }
-        tableHtml += /* html */ `<th class="sortable" data-col="${col}" class="cursor-pointer select-none">
-                   <div class="flex justify-between items-center" style="min-width: 128px;">
-                      <div>${col}${pkLabel}${typeLabel}</div>
-                      <div class="sort-arrow" class="opacity-80 ml-2 text-right" style="font-size: 8px; margin-left: 32px;">${sortArrow}</div>
+        tableHtml += /* html */ `<th class="sortable ${isSorted ? "sorted" : ""}" data-col="${col}">
+                   <div class="th-content-wrapper">
+                      <div class="th-col-info">
+                         <div class="th-name-row">
+                            <span class="th-col-name">${col}</span>
+                            ${pkBadge}
+                         </div>
+                         ${typeText ? `<span class="th-col-type">${typeText}</span>` : ""}
+                      </div>
+                      <div class="th-sort-indicator ${isSorted ? "active" : ""}">
+                         ${sortIcon}
+                      </div>
                    </div>
                  </th>`;
       });
@@ -141,7 +161,8 @@ export async function loadTableData(
       const ghostIdx = rows ? rows.length : 0;
       tableHtml += `<td class="row-header" data-row-idx="${ghostIdx}">*</td>`;
       columns.forEach((col, cIdx) => {
-        tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col="${col}">+ New</td>`;
+        const cellHint = cIdx === 0 ? `<span class="ghost-cell-hint">+ Add Row</span>` : "";
+        tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col="${col}">${cellHint}</td>`;
       });
       tableHtml += `</tr></tbody></table>`;
 
@@ -154,7 +175,7 @@ export async function loadTableData(
       }
       tableContainer.innerHTML = tableHtml;
 
-      document.querySelectorAll("th.sortable").forEach((th) => {
+      tableContainer.querySelectorAll("th.sortable").forEach((th) => {
         th.onclick = (e) => {
           if (window.DataGrid && window.DataGrid.isResizing) return;
           const hasPending =
@@ -169,15 +190,19 @@ export async function loadTableData(
           }
 
           const col = th.dataset.col;
-          if (window.DataGrid.sortState.col === col) {
-            window.DataGrid.sortState.asc = !window.DataGrid.sortState.asc;
-          } else {
-            window.DataGrid.sortState.col = col;
-            window.DataGrid.sortState.asc = true;
+          const currentTable = tableName;
+          const grid = window.TableStates?.[currentTable]?.dataGrid || window.DataGrid;
+          if (grid) {
+            if (grid.sortState.col === col) {
+              grid.sortState.asc = !grid.sortState.asc;
+            } else {
+              grid.sortState.col = col;
+              grid.sortState.asc = true;
+            }
+            grid.pagination.offset = 0;
           }
 
-          window.DataGrid.pagination.offset = 0;
-          loadTableData(tableName, btnElement, getFilterQuery(), true);
+          loadTableData(currentTable, btnElement, getFilterQuery(), true);
         };
 
         bindColumnResizer(th, window.DataGrid);
@@ -203,8 +228,26 @@ export async function loadTableData(
           loadTableData(tableName, btnElement, getFilterQuery(), true);
         };
 
+        const clearFilterBtn = document.getElementById(`btn-clear-filter-${tableName}`);
+        const updateClearBtn = () => {
+          if (clearFilterBtn) {
+            if (inputElSearch?.value.trim()) clearFilterBtn.classList.remove("hidden");
+            else clearFilterBtn.classList.add("hidden");
+          }
+        };
+
+        if (clearFilterBtn && inputElSearch) {
+          clearFilterBtn.addEventListener("click", () => {
+            inputElSearch.value = "";
+            clearFilterBtn.classList.add("hidden");
+            executeSearch(true);
+            inputElSearch.focus();
+          });
+        }
+
         let searchTimeout;
         const debounceSearch = () => {
+          updateClearBtn();
           clearTimeout(searchTimeout);
           searchTimeout = setTimeout(() => executeSearch(true), 400);
         };

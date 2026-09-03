@@ -22,41 +22,61 @@ export function openIndexModal() {
     }
   });
 
-  const colOptions = schemaCols
-    .map((c) => `<option value="${c}">${c}</option>`)
-    .join("");
+  let selectedCols = [];
 
   modal = document.createElement("div");
   modal.id = "index-modal";
-  modal.style.cssText = `
-    position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5);
-    display:flex; justify-content:center; align-items:center; z-index:9999;
-  `;
+  modal.className = "modal-overlay";
   modal.innerHTML = /* html */ `
-    <div class="modal-container" class="w-500">
+    <div class="modal-container idx-modal-container">
       <div class="modal-header">
-        <h3 class="m-0">Manage Indexes</h3>
-        <button id="close-idx-modal" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary" style="font-size:20px;">key</span>
+          <h3 class="m-0 text-15 font-semibold">Manage Indexes</h3>
+        </div>
+        <button id="close-idx-modal" class="modal-close-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div class="modal-body-scroll" id="idx-list-container">
+
+      <div class="modal-body-scroll" style="max-height: 220px; padding: 16px;">
+        <div class="idx-section-title">Current Indexes</div>
+        <div id="idx-list-container"></div>
       </div>
-      <div class="modal-section-bg">
-        <div class="font-semibold mb-2">Add New Index</div>
-        <div class="flex-col gap-2">
-          <input type="text" id="new-idx-name" placeholder="Index Name (Optional)" class="modal-input" />
-          <select id="new-idx-cols" multiple class="modal-input" class="h-80">
-            ${colOptions}
-          </select>
-          <div class="text-12 text-soft">Hold Ctrl/Cmd to select multiple columns</div>
-          <label class="items-center gap-6px cursor-pointer">
-            <input type="checkbox" id="new-idx-unique" /> Unique Index
-          </label>
-          <button id="add-idx-btn" class="primary" class="btn-primary">Add</button>
+
+      <div class="modal-section-bg" style="padding: 16px 20px;">
+        <div class="idx-section-title" style="margin-bottom: 24px;">+ Create New Index</div>
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-11 text-secondary block mb-1.5">Index Name</label>
+            <input type="text" id="new-idx-name" placeholder="Optional (auto-generated if empty)" class="modal-input w-full" style="padding: 8px 12px; font-size: 13px;" />
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-11 text-secondary">Columns (click to select in order)</label>
+              <button type="button" id="btn-clear-selected-cols" class="idx-clear-btn hidden" title="Clear column selection">
+                <span class="material-symbols-outlined" style="font-size:12px; line-height:1;">close</span>
+                <span>Clear selection</span>
+              </button>
+            </div>
+            <div id="idx-chips-container" class="idx-chips-container"></div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none text-13">
+              <input type="checkbox" id="new-idx-unique" style="accent-color: var(--color-primary);" />
+              <span>Unique Index</span>
+            </label>
+            <button type="button" id="add-idx-btn" class="btn-add-idx">
+              <span class="material-symbols-outlined">add</span>
+              <span>Add to List</span>
+            </button>
+          </div>
         </div>
       </div>
+
       <div class="modal-footer">
-        <button id="cancel-idx-btn" class="secondary" class="btn-secondary">Cancel</button>
-        <button id="save-idx-btn" class="primary" class="btn-primary">Save Changes</button>
+        <button id="cancel-idx-btn" class="btn-secondary">Cancel</button>
+        <button id="save-idx-btn" class="btn-primary">Save Changes</button>
       </div>
     </div>
   `;
@@ -66,24 +86,95 @@ export function openIndexModal() {
   document.getElementById("close-idx-modal").onclick = closeFn;
   document.getElementById("cancel-idx-btn").onclick = closeFn;
 
+  const renderChips = () => {
+    const chipsContainer = document.getElementById("idx-chips-container");
+    const clearBtn = document.getElementById("btn-clear-selected-cols");
+    if (!chipsContainer) return;
+
+    if (clearBtn) {
+      if (selectedCols.length > 0) {
+        clearBtn.classList.remove("hidden");
+        clearBtn.onclick = () => {
+          selectedCols = [];
+          renderChips();
+        };
+      } else {
+        clearBtn.classList.add("hidden");
+      }
+    }
+
+    chipsContainer.innerHTML = schemaCols
+      .map((col) => {
+        const orderIdx = selectedCols.indexOf(col);
+        const isSelected = orderIdx !== -1;
+        const badge = isSelected
+          ? `<span class="idx-chip-badge">${orderIdx + 1}</span>`
+          : "";
+        return `
+          <div class="idx-chip ${isSelected ? "selected" : ""}" data-col="${col}">
+            ${badge}
+            <span>${col}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    chipsContainer.querySelectorAll(".idx-chip").forEach((chip) => {
+      chip.onclick = () => {
+        const col = chip.dataset.col;
+        const idx = selectedCols.indexOf(col);
+        if (idx !== -1) {
+          selectedCols.splice(idx, 1);
+        } else {
+          selectedCols.push(col);
+        }
+        renderChips();
+      };
+    });
+  };
+
+  renderChips();
+
   const renderList = () => {
-    let html = activeIndexes
+    const container = document.getElementById("idx-list-container");
+    if (!container) return;
+
+    if (activeIndexes.length === 0) {
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 24px 0; color: var(--color-text-soft);">
+          <span class="material-symbols-outlined" style="font-size:32px; opacity:0.4; margin-bottom:6px;">dataset</span>
+          <div style="font-size:12px;">No indexes defined for this table yet.</div>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = activeIndexes
       .map(
         (idx, i) => `
-      <div class="index-row" class="index-row-container">
-        <div class="flex-1"><strong>${idx.name || "-"}</strong></div>
-        <div class="flex-2 text-12 text-secondary">${idx.columns.join(", ")}</div>
-        <div class="w-60 text-12 text-center">${idx.isUnique ? "UNIQUE" : ""}</div>
-        <button class="icon-btn delete-idx-btn" data-idx="${i}" class="text-error btn-icon"><span class="material-symbols-outlined" class="icon-18">delete</span></button>
-      </div>
-    `,
+        <div class="idx-card">
+          <div class="idx-card-info">
+            <div class="idx-card-header">
+              <span class="idx-name">${idx.name || "unnamed_idx"}</span>
+              ${
+                idx.isUnique
+                  ? `<span class="badge-unique" style="font-size:10px; padding:1px 6px; line-height:14px;">UNIQUE</span>`
+                  : ""
+              }
+            </div>
+            <div class="idx-cols-tags">
+              ${idx.columns.map((c) => `<span class="idx-col-pill">${c}</span>`).join("")}
+            </div>
+          </div>
+          <button type="button" class="idx-del-btn delete-idx-btn" data-idx="${i}" title="Remove index">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </div>
+      `,
       )
       .join("");
-    if (activeIndexes.length === 0)
-      html = `<div class="p-4 text-center text-secondary">No indexes yet.</div>`;
-    document.getElementById("idx-list-container").innerHTML = html;
 
-    document.querySelectorAll(".delete-idx-btn").forEach((btn) => {
+    container.querySelectorAll(".delete-idx-btn").forEach((btn) => {
       btn.onclick = (e) => {
         const i = parseInt(e.currentTarget.dataset.idx, 10);
         activeIndexes.splice(i, 1);
@@ -95,20 +186,25 @@ export function openIndexModal() {
   renderList();
 
   document.getElementById("add-idx-btn").onclick = () => {
-    const name = document.getElementById("new-idx-name").value.trim();
-    const select = document.getElementById("new-idx-cols");
-    const cols = Array.from(select.selectedOptions).map((o) => o.value);
-    const unique = document.getElementById("new-idx-unique").checked;
-
-    if (cols.length === 0) {
-      alert("Please select at least one column for the index.");
+    if (selectedCols.length === 0) {
+      if (window.showToast) {
+        window.showToast("Please select at least one column for the index.", "warning");
+      } else {
+        alert("Please select at least one column for the index.");
+      }
       return;
     }
 
-    activeIndexes.push({ name, columns: cols, isUnique: unique });
+    const t = window.AppState?.currentTable || "table";
+    const rawName = document.getElementById("new-idx-name").value.trim();
+    const name = rawName || `idx_${t}_${selectedCols.join("_")}`;
+    const unique = document.getElementById("new-idx-unique").checked;
+
+    activeIndexes.push({ name, columns: [...selectedCols], isUnique: unique });
     document.getElementById("new-idx-name").value = "";
     document.getElementById("new-idx-unique").checked = false;
-    select.selectedIndex = -1;
+    selectedCols = [];
+    renderChips();
     renderList();
   };
 

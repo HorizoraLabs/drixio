@@ -15,3 +15,7 @@
   opacity: 0.5;
 }
 
+.data-table th:last-child .resizer {
+  display: none !important;
+}
+

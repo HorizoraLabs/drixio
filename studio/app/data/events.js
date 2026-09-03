@@ -15,8 +15,10 @@ export function bindCellEditor(tableContainer, schema, columns) {
       typeUpper.includes("DATETIME") || typeUpper.includes("TIMESTAMP");
     const isBool = typeUpper.includes("BOOL") || typeUpper === "TINYINT(1)";
 
+    const isGhost = td.classList.contains("ghost-row") || (td.dataset.insertIndex !== undefined && !td.classList.contains("cell-edited"));
+    const textVal = td.textContent.trim();
     const rawText =
-      td.textContent === "null" || td.textContent === "+ New"
+      isGhost || textVal === "null" || textVal === "+ New" || textVal === "+ Add Row"
         ? ""
         : td.textContent;
 
@@ -117,12 +119,16 @@ export function bindCellEditor(tableContainer, schema, columns) {
       const saveBtn = document.getElementById("modal-save-btn");
       const title = document.getElementById("modal-title");
 
+      if (!overlay || !textarea) return;
+
       title.textContent = `Edit ${colName}`;
       textarea.value = inputEl.value;
+      overlay.classList.remove("hidden");
       overlay.style.display = "flex";
       textarea.focus();
 
       const closeModal = () => {
+        overlay.classList.add("hidden");
         overlay.style.display = "none";
         saveBtn.onclick = null;
         cancelBtn.onclick = null;
@@ -136,6 +142,11 @@ export function bindCellEditor(tableContainer, schema, columns) {
         closeModal();
         commitEdit();
       };
+
+      // Close on backdrop click
+      overlay.onclick = (e) => {
+        if (e.target === overlay) closeModal();
+      };
     };
 
     td.innerHTML = "";
@@ -144,8 +155,16 @@ export function bindCellEditor(tableContainer, schema, columns) {
       const expandBtn = document.createElement("span");
       expandBtn.className = "material-symbols-outlined cell-expand-btn";
       expandBtn.textContent = "open_in_full";
-      expandBtn.onmousedown = (e) => e.preventDefault();
-      expandBtn.onclick = () => openModal();
+      expandBtn.title = "Open Full Editor (Shift + Enter)";
+      expandBtn.onmousedown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      expandBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openModal();
+      };
       td.appendChild(expandBtn);
 
       inputEl.style.width = "100%";

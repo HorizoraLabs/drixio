@@ -32,12 +32,18 @@
   --font-inter: "Inter", sans-serif;
   --color-btn-active-text: var(--color-primary);
 
+  --color-brand-500: #2c68ec;
+  --color-error: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   /* Grid Interactive States (Light) */
   --color-cell-range-bg: #dbeafe;
   --color-copy-flash: #bfdbfe;
-  --color-cell-edited-bg: #fffbeb;
-  --color-cell-edited-text: #b45309;
-  --color-cell-error-bg: #fef2f2;
+  --color-cell-edited-bg: rgba(245, 158, 11, 0.08);
+  --color-cell-edited-text: var(--color-text);
+  --color-cell-error-bg: rgba(244, 63, 94, 0.08);
   --color-row-deleted-bg: #fee2e2;
   --color-row-deleted-text: #ef4444;
   --color-ghost-row-bg: #f8fafc;
@@ -57,16 +63,27 @@
   --color-border-soft: #1e293b;
   --ring-primary-2: 0 0 0 2px #3b82f633;
   --color-btn-active-text: #ffffff;
+  --color-brand-500: #3b82f6;
+  --color-error: #f43f5e;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
 
   /* Grid Interactive States (Dark) */
   --color-cell-range-bg: rgba(59, 130, 246, 0.15); /* translucent primary */
   --color-copy-flash: rgba(59, 130, 246, 0.4);
-  --color-cell-edited-bg: rgba(245, 158, 11, 0.15);
-  --color-cell-edited-text: #fbbf24;
-  --color-cell-error-bg: rgba(239, 68, 68, 0.15);
+  --color-cell-edited-bg: rgba(245, 158, 11, 0.12);
+  --color-cell-edited-text: var(--color-text);
+  --color-cell-error-bg: rgba(244, 63, 94, 0.12);
   --color-row-deleted-bg: rgba(239, 68, 68, 0.15);
   --color-row-deleted-text: #f87171;
   --color-ghost-row-bg: var(--color-bg-secondary);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-inter);
 }
 
 body,

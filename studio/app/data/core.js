@@ -106,9 +106,11 @@ export function updateCell(td, newVal, columns, recordHistory = true) {
   }
 
   const colName = td.dataset.col;
+  const colIdx = td.dataset.colIdx;
+  const ghostPlaceholder = colIdx === "0" ? `<span class="ghost-cell-hint">+ Add Row</span>` : "";
   td.innerHTML =
     newVal ||
-    (td.dataset.insertIndex !== undefined ? "+ New" : "<em>null</em>");
+    (td.dataset.insertIndex !== undefined ? ghostPlaceholder : "<em>null</em>");
 
   if (td.dataset.insertIndex !== undefined) {
     const idx = parseInt(td.dataset.insertIndex);
@@ -128,7 +130,8 @@ export function updateCell(td, newVal, columns, recordHistory = true) {
         const nextRowIdx = parseInt(td.dataset.rowIdx) + 1;
         tr.innerHTML += `<td class="row-header" data-row-idx="${nextRowIdx}">*</td>`;
         columns.forEach((c, cIdx) => {
-          tr.innerHTML += `<td class="data-cell ghost-row" data-row-idx="${nextRowIdx}" data-col-idx="${cIdx}" data-insert-index="${idx + 1}" data-col="${c}">+ New</td>`;
+          const hint = cIdx === 0 ? `<span class="ghost-cell-hint">+ Add Row</span>` : "";
+          tr.innerHTML += `<td class="data-cell ghost-row" data-row-idx="${nextRowIdx}" data-col-idx="${cIdx}" data-insert-index="${idx + 1}" data-col="${c}">${hint}</td>`;
         });
         tbody.appendChild(tr);
       }

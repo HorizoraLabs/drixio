@@ -1,286 +1,540 @@
-/* ==================== SQL CONSOLE ==================== */
+/* ==================== SQL CONSOLE — Unified Drixio Design System ==================== */
+
 .sql-console-wrapper {
-  display: flex;
-  flex-direction: column-reverse;
-  background-color: var(--color-bg-secondary);
-  text-wrap: nowrap;
-  height: 100%;
+   display: flex;
+   flex-direction: column;
+   height: 100%;
+   background-color: var(--color-bg-primary);
+   overflow: hidden;
+   color: var(--color-text);
+}
+
+/* Custom Thin Scrollbar matching System */
+#console-history-pane::-webkit-scrollbar,
+.console-history-results::-webkit-scrollbar,
+.sql-console-wrapper .table-container::-webkit-scrollbar {
+   width: 6px;
+   height: 6px;
+}
+
+#console-history-pane::-webkit-scrollbar-track,
+.console-history-results::-webkit-scrollbar-track,
+.sql-console-wrapper .table-container::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+#console-history-pane::-webkit-scrollbar-thumb,
+.console-history-results::-webkit-scrollbar-thumb,
+.sql-console-wrapper .table-container::-webkit-scrollbar-thumb {
+   background-color: var(--color-border);
+   border-radius: 4px;
+}
+
+#console-history-pane::-webkit-scrollbar-thumb:hover,
+.console-history-results::-webkit-scrollbar-thumb:hover,
+.sql-console-wrapper .table-container::-webkit-scrollbar-thumb:hover {
+   background-color: var(--color-text-soft);
+}
+
+/* 1. History Pane & Welcome Screen */
+#console-history-pane {
+   flex: 1;
+   overflow-y: auto;
+   padding: 24px 28px;
+   display: flex;
+   flex-direction: column;
+   gap: 18px;
 }
 
 #console-welcome-msg {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  color: var(--color-text-soft);
-  font-family: monospace;
-  text-align: center;
-  letter-spacing: 0.5px;
-  margin: auto 0;
+   display: flex;
+   flex-direction: column;
+   justify-content: center;
+   align-items: center;
+   text-align: center;
+   margin: auto;
+   max-width: 540px;
+   padding: 40px 24px;
 }
 
-#console-welcome-title {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 24px;
-  gap: 36px;
-  color: var(--color-text);
-  font-weight: bolder;
+.console-welcome-icon-box {
+   width: 48px;
+   height: 48px;
+   border-radius: 12px;
+   background: rgba(59, 130, 246, 0.12);
+   border: 1px solid rgba(59, 130, 246, 0.25);
+   color: var(--color-primary);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   margin-bottom: 16px;
 }
 
-#console-welcome-title #icon-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--color-primary);
-  color: #ffffff;
-  width: fit-content;
-  padding: 14px;
-  border-radius: 12px;
+.console-welcome-icon-box .material-symbols-outlined {
+   font-size: 26px;
 }
 
-#console-welcome-description {
-  font-size: 14px;
-  max-width: 50%;
-  text-wrap: wrap;
-  line-height: 2;
+.console-welcome-heading {
+   font-size: 20px;
+   font-weight: 700;
+   color: var(--color-text);
+   margin: 0 0 8px 0;
+   letter-spacing: -0.01em;
 }
 
-#console-welcome-description b {
-  color: var(--color-primary);
-  background-color: var(--color-bg-secondary);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 16px;
+.console-welcome-sub {
+   font-size: 13px;
+   color: var(--color-text-secondary);
+   line-height: 1.6;
+   margin: 0 0 20px 0;
 }
 
-#console-welcome-hint {
-  margin-top: 24px;
-  font-size: 12px;
-  opacity: 0.65;
+.console-shortcuts-hint {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   gap: 8px;
+   flex-wrap: wrap;
+   margin-bottom: 24px;
 }
 
-.sql-console-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: var(--color-bg-primary);
-  overflow: hidden;
-}
-.sql-console-wrapper ::-webkit-scrollbar {
-  display: none;
-}
-.sql-console-wrapper {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.shortcut-pill {
+   font-size: 11px;
+   color: var(--color-text-soft);
+   background: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   padding: 3px 8px;
+   border-radius: 6px;
 }
 
-#console-history-pane {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+.shortcut-pill kbd {
+   font-family: var(--font-mono);
+   font-weight: 600;
+   color: var(--color-text);
+   background: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   padding: 1px 4px;
+   border-radius: 4px;
+   font-size: 10px;
 }
 
-#console-input-pane {
-  border-top: 1px solid var(--color-border);
-  padding: 16px 24px;
-  background-color: var(--color-bg-secondary);
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.02);
+.console-quick-templates {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   flex-wrap: wrap;
+   justify-content: center;
 }
 
-.sql-editor-wrapper {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+.quick-template-label {
+   font-size: 12px;
+   color: var(--color-text-soft);
+   font-weight: 500;
 }
 
-.sql-prompt {
-  font-family: monospace;
-  color: var(--color-primary);
-  font-weight: bold;
-  font-size: 14px;
-  user-select: none;
-  margin-top: 1.5px;
+.template-chip {
+   background: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   border-radius: 6px;
+   padding: 4px 10px;
+   font-size: 12px;
+   font-family: var(--font-mono);
+   color: var(--color-text);
+   cursor: pointer;
+   transition: all 0.15s ease;
 }
 
-.sql-editor-layer-container {
-  position: relative;
-  flex: 1;
-  height: fit-content;
-  min-height: 128px;
+.template-chip:hover {
+   border-color: var(--color-primary);
+   color: var(--color-primary);
+   background: var(--color-bg-primary);
+   transform: translateY(-1px);
 }
 
-#sql-highlight-layer {
-  position: absolute;
-  top: 1.5px;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  pointer-events: none;
-  white-space: pre-wrap;
-  word-break: break-all;
-  z-index: 1;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-}
-
-.sql-editor {
-  width: 100%;
-  height: fit-content;
-  min-height: 128px;
-  resize: none;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-  font-size: 14px;
-  border: none;
-  outline: none;
-  background-color: transparent;
-  color: var(--color-text);
-  letter-spacing: 0.8px;
-  line-height: normal;
-}
-
-textarea#sql-editor {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  color: transparent !important;
-  caret-color: var(--color-text);
-  margin: 0;
-  padding: 0;
-}
-
+/* 2. History Result Blocks */
 .console-history-block {
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  flex-shrink: 0;
+   background-color: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   border-radius: 10px;
+   overflow: hidden;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+   flex-shrink: 0;
 }
 
 .console-history-header {
-  padding: 12px 16px;
-  background-color: var(--color-bg-primary);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+   padding: 10px 16px;
+   background-color: var(--color-bg-primary);
+   border-bottom: 1px solid var(--color-border);
+   display: flex;
+   justify-content: space-between;
+   align-items: flex-start;
+   gap: 16px;
 }
 
 .console-history-sql {
-  flex: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  line-height: 1.5;
-  word-break: break-all;
+   flex: 1;
+   font-family: var(--font-mono);
+   font-size: 13px;
+   color: var(--color-text);
+   white-space: pre-wrap;
+   line-height: 1.5;
+   word-break: break-all;
 }
 
 .console-history-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
+   display: flex;
+   gap: 4px;
+   flex-shrink: 0;
 }
 
 .console-history-actions .icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-soft);
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+   background: none;
+   border: 1px solid transparent;
+   cursor: pointer;
+   color: var(--color-text-soft);
+   padding: 4px 6px;
+   border-radius: 6px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   transition: all 0.15s ease;
+}
+
+.console-history-actions .icon-btn:hover {
+   color: var(--color-text);
+   background-color: var(--color-bg-secondary);
+   border-color: var(--color-border);
 }
 
 .console-history-results {
-  padding: 16px;
-  overflow-x: auto;
-  max-height: 400px;
-  overflow-y: auto;
+   padding: 14px 16px;
+   overflow-x: auto;
+   max-height: 420px;
+   overflow-y: auto;
 }
 
 .console-msg-executing,
 .console-msg-error,
 .console-msg-success {
-  font-family: monospace;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.console-msg-executing {
-  color: var(--color-text-soft);
-}
-.console-msg-error {
-  color: var(--color-error);
-  align-items: flex-start;
-  white-space: pre-wrap;
-}
-.console-msg-success {
-  color: #10b981;
+   font-family: var(--font-mono);
+   font-size: 13px;
+   display: flex;
+   align-items: center;
+   gap: 8px;
 }
 
-.console-stats-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+.console-msg-executing {
+   color: var(--color-text-soft);
+}
+
+.console-msg-error {
+   color: var(--color-error);
+   align-items: flex-start;
+   white-space: pre-wrap;
+   line-height: 1.5;
+   background: rgba(239, 68, 68, 0.08);
+   border: 1px solid rgba(239, 68, 68, 0.2);
+   padding: 10px 14px;
+   border-radius: 6px;
+}
+
+.console-msg-success {
+   color: var(--color-success);
+   background: rgba(16, 185, 129, 0.08);
+   border: 1px solid rgba(16, 185, 129, 0.2);
+   padding: 8px 12px;
+   border-radius: 6px;
+   width: fit-content;
+}
+
+/* Mutation Feedback Banner */
+.console-mutation-banner {
+   display: flex;
+   align-items: center;
+   font-family: var(--font-mono);
+   font-size: 13px;
+   color: var(--color-text);
+   background: rgba(16, 185, 129, 0.06);
+   border: 1px solid rgba(16, 185, 129, 0.2);
+   border-radius: 6px;
+   padding: 10px 14px;
+   width: fit-content;
+}
+
+.console-mutation-info {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+}
+
+.console-mutation-info .icon {
+   color: var(--color-success);
+   font-size: 18px;
+}
+
+.console-mutation-info b {
+   color: var(--color-success);
+   font-weight: 700;
+}
+
+/* Stats Header acting as a Divider above table */
+.console-stats-header.console-stats-divider {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   margin-bottom: 12px;
+   padding-bottom: 10px;
+   border-bottom: 1px solid var(--color-border);
 }
 
 .console-stats-info {
-  color: var(--color-text-soft);
-  font-size: 12px;
-  font-family: monospace;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+   color: var(--color-text-secondary);
+   font-size: 12px;
+   font-family: var(--font-mono);
+   display: flex;
+   align-items: center;
+   gap: 6px;
+}
+
+.console-stats-info .icon {
+   color: var(--color-success);
+   font-size: 16px;
+}
+
+.console-stats-info b {
+   color: var(--color-text);
+   font-weight: 600;
 }
 
 .console-export-btn {
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 500;
+   background: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   border-radius: 6px;
+   padding: 4px 10px;
+   font-size: 12px;
+   cursor: pointer;
+   color: var(--color-text);
+   display: inline-flex;
+   align-items: center;
+   gap: 5px;
+   font-weight: 500;
+   transition: all 0.15s ease;
 }
 
+.console-export-btn:hover {
+   border-color: var(--color-primary);
+   color: var(--color-primary);
+}
+
+/* 3. Bottom Terminal Editor Dock */
+#console-input-pane {
+   border-top: 1px solid var(--color-border);
+   padding: 12px 24px 16px;
+   background-color: var(--color-bg-secondary);
+   flex-shrink: 0;
+   display: flex;
+   flex-direction: column;
+   gap: 10px;
+   position: relative;
+   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.console-editor-toolbar {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+}
+
+.editor-toolbar-left {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+}
+
+.editor-mode-tag {
+   display: inline-flex;
+   align-items: center;
+   gap: 4px;
+   font-size: 11px;
+   font-weight: 700;
+   font-family: var(--font-mono);
+   color: var(--color-primary);
+   background: rgba(59, 130, 246, 0.1);
+   border: 1px solid rgba(59, 130, 246, 0.2);
+   padding: 2px 7px;
+   border-radius: 5px;
+}
+
+.editor-shortcut-info {
+   font-size: 12px;
+   color: var(--color-text-soft);
+}
+
+.editor-shortcut-info b {
+   color: var(--color-text-secondary);
+}
+
+.editor-toolbar-right {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+}
+
+.sql-editor-wrapper {
+   display: flex;
+   align-items: flex-start;
+   background-color: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   border-radius: 8px;
+   padding: 10px 14px;
+   transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+}
+
+.sql-editor-wrapper:focus-within {
+   border-color: var(--color-primary);
+   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.sql-editor-layer-container {
+   position: relative;
+   flex: 1;
+   min-height: 84px;
+   max-height: 220px;
+}
+
+/* Autocomplete Floating Popup (VS Code Style) */
+.console-autocomplete-popup {
+   position: absolute;
+   bottom: calc(100% + 10px);
+   left: 0;
+   min-width: 240px;
+   max-width: 380px;
+   max-height: 200px;
+   overflow-y: auto;
+   background: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   border-radius: 8px;
+   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+   z-index: 50;
+   padding: 4px;
+   display: flex;
+   flex-direction: column;
+   gap: 2px;
+}
+
+.console-autocomplete-popup.hidden {
+   display: none;
+}
+
+.autocomplete-item {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
+   padding: 5px 8px;
+   border-radius: 5px;
+   font-family: var(--font-mono);
+   font-size: 12px;
+   cursor: pointer;
+   color: var(--color-text);
+   transition: background 0.1s ease;
+}
+
+.autocomplete-item.active,
+.autocomplete-item:hover {
+   background: var(--color-primary);
+   color: #ffffff;
+}
+
+.autocomplete-item-left {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   overflow: hidden;
+}
+
+.autocomplete-item-icon {
+   font-size: 14px;
+   line-height: 1;
+   opacity: 0.85;
+}
+
+.autocomplete-item-text {
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+.autocomplete-item-type {
+   font-size: 10px;
+   text-transform: uppercase;
+   opacity: 0.65;
+   letter-spacing: 0.05em;
+   font-weight: 600;
+}
+
+/* Identical layout metrics for both layers */
+#sql-highlight-layer,
+textarea#sql-editor {
+   position: absolute;
+   top: 0;
+   left: 0;
+   width: 100%;
+   height: 100%;
+   margin: 0;
+   padding: 0;
+   border: none;
+   outline: none;
+   box-sizing: border-box;
+}
+
+/* Identical text metrics for both layers AND span children to ensure ZERO caret misalignment */
+#sql-highlight-layer,
+#sql-highlight-layer *,
+textarea#sql-editor {
+   font-family: var(--font-mono) !important;
+   font-size: 13px !important;
+   line-height: 1.5 !important;
+   letter-spacing: normal !important;
+   font-weight: 400 !important;
+   white-space: pre-wrap !important;
+   word-break: break-all !important;
+   tab-size: 2 !important;
+}
+
+#sql-highlight-layer {
+   pointer-events: none;
+   z-index: 1;
+   overflow: hidden;
+   color: var(--color-text);
+}
+
+textarea#sql-editor {
+   z-index: 2;
+   resize: none;
+   background: transparent;
+   color: transparent !important;
+   caret-color: var(--color-text);
+   overflow-y: auto;
+}
+
+/* Syntax Highlighting — NEVER change font-weight to preserve monospaced alignment */
 .hl-string {
-  color: #98c379;
-}
-.hl-number {
-  color: #d19a66;
-}
-.hl-keyword {
-  color: #c678dd;
-  font-weight: bold;
-}
-.hl-placeholder {
-  color: var(--color-text-soft);
-  opacity: 0.5;
+   color: #10b981;
 }
 
+.hl-number {
+   color: #f59e0b;
+}
+
+.hl-keyword {
+   color: #818cf8;
+   font-weight: 400; /* Must stay 400 to prevent caret drift! */
+}
+
+.hl-placeholder {
+   color: var(--color-text-soft);
+   opacity: 0.4;
+}

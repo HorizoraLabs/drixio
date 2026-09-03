@@ -134,6 +134,23 @@ export const bindGridEvents = () => {
     }
 
     if (!isData && !isSchema) return;
+
+    if (e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (
+        e.target.tagName === "INPUT" ||
+        e.target.tagName === "SELECT" ||
+        e.target.tagName === "TEXTAREA"
+      ) {
+        e.target.blur();
+      }
+      setTimeout(() => {
+        if (isData) window.saveDataGridEdits?.();
+        if (isSchema) window.saveSchemaEdits?.();
+      }, 50);
+      return;
+    }
+
     if (
       e.target.tagName === "INPUT" ||
       e.target.tagName === "SELECT" ||
@@ -213,7 +230,59 @@ export const bindGridEvents = () => {
       return;
     }
 
-    if (e.key === "Enter" || e.key === "Tab") {
+    const isPrintable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+    const isF2 = e.key === "F2";
+
+    if (e.key === "Enter" || isPrintable || isF2) {
+      const grid = isData ? window.DataGrid : window.SchemaGrid;
+      if (!grid || !grid.selection || grid.selection.startRow === -1) return;
+
+      const t = window.AppState?.currentTable;
+      if (!t) return;
+      let targetRow = Math.min(grid.selection.startRow, grid.selection.endRow);
+      let targetCol = Math.min(grid.selection.startCol, grid.selection.endCol);
+
+      const td = document.querySelector(
+        isData
+          ? `#data-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`
+          : `#schema-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`,
+      );
+
+      if (td && !td.classList.contains("manage-indexes-cell") && !td.querySelector("input, select")) {
+        e.preventDefault();
+        const dblclickEvent = new MouseEvent("dblclick", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        });
+        td.dispatchEvent(dblclickEvent);
+
+        const input = td.querySelector("input");
+        if (input) {
+          if (isPrintable) {
+            input.value = e.key;
+            input.setSelectionRange(e.key.length, e.key.length);
+          } else if (isF2) {
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+          }
+        } else {
+          const select = td.querySelector("select");
+          if (select && isPrintable) {
+            const match = Array.from(select.options).find((opt) =>
+              opt.text.toLowerCase().startsWith(e.key.toLowerCase()),
+            );
+            if (match) {
+              select.value = match.value;
+              select.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+          }
+        }
+        return;
+      }
+    }
+
+    if (e.key === "Tab") {
       const grid = isData ? window.DataGrid : window.SchemaGrid;
       if (!grid || !grid.selection || grid.selection.startRow === -1) return;
       e.preventDefault();
@@ -222,88 +291,69 @@ export const bindGridEvents = () => {
       let targetRow = Math.min(grid.selection.startRow, grid.selection.endRow);
       let targetCol = Math.min(grid.selection.startCol, grid.selection.endCol);
 
-      if (e.key === "Enter") {
+      const maxCols = isData ? grid.schema.length : 5;
+      const rowElements = document.querySelectorAll(
+        isData
+          ? `#data-grid-table-${t} tbody tr`
+          : `#schema-grid-table-${t} tbody tr`,
+      );
+      const maxRows = rowElements.length > 0 ? rowElements.length - 1 : 0;
+
+      if (e.shiftKey) {
+        targetCol -= 1;
+        if (targetCol < 0) {
+          targetCol = maxCols - 1;
+          targetRow = Math.max(0, targetRow - 1);
+        }
+      } else {
+        targetCol += 1;
+        if (targetCol >= maxCols) {
+          targetCol = 0;
+          targetRow = Math.min(maxRows, targetRow + 1);
+        }
+      }
+
+      grid.selection.startRow = targetRow;
+      grid.selection.endRow = targetRow;
+      grid.selection.startCol = targetCol;
+      grid.selection.endCol = targetCol;
+
+      const tableId = isData
+        ? `data-grid-table-${t}`
+        : `schema-grid-table-${t}`;
+      renderSelection(tableId, grid);
+
+      setTimeout(() => {
         const td = document.querySelector(
           isData
             ? `#data-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`
             : `#schema-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`,
         );
         if (td) {
-          const dblclickEvent = new MouseEvent("dblclick", {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-          });
-          td.dispatchEvent(dblclickEvent);
-        }
-        return;
-      }
-
-      if (e.key === "Tab") {
-        const maxCols = isData ? grid.schema.length : 5;
-        const rowElements = document.querySelectorAll(
-          isData
-            ? `#data-grid-table-${t} tbody tr`
-            : `#schema-grid-table-${t} tbody tr`,
-        );
-        const maxRows = rowElements.length > 0 ? rowElements.length - 1 : 0;
-
-        if (e.shiftKey) {
-          targetCol -= 1;
-          if (targetCol < 0) {
-            targetCol = maxCols - 1;
-            targetRow = Math.max(0, targetRow - 1);
-          }
-        } else {
-          targetCol += 1;
-          if (targetCol >= maxCols) {
-            targetCol = 0;
-            targetRow = Math.min(maxRows, targetRow + 1);
-          }
-        }
-
-        grid.selection.startRow = targetRow;
-        grid.selection.endRow = targetRow;
-        grid.selection.startCol = targetCol;
-        grid.selection.endCol = targetCol;
-
-        const tableId = isData
-          ? `data-grid-table-${t}`
-          : `schema-grid-table-${t}`;
-        renderSelection(tableId, grid);
-
-        setTimeout(() => {
-          const td = document.querySelector(
+          const container = document.getElementById(
             isData
-              ? `#data-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`
-              : `#schema-grid-table-${t} td.data-cell[data-row-idx="${targetRow}"][data-col-idx="${targetCol}"]`,
+              ? `data-grid-container-${t}`
+              : `schema-grid-container-${t}`,
           );
-          if (td) {
-            const container = document.getElementById(
-              isData
-                ? `data-grid-container-${t}`
-                : `schema-grid-container-${t}`,
-            );
-            if (container) {
-              const tdRect = td.getBoundingClientRect();
-              const containerRect = container.getBoundingClientRect();
+          if (container) {
+            const tdRect = td.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
 
-              if (tdRect.bottom > containerRect.bottom) {
-                container.scrollTop += tdRect.bottom - containerRect.bottom + 5;
-              } else if (tdRect.top < containerRect.top + 30) {
-                container.scrollTop -= containerRect.top + 30 - tdRect.top;
-              }
+            if (tdRect.bottom > containerRect.bottom) {
+              container.scrollTop += tdRect.bottom - containerRect.bottom + 5;
+            } else if (tdRect.top < containerRect.top + 30) {
+              container.scrollTop -= containerRect.top + 30 - tdRect.top;
+            }
 
-              if (tdRect.right > containerRect.right) {
-                container.scrollLeft += tdRect.right - containerRect.right + 5;
-              } else if (tdRect.left < containerRect.left + 50) {
-                container.scrollLeft -= containerRect.left + 50 - tdRect.left;
-              }
+            if (tdRect.right > containerRect.right) {
+              container.scrollLeft += tdRect.right - containerRect.right + 5;
+            } else if (tdRect.left < containerRect.left + 50) {
+              container.scrollLeft -= containerRect.left + 50 - tdRect.left;
             }
           }
-        }, 5);
-        return;
-      }
+        }
+      }, 5);
+      return;
     }
 
     if (e.key === "Delete" || e.key === "Backspace") {

@@ -4,10 +4,19 @@ export const initTheme = () => {
     window.matchMedia &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
     
-  if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
-    document.documentElement.setAttribute("data-theme", "dark");
+  const updateThemeUI = (isDark) => {
     const themeIcon = document.getElementById("theme-icon");
-    if (themeIcon) themeIcon.textContent = "light_mode";
+    const themeText = document.getElementById("theme-text");
+    if (themeIcon) themeIcon.textContent = isDark ? "light_mode" : "dark_mode";
+    if (themeText) themeText.textContent = isDark ? "Light" : "Dark";
+  };
+
+  const isInitialDark = savedTheme === "dark" || (!savedTheme && prefersDark);
+  if (isInitialDark) {
+    document.documentElement.setAttribute("data-theme", "dark");
+    updateThemeUI(true);
+  } else {
+    updateThemeUI(false);
   }
 
   const themeToggle = document.getElementById("theme-toggle");
@@ -18,9 +27,7 @@ export const initTheme = () => {
       const newTheme = isDark ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", newTheme);
       localStorage.setItem("drixio-theme", newTheme);
-      document.getElementById("theme-icon").textContent = isDark
-        ? "dark_mode"
-        : "light_mode";
+      updateThemeUI(!isDark);
     });
   }
 };

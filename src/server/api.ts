@@ -131,6 +131,36 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
+   api.post('/tables/:name/schema', async (c) => {
+      const tableName = c.req.param('name');
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { columns, renames } = body;
+
+         if (!columns || !Array.isArray(columns)) {
+            return c.json(
+               { success: false, error: 'Invalid columns parameter' },
+               400,
+            );
+         }
+
+         if (adapter.recreateTable) {
+            await adapter.recreateTable(tableName, columns, renames || {});
+            return c.json({ success: true });
+         } else {
+            return c.json(
+               {
+                  success: false,
+                  error: 'Table recreation is currently supported for SQLite',
+               },
+               400,
+            );
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
    api.get('/tables/:name/indexes', async (c) => {
       const tableName = c.req.param('name');
       try {

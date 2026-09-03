@@ -42,9 +42,7 @@ export interface DBAdapter {
       whereClause?: string,
       orderBy?: { col: string; asc: boolean },
    ): Promise<{ columns: string[]; rows: Record<string, any>[] }>;
-   query(
-      sql: string,
-   ): Promise<{
+   query(sql: string): Promise<{
       columns: string[];
       rows: Record<string, any>[];
       affectedRows?: number;
@@ -54,6 +52,12 @@ export interface DBAdapter {
    close(): Promise<void>;
    /** Quote a table/column identifier using the correct syntax for this database engine. */
    quoteIdentifier(name: string): string;
+   /** Re-create a table with new column definitions while preserving existing data. */
+   recreateTable?(
+      tableName: string,
+      newColumns: ColumnSchema[],
+      renames?: Record<string, string>,
+   ): Promise<void>;
 }
 
 export interface DBConfig {

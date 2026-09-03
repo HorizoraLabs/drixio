@@ -218,9 +218,7 @@ export class SqliteAdapter implements DBAdapter {
       return { columns, rows };
    }
 
-   async query(
-      sql: string,
-   ): Promise<{
+   async query(sql: string): Promise<{
       columns: string[];
       rows: Record<string, any>[];
       affectedRows?: number;
@@ -301,6 +299,144 @@ export class SqliteAdapter implements DBAdapter {
       } catch (e) {
          db.exec('ROLLBACK');
          throw e;
+      }
+   }
+
+   async recreateTable(
+      tableName: string,
+      newColumns: ColumnSchema[],
+      renames: Record<string, string> = {},
+   ): Promise<void> {
+      const db = await this.getDb();
+      const quotedOldTable = this.quoteIdentifier(tableName);
+
+      // 1. Verify table exists
+      const tableCheck = db
+         .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+         )
+         .get(tableName);
+      if (!tableCheck) {
+         throw new Error(`Table "${tableName}" does not exist.`);
+      }
+
+      // 2. Fetch existing custom indexes
+      const indexRows = db
+         .prepare(
+            `SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL`,
+         )
+         .all(tableName) as { name: string; sql: string }[];
+
+      // 3. Create a unique temporary table name
+      const tempTableName = `_drixio_recreate_${Date.now()}`;
+      const quotedTempTable = this.quoteIdentifier(tempTableName);
+
+      // 4. Build column definitions for CREATE TABLE
+      const pkColumns = newColumns.filter((c) => c.isPk);
+      const isCompositePk = pkColumns.length > 1;
+
+      const colDefs: string[] = [];
+      for (const col of newColumns) {
+         let def = `${this.quoteIdentifier(col.name)} ${col.type || 'TEXT'}`;
+
+         if (col.isPk && !isCompositePk) {
+            def += ' PRIMARY KEY';
+         }
+
+         if (!col.nullable && (!col.isPk || isCompositePk)) {
+            def += ' NOT NULL';
+         }
+
+         if (
+            col.defaultValue !== undefined &&
+            col.defaultValue !== null &&
+            col.defaultValue !== ''
+         ) {
+            def += ` DEFAULT '${String(col.defaultValue).replace(/'/g, "''")}'`;
+         }
+
+         if (col.fkTarget && col.fkTarget.table && col.fkTarget.column) {
+            def += ` REFERENCES ${this.quoteIdentifier(col.fkTarget.table)}(${this.quoteIdentifier(col.fkTarget.column)})`;
+         }
+
+         if (col.isUnique && (!col.isPk || isCompositePk)) {
+            def += ' UNIQUE';
+         }
+
+         colDefs.push(def);
+      }
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => this.quoteIdentifier(c.name))
+            .join(', ');
+         colDefs.push(`PRIMARY KEY (${pkColsQuoted})`);
+      }
+
+      const createSql = `CREATE TABLE ${quotedTempTable} (\n  ${colDefs.join(',\n  ')}\n);`;
+
+      // 5. Build column mapping for data migration
+      const newToOldMap: Record<string, string> = {};
+      for (const [oldName, newName] of Object.entries(renames)) {
+         newToOldMap[newName] = oldName;
+      }
+
+      const oldTableCols = (
+         db.prepare(`PRAGMA table_info(${quotedOldTable})`).all() as {
+            name: string;
+         }[]
+      ).map((r) => r.name);
+
+      const copyNewCols: string[] = [];
+      const copyOldCols: string[] = [];
+
+      for (const col of newColumns) {
+         const sourceOldName = newToOldMap[col.name] || col.name;
+         if (oldTableCols.includes(sourceOldName)) {
+            copyNewCols.push(this.quoteIdentifier(col.name));
+            copyOldCols.push(this.quoteIdentifier(sourceOldName));
+         }
+      }
+
+      let copySql = '';
+      if (copyNewCols.length > 0) {
+         copySql = `INSERT INTO ${quotedTempTable} (${copyNewCols.join(', ')}) SELECT ${copyOldCols.join(', ')} FROM ${quotedOldTable};`;
+      }
+
+      // 6. Execute migration in single transaction with foreign keys temporarily off
+      db.exec('PRAGMA foreign_keys = OFF;');
+      db.exec('BEGIN TRANSACTION;');
+      try {
+         db.exec(createSql);
+         if (copySql) {
+            db.exec(copySql);
+         }
+         db.exec(`DROP TABLE ${quotedOldTable};`);
+         db.exec(`ALTER TABLE ${quotedTempTable} RENAME TO ${quotedOldTable};`);
+
+         // Re-create user indexes
+         for (const idx of indexRows) {
+            if (!idx.sql) continue;
+            let idxSql = idx.sql;
+            for (const [oldName, newName] of Object.entries(renames)) {
+               idxSql = idxSql.replace(
+                  new RegExp(`\\b${oldName}\\b`, 'g'),
+                  newName,
+               );
+            }
+            try {
+               db.exec(idxSql);
+            } catch {
+               // Index might reference a dropped column, safe to skip
+            }
+         }
+
+         db.exec('COMMIT;');
+      } catch (err) {
+         db.exec('ROLLBACK;');
+         throw err;
+      } finally {
+         db.exec('PRAGMA foreign_keys = ON;');
       }
    }
 }

@@ -105,6 +105,7 @@ export class SqliteAdapter implements DBAdapter {
       }[];
       const uniqueCols = new Set<string>();
       for (const idx of indexList) {
+         if (idx.origin === 'pk') continue;
          if (idx.unique === 1) {
             const infoQuery = db.prepare(
                `PRAGMA index_info(${this.quoteIdentifier(idx.name)})`,
@@ -176,7 +177,7 @@ export class SqliteAdapter implements DBAdapter {
             type: col.type,
             isPk: col.pk > 0,
             nullable: col.pk > 0 ? false : col.notnull === 0,
-            isUnique: col.pk > 0 || uniqueCols.has(col.name),
+            isUnique: uniqueCols.has(col.name),
             defaultValue:
                col.dflt_value != null ? String(col.dflt_value) : undefined,
             enumValues: enumMap.get(col.name),

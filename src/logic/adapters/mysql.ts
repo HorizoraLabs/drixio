@@ -172,7 +172,7 @@ export class MysqlAdapter implements DBAdapter {
             type: col.Type,
             isPk: col.Key === 'PRI',
             nullable: col.Key === 'PRI' ? false : col.Null === 'YES',
-            isUnique: col.Key === 'PRI' || col.Key === 'UNI',
+            isUnique: col.Key === 'UNI',
             defaultValue: col.Default != null ? String(col.Default) : undefined,
             enumValues,
             fkTarget: fk

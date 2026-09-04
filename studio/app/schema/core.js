@@ -94,8 +94,23 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
    const ghostPlaceholder =
       colIdx === '0' ? `<span class="ghost-cell-hint">+ Add column</span>` : '';
 
+   let displayHtml = newVal;
+   if (colKey === 'isPk' && newVal) {
+      const isPk = newVal.includes('PK') || newVal.includes('PFK');
+      const fkMatch = newVal.match(
+         /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+      );
+      if (isPk && fkMatch) {
+         displayHtml = `<span class="col-badge badge-pfk" title="Primary Foreign Key (Composite Key referencing ${fkMatch[1]}.${fkMatch[2]})">PFK &rarr; ${fkMatch[1]}.${fkMatch[2]}</span>`;
+      } else if (isPk) {
+         displayHtml = `<span class="col-badge badge-pk">PK</span>`;
+      } else if (fkMatch) {
+         displayHtml = `<span class="col-badge badge-fk" title="References ${fkMatch[1]}.${fkMatch[2]}">FK &rarr; ${fkMatch[1]}.${fkMatch[2]}</span>`;
+      }
+   }
+
    td.innerHTML =
-      newVal ||
+      displayHtml ||
       (td.dataset.insertIndex !== undefined
          ? ghostPlaceholder
          : `<span class="text-soft">-</span>`);

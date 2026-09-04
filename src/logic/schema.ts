@@ -89,10 +89,18 @@ export async function applySchemaChanges(
    // Case A: Explicit newColumns array passed (used by SQLite recreation or direct column array)
    if (dbType === 'sqlite') {
       if (adapter.recreateTable) {
-         let targetColumns = columns;
-         if (!targetColumns) {
+         const hasEdits =
+            Object.keys(pendingEdits).length > 0 ||
+            pendingInserts.length > 0 ||
+            pendingDeletes.length > 0;
+
+         let targetColumns: ColumnSchema[];
+         if (hasEdits || !columns || columns.length === 0) {
             // Reconstruct targetColumns from existing schema + edits/inserts/deletes
-            const origSchema = await adapter.getSchema(tableName);
+            const origSchema =
+               columns && columns.length > 0
+                  ? columns
+                  : await adapter.getSchema(tableName);
             const updated: ColumnSchema[] = [];
 
             for (const col of origSchema) {
@@ -101,7 +109,26 @@ export async function applySchemaChanges(
                const edits = pendingEdits[col.name] || {};
                let colName = edits.name || col.name;
                let type = edits.type || col.type;
-               let isPk = edits.isPk !== undefined ? !!edits.isPk : col.isPk;
+               let isPk = col.isPk;
+               let fkTarget = edits.fkTarget || col.fkTarget;
+
+               const rawPk = (edits as any).isPk;
+               if (rawPk !== undefined) {
+                  if (typeof rawPk === 'string') {
+                     isPk = rawPk.includes('PK') || rawPk.includes('PFK');
+                     const fkMatch = rawPk.match(
+                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+                     );
+                     if (fkMatch) {
+                        fkTarget = { table: fkMatch[1], column: fkMatch[2] };
+                     } else {
+                        fkTarget = undefined;
+                     }
+                  } else {
+                     isPk = !!rawPk;
+                  }
+               }
+
                let nullable =
                   edits.nullable !== undefined
                      ? !!edits.nullable
@@ -113,8 +140,9 @@ export async function applySchemaChanges(
                let isUnique =
                   edits.isUnique !== undefined
                      ? !!edits.isUnique
-                     : col.isUnique;
-               let fkTarget = edits.fkTarget || col.fkTarget;
+                     : col.isPk && !isPk
+                       ? false
+                       : !!col.isUnique;
 
                if (edits.name && edits.name !== col.name) {
                   renames[col.name] = edits.name;
@@ -133,18 +161,36 @@ export async function applySchemaChanges(
 
             for (const ins of pendingInserts) {
                if (!ins.name || ins.name.trim() === '') continue;
+               let isPk = false;
+               let fkTarget = ins.fkTarget;
+               const rawInsPk = (ins as any).isPk;
+               if (rawInsPk !== undefined) {
+                  if (typeof rawInsPk === 'string') {
+                     isPk = rawInsPk.includes('PK') || rawInsPk.includes('PFK');
+                     const fkMatch = rawInsPk.match(
+                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+                     );
+                     if (fkMatch) {
+                        fkTarget = { table: fkMatch[1], column: fkMatch[2] };
+                     }
+                  } else {
+                     isPk = !!rawInsPk;
+                  }
+               }
                updated.push({
                   name: ins.name.trim(),
                   type: ins.type || 'TEXT',
-                  isPk: !!ins.isPk,
+                  isPk,
                   nullable: ins.nullable !== undefined ? !!ins.nullable : true,
                   defaultValue: ins.defaultValue,
                   isUnique: !!ins.isUnique,
-                  fkTarget: ins.fkTarget,
+                  fkTarget,
                });
             }
 
             targetColumns = updated;
+         } else {
+            targetColumns = columns;
          }
 
          try {

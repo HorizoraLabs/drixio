@@ -1,137 +1,204 @@
-import { updateSchemaCell } from "./core.js";
-import { openIndexModal, openPkFkModal } from "./modals.js";
+import { updateSchemaCell } from './core.js';
+import { openIndexModal, openPkFkModal } from './modals.js';
 
 export function bindSchemaCellEditor(tableContainer, columns) {
-  tableContainer.addEventListener("click", (e) => {
-    const manageCell = e.target.closest(".manage-indexes-cell");
-    if (manageCell) {
-      openIndexModal();
-    }
-  });
+   tableContainer.addEventListener('click', (e) => {
+      const manageCell = e.target.closest('.manage-indexes-cell');
+      if (manageCell) {
+         openIndexModal();
+      }
+   });
 
-  tableContainer.addEventListener("dblclick", (e) => {
-    const td = e.target.closest("td.data-cell");
-    if (!td || td.querySelector("input, select")) return;
+   tableContainer.addEventListener('dblclick', (e) => {
+      const td = e.target.closest('td.data-cell');
+      if (!td || td.querySelector('input, select')) return;
 
-    const colKey = td.dataset.colKey;
-    const isNewRow = td.dataset.insertIndex !== undefined;
+      const colKey = td.dataset.colKey;
+      const isNewRow = td.dataset.insertIndex !== undefined;
 
-    const rawText =
-      isNewRow || td.textContent === "-" || td.textContent === "+ New" || td.textContent.includes("Add column") || td.textContent === "+ Add Row" || td.textContent === "null"
-        ? ""
-        : (td.textContent.trim().startsWith("Yes") ? "1" : (td.textContent.trim() === "No" ? "" : td.textContent));
+      const rawText =
+         isNewRow ||
+         td.textContent === '-' ||
+         td.textContent === '+ New' ||
+         td.textContent.includes('Add column') ||
+         td.textContent === '+ Add Row' ||
+         td.textContent === 'null'
+            ? ''
+            : td.textContent.trim().startsWith('Yes')
+              ? '1'
+              : td.textContent.trim() === 'No'
+                ? ''
+                : td.textContent;
 
-    let inputEl;
-    if (colKey === "isPk") {
-      openPkFkModal(td, td.textContent);
-      return;
-    } else if (colKey === "nullable") {
-      const origColName = td.dataset.pk;
-      const colSchema = window.SchemaGrid?.schema?.find((c) => c.name === origColName);
-      const isPk = colSchema ? colSchema.isPk : false;
-      const newRowPk = isNewRow && window.SchemaGrid?.pendingInserts?.[parseInt(td.dataset.insertIndex)]?.isPk;
+      let inputEl;
+      if (colKey === 'isPk') {
+         openPkFkModal(td, td.textContent);
+         return;
+      } else if (colKey === 'nullable') {
+         const origColName = td.dataset.pk;
+         const colSchema = window.SchemaGrid?.schema?.find(
+            (c) => c.name === origColName,
+         );
+         const pendingPk = window.SchemaGrid?.pendingEdits?.[origColName]?.isPk;
+         const isPk =
+            pendingPk !== undefined
+               ? typeof pendingPk === 'string'
+                  ? pendingPk.includes('PK') || pendingPk.includes('PFK')
+                  : !!pendingPk
+               : colSchema
+                 ? colSchema.isPk
+                 : false;
+         const newRowPkVal =
+            isNewRow &&
+            window.SchemaGrid?.pendingInserts?.[
+               parseInt(td.dataset.insertIndex, 10)
+            ]?.isPk;
+         const newRowPk =
+            typeof newRowPkVal === 'string'
+               ? newRowPkVal.includes('PK') || newRowPkVal.includes('PFK')
+               : !!newRowPkVal;
 
-      if (isPk || newRowPk) {
-        if (window.showToast) {
-          window.showToast("Primary Key cannot be nullable.", "error");
-        } else {
-          alert("Primary Key cannot be nullable.");
-        }
-        return;
+         if (isPk || newRowPk) {
+            if (window.showToast) {
+               window.showToast('Primary Key cannot be nullable.', 'error');
+            } else {
+               alert('Primary Key cannot be nullable.');
+            }
+            return;
+         }
+
+         inputEl = document.createElement('select');
+         const opts = ['No', 'Yes'];
+         opts.forEach((opt) => {
+            const op = document.createElement('option');
+            op.value = opt;
+            op.textContent = opt;
+            if (
+               (opt === 'Yes' && rawText === '1') ||
+               (opt === 'No' && rawText === '')
+            )
+               op.selected = true;
+            inputEl.appendChild(op);
+         });
+      } else if (colKey === 'isUnique') {
+         const origColName = td.dataset.pk;
+         const colSchema = window.SchemaGrid?.schema?.find(
+            (c) => c.name === origColName,
+         );
+         const pendingPk = window.SchemaGrid?.pendingEdits?.[origColName]?.isPk;
+         const isPk =
+            pendingPk !== undefined
+               ? typeof pendingPk === 'string'
+                  ? pendingPk.includes('PK') || pendingPk.includes('PFK')
+                  : !!pendingPk
+               : colSchema
+                 ? colSchema.isPk
+                 : false;
+         const newRowPkVal =
+            isNewRow &&
+            window.SchemaGrid?.pendingInserts?.[
+               parseInt(td.dataset.insertIndex, 10)
+            ]?.isPk;
+         const newRowPk =
+            typeof newRowPkVal === 'string'
+               ? newRowPkVal.includes('PK') || newRowPkVal.includes('PFK')
+               : !!newRowPkVal;
+
+         if (isPk || newRowPk) {
+            if (window.showToast) {
+               window.showToast(
+                  'Primary Key is always unique and locked.',
+                  'error',
+               );
+            } else {
+               alert('Primary Key is always unique and locked.');
+            }
+            return;
+         }
+
+         inputEl = document.createElement('select');
+         const opts = ['No', 'Yes'];
+         opts.forEach((opt) => {
+            const op = document.createElement('option');
+            op.value = opt;
+            op.textContent = opt;
+            if (
+               (opt === 'Yes' && rawText === '1') ||
+               (opt === 'No' && rawText === '')
+            )
+               op.selected = true;
+            inputEl.appendChild(op);
+         });
+      } else if (colKey === 'type') {
+         inputEl = document.createElement('select');
+         const opts = [
+            'INTEGER',
+            'TEXT',
+            'REAL',
+            'BLOB',
+            'NUMERIC',
+            'BOOLEAN',
+            'DATE',
+            'DATETIME',
+            'JSON',
+            'VARCHAR(255)',
+            'DECIMAL(10,2)',
+            'UUID',
+         ];
+         if (
+            rawText &&
+            !opts.some((o) => o.toUpperCase() === rawText.toUpperCase())
+         ) {
+            opts.unshift(rawText);
+         }
+         opts.forEach((opt) => {
+            const op = document.createElement('option');
+            op.value = opt;
+            op.textContent = opt;
+            if (opt.toUpperCase() === rawText.toUpperCase()) op.selected = true;
+            inputEl.appendChild(op);
+         });
+      } else {
+         inputEl = document.createElement('input');
+         inputEl.type = 'text';
+         inputEl.value = rawText;
       }
 
-      inputEl = document.createElement("select");
-      const opts = ["No", "Yes"];
-      opts.forEach((opt) => {
-        const op = document.createElement("option");
-        op.value = opt;
-        op.textContent = opt;
-        if ((opt === "Yes" && rawText === "1") || (opt === "No" && rawText === "")) op.selected = true;
-        inputEl.appendChild(op);
+      td.innerHTML = '';
+      td.appendChild(inputEl);
+      inputEl.style.width = '100%';
+
+      inputEl.addEventListener('keydown', (e2) => {
+         if (e2.key === 'Enter') inputEl.blur();
+         if (e2.key === 'Tab') {
+            e2.preventDefault();
+            inputEl.blur();
+            document.body.dispatchEvent(
+               new KeyboardEvent('keydown', {
+                  key: 'Tab',
+                  shiftKey: e2.shiftKey,
+                  bubbles: true,
+               }),
+            );
+         }
       });
-    } else if (colKey === "isUnique") {
-      const origColName = td.dataset.pk;
-      const colSchema = window.SchemaGrid?.schema?.find((c) => c.name === origColName);
-      const isPk = colSchema ? colSchema.isPk : false;
-      const newRowPk = isNewRow && window.SchemaGrid?.pendingInserts?.[parseInt(td.dataset.insertIndex)]?.isPk;
 
-      if (isPk || newRowPk) {
-        if (window.showToast) {
-          window.showToast("Primary Key is always unique and locked.", "error");
-        } else {
-          alert("Primary Key is always unique and locked.");
-        }
-        return;
-      }
+      inputEl.focus();
 
-      inputEl = document.createElement("select");
-      const opts = ["No", "Yes"];
-      opts.forEach((opt) => {
-        const op = document.createElement("option");
-        op.value = opt;
-        op.textContent = opt;
-        if ((opt === "Yes" && rawText === "1") || (opt === "No" && rawText === "")) op.selected = true;
-        inputEl.appendChild(op);
+      const commitEdit = () => {
+         let newVal = inputEl.value;
+
+         window.SchemaGrid.currentTransaction = [];
+         updateSchemaCell(td, newVal, columns);
+         if (window.SchemaGrid.currentTransaction.length > 0)
+            window.SchemaGrid.history.push(
+               window.SchemaGrid.currentTransaction,
+            );
+         window.SchemaGrid.currentTransaction = null;
+      };
+
+      inputEl.addEventListener('blur', () => {
+         commitEdit();
       });
-    } else if (colKey === "type") {
-      inputEl = document.createElement("select");
-      const opts = [
-        "INTEGER",
-        "TEXT",
-        "REAL",
-        "BLOB",
-        "NUMERIC",
-        "BOOLEAN",
-        "DATE",
-        "DATETIME",
-        "JSON",
-        "VARCHAR(255)",
-        "DECIMAL(10,2)",
-        "UUID"
-      ];
-      if (rawText && !opts.some(o => o.toUpperCase() === rawText.toUpperCase())) {
-        opts.unshift(rawText);
-      }
-      opts.forEach((opt) => {
-        const op = document.createElement("option");
-        op.value = opt;
-        op.textContent = opt;
-        if (opt.toUpperCase() === rawText.toUpperCase()) op.selected = true;
-        inputEl.appendChild(op);
-      });
-    } else {
-      inputEl = document.createElement("input");
-      inputEl.type = "text";
-      inputEl.value = rawText;
-    }
-
-    td.innerHTML = "";
-    td.appendChild(inputEl);
-    inputEl.style.width = "100%";
-
-    inputEl.addEventListener("keydown", (e2) => {
-      if (e2.key === "Enter") inputEl.blur();
-      if (e2.key === "Tab") {
-        e2.preventDefault();
-        inputEl.blur();
-        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: e2.shiftKey, bubbles: true }));
-      }
-    });
-
-    inputEl.focus();
-
-    const commitEdit = () => {
-      let newVal = inputEl.value;
-      
-      window.SchemaGrid.currentTransaction = [];
-      updateSchemaCell(td, newVal, columns);
-      if (window.SchemaGrid.currentTransaction.length > 0)
-        window.SchemaGrid.history.push(window.SchemaGrid.currentTransaction);
-      window.SchemaGrid.currentTransaction = null;
-    };
-
-    inputEl.addEventListener("blur", () => {
-      commitEdit();
-    });
-  });
+   });
 }

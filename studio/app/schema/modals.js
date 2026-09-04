@@ -258,83 +258,210 @@ export async function openPkFkModal(td, currentText) {
    if (modal) modal.remove();
 
    const isNewRow = td.dataset.insertIndex !== undefined;
+   const insertIdx = isNewRow ? parseInt(td.dataset.insertIndex, 10) : null;
+   const colName =
+      td.dataset.pk ||
+      td.parentElement
+         ?.querySelector('[data-col-key="name"]')
+         ?.textContent?.trim() ||
+      '';
 
-   // Parse current text
-   const origText = td.dataset.original || currentText || '';
-   let isPk = origText.includes('PK');
-   let isFk = origText.includes('FK');
+   // Get the current effective value (pending edits take precedence over original attribute)
+   let effectiveVal = '';
+   if (
+      isNewRow &&
+      insertIdx !== null &&
+      window.SchemaGrid?.pendingInserts?.[insertIdx]
+   ) {
+      effectiveVal = window.SchemaGrid.pendingInserts[insertIdx].isPk || '';
+   } else if (
+      colName &&
+      window.SchemaGrid?.pendingEdits?.[colName]?.isPk !== undefined
+   ) {
+      effectiveVal = window.SchemaGrid.pendingEdits[colName].isPk || '';
+   } else {
+      effectiveVal =
+         currentText || td.textContent?.trim() || td.dataset.original || '';
+   }
+
+   let isPk = effectiveVal.includes('PK') || effectiveVal.includes('PFK');
+   let isFk = false;
    let fkTable = '';
    let fkCol = '';
 
-   const fkMatch = origText.match(
+   const fkMatch = effectiveVal.match(
       /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
    );
    if (fkMatch) {
       fkTable = fkMatch[1];
       fkCol = fkMatch[2];
       isFk = true;
+   } else if (effectiveVal.includes('FK') || effectiveVal.includes('PFK')) {
+      isFk = true;
    }
 
    modal = document.createElement('div');
    modal.id = 'pkfk-modal';
-   modal.style.cssText = `
-    position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5);
-    display:flex; justify-content:center; align-items:center; z-index:9999;
-  `;
+   modal.className = 'modal-overlay';
 
    modal.innerHTML = /* html */ `
-    <div class="modal-container" class="w-400">
+    <div class="keys-modal-container">
       <div class="modal-header">
-        <h3 class="m-0">Manage Keys</h3>
-        <button id="close-pkfk-modal" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary" style="font-size:20px;">vpn_key</span>
+          <h3 class="m-0 text-15 font-semibold">Manage Keys</h3>
+          ${colName ? `<span class="keys-col-badge">${colName}</span>` : ''}
+        </div>
+        <button id="close-pkfk-modal" class="modal-close-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div class="modal-body">
-        <label class="items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="modal-is-pk" ${isPk ? 'checked' : ''} />
-          <strong>Primary Key (PK)</strong>
-        </label>
-        
-        <div class="divider-y"></div>
-        
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="modal-is-fk" ${isFk ? 'checked' : ''} />
-          <strong>Foreign Key (FK)</strong>
-        </label>
-        
-        <div id="fk-settings-container" class="flex-col gap-2 pl-6 ${isFk ? 'flex' : 'hidden'}">
-          <div>
-            <div class="text-12 text-secondary mb-1">Target Table</div>
-            <select id="modal-fk-table" class="modal-input w-full">
-              <option value="">Loading tables...</option>
-            </select>
+
+      <div class="key-cards-list">
+        <!-- Primary Key Card -->
+        <div class="key-card ${isPk ? 'active' : ''}" id="pk-card">
+          <div class="key-card-header" id="pk-card-toggle">
+            <div class="key-card-icon pk">
+              <span class="material-symbols-outlined">key</span>
+            </div>
+            <div class="key-card-content">
+              <div class="key-card-title">Primary Key (PK)</div>
+              <div class="key-card-desc">Uniquely identifies each record in this table</div>
+            </div>
+            <label class="key-switch" id="pk-switch-label">
+              <input type="checkbox" id="modal-is-pk" ${isPk ? 'checked' : ''} />
+              <span class="key-slider"></span>
+            </label>
           </div>
-          <div>
-            <div class="text-12 text-secondary mb-1">Target Column</div>
-            <select id="modal-fk-col" class="modal-input w-full" ${!fkTable ? 'disabled' : ''}>
-              <option value="">Select a table first</option>
-            </select>
+        </div>
+
+        <!-- Foreign Key Card -->
+        <div class="key-card ${isFk ? 'active' : ''}" id="fk-card">
+          <div class="key-card-header" id="fk-card-toggle">
+            <div class="key-card-icon fk">
+              <span class="material-symbols-outlined">link</span>
+            </div>
+            <div class="key-card-content">
+              <div class="key-card-title">Foreign Key (FK)</div>
+              <div class="key-card-desc">Reference a column in another table</div>
+            </div>
+            <label class="key-switch" id="fk-switch-label">
+              <input type="checkbox" id="modal-is-fk" ${isFk ? 'checked' : ''} />
+              <span class="key-slider"></span>
+            </label>
+          </div>
+
+          <!-- FK Configuration Drawer -->
+          <div id="fk-settings-container" class="key-fk-drawer ${isFk ? 'open' : ''}">
+            <div class="key-field-group">
+              <label class="key-field-label">Target Table</label>
+              <div class="key-select-wrapper">
+                <select id="modal-fk-table" class="key-select">
+                  <option value="">Loading tables...</option>
+                </select>
+                <span class="material-symbols-outlined key-select-arrow">expand_more</span>
+              </div>
+            </div>
+
+            <div class="key-field-group">
+              <label class="key-field-label">Target Column</label>
+              <div class="key-select-wrapper">
+                <select id="modal-fk-col" class="key-select" ${!fkTable ? 'disabled' : ''}>
+                  <option value="">Select a table first</option>
+                </select>
+                <span class="material-symbols-outlined key-select-arrow">expand_more</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
       <div class="modal-footer">
-        <button id="cancel-pkfk-btn" class="secondary" class="btn-secondary">Cancel</button>
-        <button id="save-pkfk-btn" class="primary" class="btn-primary">Save</button>
+        <button id="cancel-pkfk-btn" class="btn-secondary">Cancel</button>
+        <button id="save-pkfk-btn" class="btn-primary flex items-center gap-1.5">
+          <span class="material-symbols-outlined" style="font-size:16px;">check</span>
+          <span>Save Changes</span>
+        </button>
       </div>
     </div>
   `;
    document.body.appendChild(modal);
 
-   const closeFn = () => modal.remove();
+   const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+         closeFn();
+      }
+   };
+   document.addEventListener('keydown', handleKeydown);
+
+   const closeFn = () => {
+      document.removeEventListener('keydown', handleKeydown);
+      modal.remove();
+   };
+
    document.getElementById('close-pkfk-modal').onclick = closeFn;
    document.getElementById('cancel-pkfk-btn').onclick = closeFn;
+   modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeFn();
+   });
 
-   const isFkCheckbox = document.getElementById('modal-is-fk');
+   const pkCard = document.getElementById('pk-card');
+   const pkCheckbox = document.getElementById('modal-is-pk');
+   const fkCard = document.getElementById('fk-card');
+   const fkCheckbox = document.getElementById('modal-is-fk');
    const fkContainer = document.getElementById('fk-settings-container');
    const tableSelect = document.getElementById('modal-fk-table');
    const colSelect = document.getElementById('modal-fk-col');
 
-   isFkCheckbox.addEventListener('change', (e) => {
-      fkContainer.style.display = e.target.checked ? 'flex' : 'none';
+   // Toggle PK on card header click
+   document.getElementById('pk-card-toggle').addEventListener('click', (e) => {
+      if (e.target.closest('.key-switch')) return;
+      pkCheckbox.checked = !pkCheckbox.checked;
+      pkCheckbox.dispatchEvent(new Event('change'));
+   });
+
+   pkCheckbox.addEventListener('change', () => {
+      pkCard.classList.toggle('active', pkCheckbox.checked);
+   });
+
+   // Toggle FK on card header click
+   document.getElementById('fk-card-toggle').addEventListener('click', (e) => {
+      if (e.target.closest('.key-switch')) return;
+      fkCheckbox.checked = !fkCheckbox.checked;
+      fkCheckbox.dispatchEvent(new Event('change'));
+   });
+
+   let availableTables = [];
+
+   fkCheckbox.addEventListener('change', () => {
+      const checked = fkCheckbox.checked;
+      if (checked && availableTables.length === 0) {
+         fkCheckbox.checked = false;
+         fkCard.classList.remove('active');
+         fkContainer.classList.remove('open');
+         if (window.showToast) {
+            window.showToast(
+               'No other tables available in the database to link as a foreign key.',
+               'warning',
+            );
+         } else {
+            alert(
+               'No other tables available in the database to link as a foreign key.',
+            );
+         }
+         return;
+      }
+
+      fkCard.classList.toggle('active', checked);
+      if (checked) {
+         fkContainer.classList.add('open');
+         // Auto-select first available table if none selected yet
+         if (!tableSelect.value && availableTables.length > 0) {
+            const firstTable = availableTables[0];
+            tableSelect.value = firstTable;
+            loadColumnsForTable(firstTable);
+         }
+      } else {
+         fkContainer.classList.remove('open');
+      }
    });
 
    // Load tables dynamically using fetch (avoids circular deps with api.js)
@@ -342,16 +469,22 @@ export async function openPkFkModal(td, currentText) {
       const res = await fetch('/api/tables');
       const json = await res.json();
       if (json.success && json.data) {
+         const currentTable = window.AppState?.currentTable;
+         // Exclude current table so FK cannot reference columns within its own table
+         availableTables = json.data.filter((t) => t !== currentTable);
+
          tableSelect.innerHTML =
-            '<option value="">-- Select Table --</option>' +
-            json.data
+            (availableTables.length === 0
+               ? '<option value="">No other tables available</option>'
+               : '<option value="">-- Select Table --</option>') +
+            availableTables
                .map(
                   (t) =>
                      `<option value="${t}" ${t === fkTable ? 'selected' : ''}>${t}</option>`,
                )
                .join('');
 
-         if (fkTable) {
+         if (fkTable && availableTables.includes(fkTable)) {
             loadColumnsForTable(fkTable, fkCol);
          }
       }
@@ -366,12 +499,26 @@ export async function openPkFkModal(td, currentText) {
          const res = await fetch(`/api/tables/${tName}/schema`);
          const json = await res.json();
          if (json.success && json.data) {
+            const currentTable = window.AppState?.currentTable;
+            const cols =
+               tName === currentTable
+                  ? json.data.filter((c) => c.name !== colName)
+                  : json.data;
+
+            let defaultCol = selectedCol;
+            if (!defaultCol || !cols.some((c) => c.name === defaultCol)) {
+               const idCol = cols.find(
+                  (c) => c.isPk || c.name.toLowerCase() === 'id',
+               );
+               defaultCol = idCol ? idCol.name : cols[0]?.name || '';
+            }
+
             colSelect.innerHTML =
                '<option value="">-- Select Column --</option>' +
-               json.data
+               cols
                   .map(
                      (c) =>
-                        `<option value="${c.name}" ${c.name === selectedCol ? 'selected' : ''}>${c.name}</option>`,
+                        `<option value="${c.name}" ${c.name === defaultCol ? 'selected' : ''}>${c.name}</option>`,
                   )
                   .join('');
             colSelect.disabled = false;
@@ -393,8 +540,8 @@ export async function openPkFkModal(td, currentText) {
    });
 
    document.getElementById('save-pkfk-btn').onclick = () => {
-      const pkChecked = document.getElementById('modal-is-pk').checked;
-      const fkChecked = document.getElementById('modal-is-fk').checked;
+      const pkChecked = pkCheckbox.checked;
+      const fkChecked = fkCheckbox.checked;
 
       const t = tableSelect.value;
       const c = colSelect.value;
@@ -402,8 +549,7 @@ export async function openPkFkModal(td, currentText) {
       if (
          pkChecked === isPk &&
          fkChecked === isFk &&
-         t === fkTable &&
-         c === fkCol
+         (!fkChecked || (t === fkTable && c === fkCol))
       ) {
          closeFn();
          return;
@@ -412,19 +558,33 @@ export async function openPkFkModal(td, currentText) {
       let newVal = '';
       if (pkChecked && fkChecked) {
          if (!t || !c) {
-            alert(
-               'Please select both Target Table and Target Column for the Foreign Key.',
-            );
+            if (window.showToast) {
+               window.showToast(
+                  'Please select both Target Table and Target Column for the Foreign Key.',
+                  'warning',
+               );
+            } else {
+               alert(
+                  'Please select both Target Table and Target Column for the Foreign Key.',
+               );
+            }
             return;
          }
-         newVal = `PK, FK: ${t}.${c}`;
+         newVal = `PFK: ${t}.${c}`;
       } else if (pkChecked) {
          newVal = 'PK';
       } else if (fkChecked) {
          if (!t || !c) {
-            alert(
-               'Please select both Target Table and Target Column for the Foreign Key.',
-            );
+            if (window.showToast) {
+               window.showToast(
+                  'Please select both Target Table and Target Column for the Foreign Key.',
+                  'warning',
+               );
+            } else {
+               alert(
+                  'Please select both Target Table and Target Column for the Foreign Key.',
+               );
+            }
             return;
          }
          newVal = `FK: ${t}.${c}`;

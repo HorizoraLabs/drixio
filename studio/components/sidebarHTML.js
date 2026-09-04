@@ -54,7 +54,7 @@ export const SideBarHTML = /* html */ `
         <span class="material-symbols-outlined" id="theme-icon">dark_mode</span>
         <span id="theme-text">Theme</span>
       </button>
-      <span class="sidebar-version-tag" title="Drixio Studio Edition">v1.1.7</span>
+      <span class="sidebar-version-tag" title="Drixio Studio Edition">v1.1.8</span>
     </div>
   </div>
 </aside>

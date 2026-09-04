@@ -26,6 +26,12 @@ export async function runStudio(dbConfig: DBConfig) {
   // Custom static middleware for Hono in Node
   const fs = await import("fs/promises");
   
+  // Prevent aggressive browser caching for local development and CLI
+  app.use("/*", async (c, next) => {
+    c.header("Cache-Control", "no-cache, no-store, must-revalidate");
+    await next();
+  });
+
   app.use("/*", serveStatic({ root: path.relative(process.cwd(), studioDistPath) }));
 
   // Fallback to index.html for SPA routing if needed

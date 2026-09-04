@@ -24,6 +24,17 @@ export const TabHTML = /* html */ `
       <span class="material-symbols-outlined tab-icon" id="schema-icon">schema</span>
       <span>Schema</span>
     </button>
+    <button
+      type="button"
+      class="tab-btn hidden"
+      onclick="handleSwitchTab('connect-btn')"
+      id="connect-btn"
+      role="tab"
+      title="Connect or create database"
+    >
+      <span class="material-symbols-outlined tab-icon" id="connect-icon">cable</span>
+      <span>Connect</span>
+    </button>
   </div>
 
   <div class="flex-1"></div>

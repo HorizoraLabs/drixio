@@ -118,6 +118,66 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
             rows[0].AffectedRows !== undefined) ||
          (rowCount === 0 && res.data.affectedRows !== undefined);
 
+      if (res.data?.connectionChanged) {
+         if (window.showToast) {
+            window.showToast(
+               `Database updated: ${res.data.dbConfig?.dbName || 'Connected'}`,
+               'success',
+            );
+         }
+         if (window.initSidebar) {
+            window.initSidebar(true);
+         }
+         const isConn =
+            res.data.dbConfig?.type && res.data.dbConfig.type !== 'none';
+         if (window.setStudioConnectionMode) {
+            window.setStudioConnectionMode(Boolean(isConn));
+         }
+         if (res.data.dbConfig?.type) {
+            window.AppState.dbType = res.data.dbConfig.type;
+            const dbTypeEl = document.getElementById('brand-db-type');
+            if (dbTypeEl) {
+               dbTypeEl.textContent =
+                  res.data.dbConfig.type === 'none'
+                     ? 'NO DATABASE'
+                     : res.data.dbConfig.type.toUpperCase();
+            }
+            const dot = document.getElementById('sidebar-db-status-dot');
+            if (dot) {
+               if (res.data.dbConfig.type === 'none') {
+                  dot.classList.remove('status-connected', 'status-error');
+                  dot.classList.add('status-warning');
+               } else {
+                  dot.classList.remove('status-error', 'status-warning');
+                  dot.classList.add('status-connected');
+               }
+            }
+         }
+
+         const title = rows[0]?.Result || 'Connected';
+         const detail =
+            rows[0]?.Database ||
+            rows[0]?.Target ||
+            rows[0]?.Path ||
+            'Database ready';
+         resContainer.innerHTML = /* html */ `
+        <div class="console-mutation-banner" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25);">
+          <div class="console-mutation-info" style="color: #10b981;">
+            <span class="material-symbols-outlined icon">check_circle</span>
+            <span><b>${title}:</b> ${detail}</span>
+            <span class="text-soft">&middot;</span>
+            <span class="text-soft">${ms}ms</span>
+          </div>
+        </div>
+      `;
+         historyPane.scrollTop = historyPane.scrollHeight;
+         return;
+      }
+
+      if (/^\s*(CREATE|DROP|ALTER)\s+(TABLE|VIEW)/i.test(sql)) {
+         window.initSidebar?.(true);
+      }
+
       if (isMutationResult) {
          const affected = res.data.affectedRows ?? rows[0]?.AffectedRows ?? 0;
          resContainer.innerHTML = /* html */ `

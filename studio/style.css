@@ -15,6 +15,7 @@
 @import url("./styles/contextMenu.css");
 @import url("./styles/data.css");
 @import url("./styles/schema.css");
+@import url("./styles/connect.css");
 
 :root {
   --color-bg-primary: #ffffff;

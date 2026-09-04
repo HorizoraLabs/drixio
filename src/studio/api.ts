@@ -3,6 +3,9 @@ import {
    DBConfig,
    DBAdapter,
    createDBAdapter,
+   detectDatabase,
+   saveDatabaseUrl,
+   createDatabase,
    previewMockData,
    generateAndInsertMockData,
    batchMutateTableData,
@@ -12,6 +15,8 @@ import {
 } from '../logic/index.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
+import path from 'node:path';
+import fs from 'node:fs';
 
 function nodeToWebStream(nodeStream: Readable) {
    return new ReadableStream({
@@ -29,19 +34,43 @@ function nodeToWebStream(nodeStream: Readable) {
 export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    const api = new Hono();
 
-   // Helper to lazily create adapter per request or use a global one
-   const adapter = createDBAdapter(dbConfig as any);
+   // Dynamic database connection state
+   let currentDbConfig: DBConfig = { ...dbConfig };
+   let currentAdapter: DBAdapter | null = null;
+
+   const initAdapter = (cfg: DBConfig): DBAdapter | null => {
+      if (cfg.type === 'unknown' || !cfg.targetUrl) return null;
+      try {
+         return createDBAdapter(cfg);
+      } catch {
+         return null;
+      }
+   };
+
+   currentAdapter = initAdapter(currentDbConfig);
+
+   const getAdapter = (): DBAdapter => {
+      if (!currentAdapter) {
+         throw new Error(
+            'No database connected. Please connect or create a database first.',
+         );
+      }
+      return currentAdapter;
+   };
 
    const getDbName = () => {
       let dbName = 'database';
-      if (dbConfig.targetUrl) {
-         if (dbConfig.type === 'sqlite') {
+      if (currentDbConfig.targetUrl) {
+         if (currentDbConfig.type === 'sqlite') {
             dbName =
-               dbConfig.targetUrl.replace('file:', '').split(/[/\\]/).pop() ||
-               dbName;
+               currentDbConfig.targetUrl
+                  .replace('file:', '')
+                  .split(/[/\\]/)
+                  .pop() || dbName;
          } else {
             dbName =
-               dbConfig.targetUrl.split('/').pop()?.split('?')[0] || dbName;
+               currentDbConfig.targetUrl.split('/').pop()?.split('?')[0] ||
+               dbName;
          }
       }
       // Remove extension if sqlite
@@ -57,7 +86,10 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/tables', async (c) => {
       try {
-         const tables = await adapter.getTables();
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json({ success: true, data: [] });
+         }
+         const tables = await currentAdapter.getTables();
          return c.json({ success: true, data: tables });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -65,26 +97,36 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.get('/config', (c) => {
-      let dbName = 'Database';
-      if (dbConfig.targetUrl) {
-         if (dbConfig.type === 'sqlite') {
-            dbName =
-               dbConfig.targetUrl.replace('file:', '').split(/[/\\]/).pop() ||
-               dbName;
-         } else {
-            dbName =
-               dbConfig.targetUrl.split('/').pop()?.split('?')[0] || 'Database';
-         }
-      }
-      return c.json({ success: true, data: { dbType: dbConfig.type, dbName } });
+      const isConnected =
+         !!currentAdapter && currentDbConfig.type !== 'unknown';
+      return c.json({
+         success: true,
+         data: {
+            connected: isConnected,
+            dbType: isConnected ? currentDbConfig.type : 'none',
+            dbName: isConnected ? getDbName() : 'No Database',
+            targetUrl: currentDbConfig.targetUrl || '',
+         },
+      });
    });
 
    api.get('/status', async (c) => {
       try {
-         const status = await adapter.getStatus();
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json({
+               success: true,
+               data: {
+                  status: 'disconnected',
+                  dbType: 'none',
+                  dbName: 'No Database',
+                  totalTables: 0,
+               },
+            });
+         }
+         const status = await currentAdapter.getStatus();
 
          // Calculate total tables
-         const tables = await adapter.getTables();
+         const tables = await currentAdapter.getTables();
          (status as any).totalTables = tables.length;
 
          // Attach OS metrics for SQLite (which is local)
@@ -104,12 +146,15 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/tables/stats', async (c) => {
       try {
-         const tables = await adapter.getTables();
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json({ success: true, data: {} });
+         }
+         const tables = await currentAdapter.getTables();
          const stats: Record<string, number> = {};
          for (const t of tables) {
             try {
-               const res = await adapter.query(
-                  `SELECT COUNT(*) as c FROM ${adapter.quoteIdentifier(t)}`,
+               const res = await currentAdapter.query(
+                  `SELECT COUNT(*) as c FROM ${currentAdapter.quoteIdentifier(t)}`,
                );
                // Different adapters might return row keys differently, try to extract count safely
                if (res && res.rows && res.rows.length > 0) {
@@ -132,7 +177,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.get('/tables/:name/schema', async (c) => {
       const tableName = c.req.param('name');
       try {
-         const schema = await adapter.getSchema(tableName);
+         const schema = await getAdapter().getSchema(tableName);
          return c.json({ success: true, data: schema });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -143,10 +188,14 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       const tableName = c.req.param('name');
       try {
          const body = await c.req.json().catch(() => ({}));
-         const res = await applySchemaChanges(adapter, dbConfig.type, {
-            tableName,
-            ...body,
-         });
+         const res = await applySchemaChanges(
+            getAdapter(),
+            currentDbConfig.type,
+            {
+               tableName,
+               ...body,
+            },
+         );
          if (res.success) {
             return c.json({ success: true });
          } else {
@@ -162,14 +211,18 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       try {
          const body = await c.req.json().catch(() => ({}));
          const { pkColumn, edits, inserts, deletes, schema } = body;
-         const res = await batchMutateTableData(adapter, dbConfig.type, {
-            tableName,
-            pkColumn,
-            edits,
-            inserts,
-            deletes,
-            schema,
-         });
+         const res = await batchMutateTableData(
+            getAdapter(),
+            currentDbConfig.type,
+            {
+               tableName,
+               pkColumn,
+               edits,
+               inserts,
+               deletes,
+               schema,
+            },
+         );
          if (res.success) {
             return c.json({ success: true, count: res.executedCount });
          } else {
@@ -183,7 +236,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.post('/tables/:name/truncate', async (c) => {
       const tableName = c.req.param('name');
       try {
-         const res = await truncateTable(adapter, tableName);
+         const res = await truncateTable(getAdapter(), tableName);
          if (res.success) {
             return c.json({ success: true });
          } else {
@@ -204,7 +257,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.json({ success: false, error: 'No file uploaded' }, 400);
          }
          const text = await file.text();
-         const res = await importDataToTable(adapter, tableName, format, text);
+         const res = await importDataToTable(
+            getAdapter(),
+            tableName,
+            format,
+            text,
+         );
          return c.json({
             success: true,
             message: `Imported ${res.count} records successfully`,
@@ -217,7 +275,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.get('/tables/:name/indexes', async (c) => {
       const tableName = c.req.param('name');
       try {
-         const indexes = await adapter.getIndexes(tableName);
+         const indexes = await getAdapter().getIndexes(tableName);
          return c.json({ success: true, data: indexes });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -238,7 +296,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
 
       try {
-         const data = await adapter.getData(
+         const data = await getAdapter().getData(
             tableName,
             limit,
             offset,
@@ -254,7 +312,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.get('/tables/:name/mock/preview', async (c) => {
       try {
          const tableName = c.req.param('name');
-         const data = await previewMockData(adapter, tableName, 3);
+         const data = await previewMockData(getAdapter(), tableName, 3);
          return c.json({ success: true, data });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -267,7 +325,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          const body = await c.req.json().catch(() => ({}));
          const count = Math.min(Math.max(Number(body.count) || 10, 1), 1000);
          const inserted = await generateAndInsertMockData(
-            adapter,
+            getAdapter(),
             tableName,
             count,
          );
@@ -280,7 +338,165 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.post('/query', async (c) => {
       try {
          const { sql } = await c.req.json();
-         const result = await adapter.query(sql);
+         if (!sql || typeof sql !== 'string') {
+            return c.json(
+               { success: false, error: 'SQL query is required' },
+               400,
+            );
+         }
+
+         const trimmed = sql.trim();
+
+         // 1. Intercept CONNECT <url> command
+         const connectMatch = trimmed.match(/^CONNECT\s+([^\s;]+)\s*;?$/i);
+         if (connectMatch) {
+            const rawUrl = connectMatch[1];
+            const newConfig = await detectDatabase(rawUrl);
+            const newAdapter = createDBAdapter(newConfig);
+            await newAdapter.getTables();
+
+            if (currentAdapter) {
+               try {
+                  await currentAdapter.close();
+               } catch {}
+            }
+
+            currentDbConfig = newConfig;
+            currentAdapter = newAdapter;
+
+            return c.json({
+               success: true,
+               data: {
+                  columns: ['Result', 'Database', 'Type'],
+                  rows: [
+                     {
+                        Result: 'Connected successfully',
+                        Database: getDbName(),
+                        Type: newConfig.type,
+                     },
+                  ],
+                  affectedRows: 1,
+                  connectionChanged: true,
+                  dbConfig: {
+                     type: newConfig.type,
+                     dbName: getDbName(),
+                  },
+               },
+            });
+         }
+
+         // 2. Intercept DISCONNECT command
+         if (/^DISCONNECT\s*;?$/i.test(trimmed)) {
+            if (currentAdapter) {
+               try {
+                  await currentAdapter.close();
+               } catch {}
+            }
+            currentDbConfig = {
+               type: 'unknown',
+               targetUrl: '',
+               source: 'manual',
+            };
+            currentAdapter = null;
+
+            return c.json({
+               success: true,
+               data: {
+                  columns: ['Result'],
+                  rows: [{ Result: 'Disconnected from database' }],
+                  affectedRows: 1,
+                  connectionChanged: true,
+                  dbConfig: {
+                     type: 'none',
+                     dbName: 'No Database',
+                  },
+               },
+            });
+         }
+
+         // 3. Intercept CREATE DATABASE <name> command
+         const createDbMatch = trimmed.match(
+            /^CREATE\s+DATABASE\s+(?:IF\s+NOT\s+EXISTS\s+)?['"`]?([^'";`\s]+)['"`]?\s*;?$/i,
+         );
+         if (createDbMatch) {
+            const dbName = createDbMatch[1];
+            // If currently connected to Postgres or MySQL, run CREATE DATABASE on the server
+            if (
+               currentAdapter &&
+               (currentDbConfig.type === 'postgres' ||
+                  currentDbConfig.type === 'mysql')
+            ) {
+               const quote = currentDbConfig.type === 'mysql' ? '`' : '"';
+               await currentAdapter.executeSql(
+                  `CREATE DATABASE ${quote}${dbName}${quote};`,
+               );
+               return c.json({
+                  success: true,
+                  data: {
+                     columns: ['Result', 'Database'],
+                     rows: [{ Result: 'Database Created', Database: dbName }],
+                     affectedRows: 1,
+                  },
+               });
+            }
+
+            // Otherwise (disconnected or SQLite): create a new SQLite file using shared createDatabase!
+            const result = await createDatabase({
+               dialect: 'sqlite',
+               dbName,
+            });
+
+            const newConfig: DBConfig = {
+               type: 'sqlite',
+               targetUrl: result.targetUrl,
+               source: 'manual',
+            };
+
+            const newAdapter = createDBAdapter(newConfig);
+            await newAdapter.getTables();
+
+            if (currentAdapter) {
+               try {
+                  await currentAdapter.close();
+               } catch {}
+            }
+
+            currentDbConfig = newConfig;
+            currentAdapter = newAdapter;
+
+            return c.json({
+               success: true,
+               data: {
+                  columns: ['Result', 'Database', 'Path'],
+                  rows: [
+                     {
+                        Result: 'Created & Connected',
+                        Database: result.dbName,
+                        Path: result.targetUrl.replace('file:', ''),
+                     },
+                  ],
+                  affectedRows: 1,
+                  connectionChanged: true,
+                  dbConfig: {
+                     type: 'sqlite',
+                     dbName: result.dbName,
+                  },
+               },
+            });
+         }
+
+         // 4. Normal SQL execution
+         if (!currentAdapter) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'No database connected. Run CREATE DATABASE <name> or CONNECT <url> to start.',
+               },
+               400,
+            );
+         }
+
+         const result = await currentAdapter.query(sql);
          return c.json({ success: true, data: result });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -297,7 +513,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             );
          }
 
-         const result = await adapter.query(sql);
+         const result = await getAdapter().query(sql);
          const rows = result.rows;
          const timestamp = getDatetimeStr();
          const format = c.req.query('format') || 'csv';
@@ -378,7 +594,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                   }
 
                   while (hasMore) {
-                     const batch = await adapter.getData(
+                     const batch = await getAdapter().getData(
                         tableName,
                         batchSize,
                         batchOffset,
@@ -466,8 +682,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/database/export', async (c) => {
       try {
-         const type = dbConfig.type;
-         const url = dbConfig.targetUrl;
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            throw new Error('No database connected');
+         }
+         const type = currentDbConfig.type;
+         const url = currentDbConfig.targetUrl;
          let child;
          let filename = 'backup.sql';
 
@@ -552,9 +771,9 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                const baseName = getDbName();
                const timeStr = getDatetimeStr();
                if (type === 'sqlite') {
-                  fallbackStream = generateSqliteDumpStream(adapter);
+                  fallbackStream = generateSqliteDumpStream(getAdapter());
                } else if (type === 'mysql') {
-                  fallbackStream = generateMysqlDumpStream(adapter);
+                  fallbackStream = generateMysqlDumpStream(getAdapter());
                } else {
                   throw err;
                }
@@ -583,8 +802,14 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
 
          const sqlContent = await file.text();
-         const type = dbConfig.type;
-         const url = dbConfig.targetUrl;
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json(
+               { success: false, error: 'No database connected' },
+               400,
+            );
+         }
+         const type = currentDbConfig.type;
+         const url = currentDbConfig.targetUrl;
 
          const executeNativeImport = (
             cmd: string,
@@ -650,7 +875,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          } catch (err: any) {
             if (err.message.includes('Native tool')) {
                // JS Fallback — all adapters now support multi-statement executeSql
-               await adapter.executeSql(sqlContent);
+               await getAdapter().executeSql(sqlContent);
             } else {
                throw err;
             }
@@ -670,13 +895,16 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/database/dictionary', async (c) => {
       try {
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.text('No database connected', 400);
+         }
          const dbName = getDbName();
          let md = `# Data Dictionary: ${dbName}\n\n`;
-         const tables = await adapter.getTables();
+         const tables = await getAdapter().getTables();
          for (const t of tables) {
             md += `## Table: \`${t}\`\n\n`;
             md += `| Column | Type | PK | Nullable |\n|---|---|---|---|\n`;
-            const schema = await adapter.getSchema(t);
+            const schema = await getAdapter().getSchema(t);
             for (const col of schema) {
                md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} |\n`;
             }
@@ -695,13 +923,15 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/database/schema-only', async (c) => {
       try {
-         const type = dbConfig.type;
-         const url = dbConfig.targetUrl;
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.text('No database connected', 400);
+         }
+         const type = currentDbConfig.type;
          const filename = `${getDbName()}_schema_${getDatetimeStr()}.sql`;
 
          if (type === 'sqlite') {
             let sqlDump = '-- Drixio SQLite Schema Dump\n\n';
-            const tablesResult = await adapter.query(
+            const tablesResult = await getAdapter().query(
                "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
             );
             for (const row of tablesResult.rows) {
@@ -714,9 +944,6 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             c.header('Content-Type', 'application/sql');
             return c.body(sqlDump);
          } else {
-            // For Postgres/MySQL we could implement native spawn, but for now we'll return an error or build one.
-            // The user only strictly requested DB dump. Schema only for SQLite works via sqlite_master.
-            // For MySQL/Postgres we can just send back a message or basic DDL.
             return c.text(
                'Schema-only export for this DB type currently requires manual DDL extraction. Coming soon!',
                501,
@@ -724,6 +951,127 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
       } catch (e: any) {
          return c.text(`Schema Export Failed: ${e.message}`, 500);
+      }
+   });
+
+   api.post('/connect', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const {
+            mode,
+            dbType,
+            host,
+            port,
+            user,
+            password,
+            dbName,
+            saveToEnv,
+            createIfNotExist,
+         } = body;
+
+         let targetUrl = '';
+         let newConfig: DBConfig;
+
+         // 1. Create mode (PostgreSQL, MySQL, or SQLite) via shared createDatabase
+         if (mode === 'create') {
+            const dialect = (dbType || 'sqlite').toLowerCase() as
+               | 'sqlite'
+               | 'postgres'
+               | 'mysql';
+            const result = await createDatabase({
+               dialect,
+               dbName: dbName || body.sqlitePath || 'database.sqlite',
+               host,
+               port,
+               user,
+               password,
+            });
+
+            targetUrl = result.targetUrl;
+            newConfig = await detectDatabase(targetUrl);
+         } else {
+            // 2. Direct connect mode or SQLite existing file
+            const rawInput = body.url || body.sqlitePath;
+            if (!rawInput || typeof rawInput !== 'string') {
+               return c.json(
+                  { success: false, error: 'Database URL or path is required' },
+                  400,
+               );
+            }
+            targetUrl = rawInput.trim();
+
+            if (
+               (dbType === 'sqlite' ||
+                  targetUrl.startsWith('file:') ||
+                  targetUrl.endsWith('.sqlite') ||
+                  targetUrl.endsWith('.db')) &&
+               createIfNotExist
+            ) {
+               // Use createDatabase for sqlite if requested
+               const result = await createDatabase({
+                  dialect: 'sqlite',
+                  dbName: targetUrl.replace(/^file:/, ''),
+               });
+               targetUrl = result.targetUrl;
+            }
+
+            newConfig = await detectDatabase(targetUrl);
+         }
+
+         const newAdapter = createDBAdapter(newConfig);
+         await newAdapter.getTables();
+
+         if (currentAdapter) {
+            try {
+               await currentAdapter.close();
+            } catch {}
+         }
+         currentDbConfig = newConfig;
+         currentAdapter = newAdapter;
+
+         if (saveToEnv) {
+            try {
+               await saveDatabaseUrl(targetUrl);
+            } catch {}
+         }
+
+         return c.json({
+            success: true,
+            data: {
+               dbType: newConfig.type,
+               dbName: getDbName(),
+               targetUrl: newConfig.targetUrl,
+            },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/disconnect', async (c) => {
+      try {
+         if (currentAdapter) {
+            try {
+               await currentAdapter.close();
+            } catch {}
+         }
+         currentDbConfig = {
+            type: 'unknown',
+            targetUrl: '',
+            source: 'manual',
+         };
+         currentAdapter = null;
+
+         return c.json({
+            success: true,
+            data: {
+               connected: false,
+               dbType: 'none',
+               dbName: 'No Database',
+            },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
       }
    });
 

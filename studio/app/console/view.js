@@ -26,6 +26,8 @@ export function loadSqlConsole(tableName, btnElement, container) {
 
           <div class="console-quick-templates">
             <span class="quick-template-label">Quick Queries:</span>
+            <button type="button" class="template-chip" data-sql="CREATE DATABASE drixio.sqlite;">Create SQLite DB</button>
+            <button type="button" class="template-chip" data-sql="CONNECT file:./drixio.sqlite;">Connect SQLite</button>
             <button type="button" class="template-chip" data-sql="SELECT * FROM sqlite_master WHERE type='table';">Show Tables</button>
             <button type="button" class="template-chip" data-sql="SELECT 1 + 1 as ping;">Ping Database</button>
           </div>

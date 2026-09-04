@@ -7,6 +7,7 @@ import { loadTableSchema, saveSchemaEdits } from './schema/view.js';
 import { loadSqlConsole } from './console/view.js';
 import { loadErd } from './erd/view.js';
 import { loadStatusDashboard, refreshStatusDashboard } from './status/view.js';
+import { loadConnectView } from './connect/view.js';
 import { fetchConfig } from '../lib/api.js';
 import { initTheme } from '../components/theme.js';
 import { initToast } from '../components/toast.js';
@@ -423,6 +424,60 @@ window.AppState = {
    dbType: null,
 };
 
+window.setStudioConnectionMode = function (connected) {
+   const dataBtn = document.getElementById('data-btn');
+   const schemaBtn = document.getElementById('schema-btn');
+   const erdBtn = document.getElementById('erd-btn');
+   const statusBtn = document.getElementById('status-btn');
+   const connectBtn = document.getElementById('connect-btn');
+
+   const exportWrap = document
+      .getElementById('export-btn')
+      ?.closest('.header-dropdown-wrap');
+   const importWrap = document
+      .getElementById('import-btn')
+      ?.closest('.header-dropdown-wrap');
+   const slash = document.getElementById('slash');
+   const currentTableCrumb = document.getElementById('current-table');
+   const dbNameEl = document.getElementById('db-name');
+
+   if (!connected) {
+      dataBtn?.classList.add('hidden');
+      schemaBtn?.classList.add('hidden');
+      erdBtn?.classList.add('hidden');
+      statusBtn?.classList.add('hidden');
+      connectBtn?.classList.remove('hidden');
+
+      if (exportWrap) exportWrap.classList.add('hidden');
+      if (importWrap) importWrap.classList.add('hidden');
+      if (slash) slash.classList.add('hidden');
+      if (currentTableCrumb) currentTableCrumb.classList.add('hidden');
+      if (dbNameEl) dbNameEl.textContent = 'No Database';
+
+      if (
+         window.AppState.currentTab !== 'connect-btn' &&
+         window.AppState.currentTab !== 'sql-btn'
+      ) {
+         window.handleSwitchTab('connect-btn');
+      }
+   } else {
+      dataBtn?.classList.remove('hidden');
+      schemaBtn?.classList.remove('hidden');
+      erdBtn?.classList.remove('hidden');
+      statusBtn?.classList.remove('hidden');
+      connectBtn?.classList.add('hidden');
+
+      if (exportWrap) exportWrap.classList.remove('hidden');
+      if (importWrap) importWrap.classList.remove('hidden');
+      if (slash) slash.classList.remove('hidden');
+      if (currentTableCrumb) currentTableCrumb.classList.remove('hidden');
+
+      if (window.AppState.currentTab === 'connect-btn') {
+         window.handleSwitchTab('data-btn');
+      }
+   }
+};
+
 fetchConfig().then((res) => {
    if (res && res.success && res.data) {
       window.AppState.dbType = res.data.dbType;
@@ -430,6 +485,13 @@ fetchConfig().then((res) => {
          const dbNameEl = document.getElementById('db-name');
          if (dbNameEl) dbNameEl.textContent = res.data.dbName;
       }
+      if (res.data.connected && res.data.dbType && res.data.dbType !== 'none') {
+         window.setStudioConnectionMode(true);
+      } else {
+         window.setStudioConnectionMode(false);
+      }
+   } else {
+      window.setStudioConnectionMode(false);
    }
 });
 
@@ -502,7 +564,12 @@ window.handleSwitchTab = function (tab) {
    if (currentTab) currentTab.classList.add('isCurrentTab');
    window.AppState.currentTab = tab;
 
-   if (tab === 'erd-btn' || tab === 'sql-btn' || tab === 'status-btn') {
+   if (
+      tab === 'erd-btn' ||
+      tab === 'sql-btn' ||
+      tab === 'status-btn' ||
+      tab === 'connect-btn'
+   ) {
       // These are global tabs, clear table selection
       window.AppState.currentTable = null;
       window.AppState.currentTableBtnElement = null;
@@ -543,9 +610,12 @@ window.renderEmptyState = function (container) {
 };
 
 window.renderCurrentView = function (whereClause = '', preserveState = false) {
-   const isGlobalTab = ['erd-btn', 'sql-btn', 'status-btn'].includes(
-      window.AppState.currentTab,
-   );
+   const isGlobalTab = [
+      'erd-btn',
+      'sql-btn',
+      'status-btn',
+      'connect-btn',
+   ].includes(window.AppState.currentTab);
    const mainContent = document.getElementById('main-content');
 
    // Hide all view containers
@@ -638,6 +708,10 @@ window.renderCurrentView = function (whereClause = '', preserveState = false) {
       } else {
          refreshStatusDashboard();
       }
+   } else if (window.AppState.currentTab === 'connect-btn') {
+      if (!container.hasChildNodes()) {
+         loadConnectView(container);
+      }
    }
 
    // Synchronize Header Breadcrumbs with active view
@@ -658,6 +732,9 @@ window.renderCurrentView = function (whereClause = '', preserveState = false) {
          } else if (window.AppState.currentTab === 'status-btn') {
             headerIcon.textContent = 'monitoring';
             headerName.textContent = 'Dashboard';
+         } else if (window.AppState.currentTab === 'connect-btn') {
+            headerIcon.textContent = 'cable';
+            headerName.textContent = 'Connect Database';
          } else {
             headerIcon.textContent = 'table_chart';
             headerName.textContent = 'none';

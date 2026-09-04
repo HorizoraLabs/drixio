@@ -60,6 +60,18 @@ export async function runStudio(dbConfig: DBConfig) {
    console.log(
       pc.cyan(`\nStarting Drixio Studio on http://localhost:${port}...`),
    );
+   if (dbConfig.type === 'unknown') {
+      console.log(
+         pc.yellow(
+            `⚠️  No database detected. Studio started in standalone mode.`,
+         ),
+      );
+      console.log(
+         pc.dim(
+            `You can create or connect to a database in the SQL Console.\n`,
+         ),
+      );
+   }
    console.log(pc.dim(`Press Ctrl+C to stop the server.\n`));
 
    serve({

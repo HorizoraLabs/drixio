@@ -1,0 +1,305 @@
+/* ==================== CONNECT PAGE ==================== */
+.connect-container {
+   flex: 1;
+   width: 100%;
+   height: 100%;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   padding: 40px 20px;
+   overflow-y: auto;
+   background-color: var(--color-bg-secondary);
+}
+
+.connect-card {
+   width: 100%;
+   max-width: 520px;
+   background-color: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   border-radius: 12px;
+   box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.05),
+      0 8px 10px -6px rgba(0, 0, 0, 0.03);
+   padding: 32px;
+   display: flex;
+   flex-direction: column;
+   gap: 24px;
+}
+
+.connect-header {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   text-align: center;
+   gap: 8px;
+}
+
+.connect-icon-box {
+   width: 52px;
+   height: 52px;
+   border-radius: 12px;
+   background-color: rgba(44, 104, 236, 0.08);
+   border: 1px solid rgba(44, 104, 236, 0.22);
+   color: var(--color-primary);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   margin-bottom: 4px;
+}
+
+[data-theme='dark'] .connect-icon-box {
+   background-color: rgba(59, 130, 246, 0.14);
+   color: #60a5fa;
+   border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.connect-icon-box .material-symbols-outlined {
+   font-size: 28px;
+}
+
+.connect-title {
+   font-size: 20px;
+   font-weight: 700;
+   color: var(--color-text);
+   margin: 0;
+}
+
+.connect-subtitle {
+   font-size: 13px;
+   color: var(--color-text-secondary);
+   line-height: 1.5;
+   margin: 0;
+   max-width: 380px;
+}
+
+/* Type Selector (SQLite, Postgres, MySQL) */
+.connect-types-group {
+   display: flex;
+   background-color: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   border-radius: 8px;
+   padding: 4px;
+   gap: 4px;
+}
+
+.connect-type-btn {
+   flex: 1;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   gap: 6px;
+   padding: 8px 12px;
+   border-radius: 6px;
+   border: none;
+   background: transparent;
+   color: var(--color-text-secondary);
+   font-size: 13px;
+   font-weight: 500;
+   cursor: pointer;
+   transition: all 0.15s ease;
+}
+
+.connect-type-btn:hover {
+   color: var(--color-text);
+   background-color: var(--color-bg-secondary-dark);
+}
+
+.connect-type-btn.active {
+   background-color: var(--color-bg-primary);
+   color: var(--color-primary);
+   font-weight: 600;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] .connect-type-btn.active {
+   background-color: var(--color-bg-primary);
+   color: #60a5fa;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.connect-type-btn .material-symbols-outlined {
+   font-size: 18px;
+}
+
+/* Sub-mode Pills for SQLite (Create vs Connect) */
+.connect-submode-pills {
+   display: flex;
+   gap: 8px;
+   border-bottom: 1px solid var(--color-border);
+   padding-bottom: 12px;
+}
+
+.connect-pill-btn {
+   background: transparent;
+   border: 1px solid var(--color-border);
+   border-radius: 20px;
+   padding: 5px 14px;
+   font-size: 12px;
+   font-weight: 500;
+   color: var(--color-text-secondary);
+   cursor: pointer;
+   transition: all 0.15s ease;
+}
+
+.connect-pill-btn:hover {
+   background-color: var(--color-bg-secondary);
+   color: var(--color-text);
+}
+
+.connect-pill-btn.active {
+   background-color: rgba(44, 104, 236, 0.08);
+   border-color: rgba(44, 104, 236, 0.3);
+   color: var(--color-primary);
+   font-weight: 600;
+}
+
+[data-theme='dark'] .connect-pill-btn.active {
+   background-color: rgba(59, 130, 246, 0.14);
+   border-color: rgba(59, 130, 246, 0.28);
+   color: #60a5fa;
+   font-weight: 600;
+}
+
+[data-theme='dark'] .connect-pill-btn.active:hover {
+   background-color: rgba(59, 130, 246, 0.22);
+   border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* Form Controls */
+.connect-form-panel {
+   display: flex;
+   flex-direction: column;
+   gap: 16px;
+}
+
+.connect-grid-2 {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 12px;
+}
+
+@media (max-width: 480px) {
+   .connect-grid-2 {
+      grid-template-columns: 1fr;
+   }
+}
+
+.connect-field {
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
+}
+
+.connect-label {
+   font-size: 12px;
+   font-weight: 600;
+   color: var(--color-text);
+}
+
+.connect-input-wrap {
+   position: relative;
+   display: flex;
+   align-items: center;
+}
+
+.connect-input {
+   width: 100%;
+   height: 38px;
+   padding: 0 12px;
+   font-size: 13px;
+   color: var(--color-text);
+   background-color: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   border-radius: 6px;
+   outline: none;
+   font-family: var(--font-inter);
+   transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+}
+
+.connect-input.mono {
+   font-family: var(--font-mono);
+   font-size: 12px;
+}
+
+.connect-input:focus {
+   border-color: var(--color-primary);
+   box-shadow: var(--ring-primary-2);
+}
+
+.connect-hint {
+   font-size: 11px;
+   color: var(--color-text-soft);
+   margin: 0;
+}
+
+.connect-checkbox-row {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   font-size: 12px;
+   color: var(--color-text-secondary);
+   cursor: pointer;
+   user-select: none;
+}
+
+.connect-checkbox-row input[type='checkbox'] {
+   accent-color: var(--color-primary);
+   cursor: pointer;
+}
+
+.connect-action-row {
+   margin-top: 8px;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+}
+
+.connect-submit-btn {
+   height: 40px;
+   width: 100%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   gap: 8px;
+   background-color: var(--color-primary);
+   color: #ffffff;
+   border: none;
+   border-radius: 6px;
+   font-size: 13px;
+   font-weight: 600;
+   cursor: pointer;
+   transition:
+      background-color 0.15s ease,
+      opacity 0.15s ease;
+}
+
+.connect-submit-btn:hover {
+   background-color: var(--color-primary-dark);
+}
+
+.connect-submit-btn:disabled {
+   opacity: 0.6;
+   cursor: not-allowed;
+}
+
+.connect-submit-btn .material-symbols-outlined {
+   font-size: 18px;
+}
+
+.connect-msg-box {
+   padding: 10px 12px;
+   border-radius: 6px;
+   font-size: 12px;
+   display: flex;
+   align-items: center;
+   gap: 8px;
+}
+
+.connect-msg-box.error {
+   background-color: rgba(239, 68, 68, 0.1);
+   color: var(--color-error);
+   border: 1px solid rgba(239, 68, 68, 0.2);
+}

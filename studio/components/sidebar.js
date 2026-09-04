@@ -29,7 +29,7 @@ export async function initSidebar(isRefresh = false) {
       tableNav.innerHTML = '';
 
       // Update database status & type display
-      updateDatabaseStatus();
+      await updateDatabaseStatus();
 
       if (res.success && res.data && res.data.length > 0) {
          const tables = res.data;
@@ -219,7 +219,11 @@ export async function initSidebar(isRefresh = false) {
         </div>
       `;
          if (!isRefresh) {
-            window.handleSwitchTab('data-btn');
+            if (window.AppState.dbType === 'none') {
+               window.handleSwitchTab('connect-btn');
+            } else {
+               window.handleSwitchTab('sql-btn');
+            }
          }
       }
 
@@ -282,6 +286,7 @@ export function updateSidebarActiveTable(tableName) {
    }
 }
 window.updateSidebarActiveTable = updateSidebarActiveTable;
+window.initSidebar = initSidebar;
 
 async function updateDatabaseStatus() {
    const dot = document.getElementById('sidebar-db-status-dot');
@@ -289,35 +294,36 @@ async function updateDatabaseStatus() {
    try {
       if (!dbTypeEl) return;
 
-      if (window.AppState?.dbType) {
-         dbTypeEl.textContent = window.AppState.dbType.toUpperCase();
-         if (dot) {
-            dot.classList.remove('status-error');
-            dot.classList.add('status-connected');
-         }
-         return;
-      }
-
       const cfg = await fetchConfig();
-      if (cfg?.success && cfg.data?.dbType) {
+      if (
+         cfg?.success &&
+         cfg.data?.connected &&
+         cfg.data?.dbType &&
+         cfg.data.dbType !== 'none'
+      ) {
+         window.AppState.dbType = cfg.data.dbType;
          dbTypeEl.textContent = cfg.data.dbType.toUpperCase();
          if (dot) {
-            dot.classList.remove('status-error');
+            dot.classList.remove('status-error', 'status-warning');
             dot.classList.add('status-connected');
          }
+         window.setStudioConnectionMode?.(true);
       } else {
+         window.AppState.dbType = 'none';
+         dbTypeEl.textContent = 'NO DATABASE';
          if (dot) {
-            dot.classList.remove('status-connected');
-            dot.classList.add('status-error');
+            dot.classList.remove('status-connected', 'status-error');
+            dot.classList.add('status-warning');
          }
-         if (dbTypeEl) dbTypeEl.textContent = 'OFFLINE';
+         window.setStudioConnectionMode?.(false);
       }
    } catch {
       if (dot) {
-         dot.classList.remove('status-connected');
+         dot.classList.remove('status-connected', 'status-warning');
          dot.classList.add('status-error');
       }
       if (dbTypeEl) dbTypeEl.textContent = 'DISCONNECTED';
+      window.setStudioConnectionMode?.(false);
    }
 }
 

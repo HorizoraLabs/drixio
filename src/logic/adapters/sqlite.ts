@@ -11,7 +11,9 @@ export class SqliteAdapter implements DBAdapter {
    private db: DatabaseSync | null = null;
 
    constructor(connection: string) {
-      this.dbPath = connection;
+      this.dbPath = connection.startsWith('file:')
+         ? connection.replace(/^file:/, '')
+         : connection;
    }
 
    private async getDb(): Promise<DatabaseSync> {

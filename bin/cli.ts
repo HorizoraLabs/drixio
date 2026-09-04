@@ -92,7 +92,8 @@ async function main() {
    // 1. Studio Tier
    if (command === 'studio') {
       const { runStudio } = await import('../src/studio/index.js');
-      const dbConfig = await detectDatabase();
+      const customTarget = positionals[1] || customUrl;
+      const dbConfig = await detectDatabase(customTarget);
       await runStudio(dbConfig);
       return;
    }

@@ -234,40 +234,21 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
-   api.get('/tables/:name/export', async (c) => {
-      const tableName = c.req.param('name');
-      const format = c.req.query('format') || 'csv';
-      const whereClause = c.req.query('where') || '';
-      const orderCol = c.req.query('orderCol');
-      const orderAscStr = c.req.query('orderAsc');
-
-      let orderBy = undefined;
-      if (orderCol) {
-         orderBy = { col: orderCol, asc: orderAscStr !== 'false' };
-      }
-
+   api.post('/query/export', async (c) => {
       try {
-         // Fetch data in batches to avoid OOM on large tables
-         const batchSize = 1000;
-         let batchOffset = 0;
-         const allRows: Record<string, any>[] = [];
-         let exportColumns: string[] = [];
-         let lastBatch;
-         do {
-            lastBatch = await adapter.getData(
-               tableName,
-               batchSize,
-               batchOffset,
-               whereClause,
-               orderBy,
+         const { sql } = await c.req.json();
+         if (!sql) {
+            return c.json(
+               { success: false, error: 'No SQL query provided' },
+               400,
             );
-            if (exportColumns.length === 0) exportColumns = lastBatch.columns;
-            allRows.push(...lastBatch.rows);
-            batchOffset += batchSize;
-         } while (lastBatch.rows.length === batchSize);
-         const rows = allRows;
+         }
+
+         const result = await adapter.query(sql);
+         const rows = result.rows;
          const timestamp = getDatetimeStr();
-         const exportFilename = `${tableName}_export_${timestamp}`;
+         const format = c.req.query('format') || 'csv';
+         const exportFilename = `query_result_${timestamp}`;
 
          if (format === 'json') {
             const jsonStr = JSON.stringify(rows, null, 2);
@@ -278,7 +259,6 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             c.header('Content-Type', 'application/json');
             return c.body(jsonStr);
          } else {
-            // Simple CSV converter
             let csvStr = '';
             if (rows.length > 0) {
                const headers = Object.keys(rows[0]);
@@ -311,6 +291,122 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.body(csvStr);
          }
       } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.get('/tables/:name/export', async (c) => {
+      const tableName = c.req.param('name');
+      const format = c.req.query('format') || 'csv';
+      const whereClause = c.req.query('where') || '';
+      const orderCol = c.req.query('orderCol');
+      const orderAscStr = c.req.query('orderAsc');
+
+      let orderBy = undefined;
+      if (orderCol) {
+         orderBy = { col: orderCol, asc: orderAscStr !== 'false' };
+      }
+
+      try {
+         const timestamp = getDatetimeStr();
+         const exportFilename = `${tableName}_export_${timestamp}`;
+
+         const stream = new ReadableStream({
+            async start(controller) {
+               const encoder = new TextEncoder();
+               try {
+                  const batchSize = 1000;
+                  let batchOffset = 0;
+                  let hasMore = true;
+                  let isFirstChunk = true;
+
+                  if (format === 'json') {
+                     controller.enqueue(encoder.encode('[\n'));
+                  }
+
+                  while (hasMore) {
+                     const batch = await adapter.getData(
+                        tableName,
+                        batchSize,
+                        batchOffset,
+                        whereClause,
+                        orderBy,
+                     );
+
+                     if (batch.rows.length === 0) {
+                        break;
+                     }
+
+                     if (format === 'json') {
+                        let jsonStr = '';
+                        for (let i = 0; i < batch.rows.length; i++) {
+                           if (!isFirstChunk || i > 0) {
+                              jsonStr += ',\n';
+                           }
+                           jsonStr += JSON.stringify(batch.rows[i], null, 2);
+                        }
+                        controller.enqueue(encoder.encode(jsonStr));
+                     } else {
+                        // CSV format
+                        let csvStr = '';
+                        const headers =
+                           batch.columns || Object.keys(batch.rows[0] || {});
+
+                        if (isFirstChunk && headers.length > 0) {
+                           csvStr += headers.join(',') + '\n';
+                        }
+
+                        for (const r of batch.rows) {
+                           const rowStr = headers
+                              .map((h) => {
+                                 let val = r[h];
+                                 if (val === null || val === undefined)
+                                    val = '';
+                                 val = String(val);
+                                 if (
+                                    val.includes(',') ||
+                                    val.includes('"') ||
+                                    val.includes('\n')
+                                 ) {
+                                    val = `"${val.replace(/"/g, '""')}"`;
+                                 }
+                                 return val;
+                              })
+                              .join(',');
+                           csvStr += rowStr + '\n';
+                        }
+                        controller.enqueue(encoder.encode(csvStr));
+                     }
+
+                     isFirstChunk = false;
+                     batchOffset += batchSize;
+                     if (batch.rows.length < batchSize) {
+                        hasMore = false;
+                     }
+                  }
+
+                  if (format === 'json') {
+                     controller.enqueue(encoder.encode('\n]'));
+                  }
+
+                  controller.close();
+               } catch (e) {
+                  // If headers are already sent, we can only close the stream with an error
+                  controller.error(e);
+               }
+            },
+         });
+
+         c.header(
+            'Content-Disposition',
+            `attachment; filename="${exportFilename}.${format}"`,
+         );
+         c.header(
+            'Content-Type',
+            format === 'json' ? 'application/json' : 'text/csv',
+         );
+         return c.body(stream);
+      } catch (e: any) {
          return c.text(`Export Failed: ${e.message}`, 500);
       }
    });
@@ -331,6 +427,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return new Promise<ReadableStream>((resolve, reject) => {
                const cp = spawn(cmd, args);
                let started = false;
+
+               // Initialize the stream immediately so we don't miss the 'end' event
+               // if the native tool completes extremely fast (< 100ms)
+               const stream = nodeToWebStream(cp.stdout);
+
                cp.on('error', (err: any) => {
                   if (!started)
                      reject(
@@ -339,11 +440,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                         ),
                      );
                });
-               // Wait briefly to ensure it spawned successfully
+
+               // Wait briefly to ensure it spawned successfully before returning the stream
                setTimeout(() => {
                   if (!cp.killed) {
                      started = true;
-                     resolve(nodeToWebStream(cp.stdout));
+                     resolve(stream);
                   }
                }, 100);
             });
@@ -393,13 +495,13 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          } catch (err: any) {
             // Fallback to JS dump if native tool is missing
             if (err.message.includes('Native tool')) {
-               let sql = '';
+               let fallbackStream: ReadableStream;
                const baseName = getDbName();
                const timeStr = getDatetimeStr();
                if (type === 'sqlite') {
-                  sql = await generateSqliteDump(adapter);
+                  fallbackStream = generateSqliteDumpStream(adapter);
                } else if (type === 'mysql') {
-                  sql = await generateMysqlDump(adapter);
+                  fallbackStream = generateMysqlDumpStream(adapter);
                } else {
                   throw err;
                }
@@ -408,7 +510,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                   `attachment; filename="${baseName}_backup_${timeStr}.sql"`,
                );
                c.header('Content-Type', 'application/sql');
-               return c.body(sql);
+               return c.body(fallbackStream);
             }
             throw err;
          }
@@ -576,89 +678,161 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 }
 
 // Fallback SQL generator for SQLite
-async function generateSqliteDump(adapter: DBAdapter): Promise<string> {
-   let sqlDump = '-- Drixio SQLite Fallback Backup\n\n';
-   try {
-      const tablesResult = await adapter.query(
-         "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
-      );
-      for (const row of tablesResult.rows) {
-         if (!row.sql) continue;
-         sqlDump += `${row.sql};\n\n`;
-         const data = await adapter.query(
-            `SELECT * FROM ${adapter.quoteIdentifier(row.name as string)}`,
-         );
-         for (const d of data.rows) {
-            const keys = Object.keys(d)
-               .map((k) => adapter.quoteIdentifier(k))
-               .join(', ');
-            const vals = Object.values(d)
-               .map((v) => {
-                  if (v === null) return 'NULL';
-                  if (typeof v === 'number') return v;
-                  return `'${String(v).replace(/'/g, "''")}'`;
-               })
-               .join(', ');
-            sqlDump += `INSERT INTO ${adapter.quoteIdentifier(row.name as string)} (${keys}) VALUES (${vals});\n`;
+function generateSqliteDumpStream(adapter: DBAdapter): ReadableStream {
+   return new ReadableStream({
+      async start(controller) {
+         const encoder = new TextEncoder();
+         try {
+            controller.enqueue(
+               encoder.encode('-- Drixio SQLite Fallback Backup\n\n'),
+            );
+            const tablesResult = await adapter.query(
+               "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+            );
+
+            for (const row of tablesResult.rows) {
+               if (!row.sql) continue;
+               controller.enqueue(encoder.encode(`${row.sql};\n\n`));
+
+               const tableName = row.name as string;
+               const batchSize = 1000;
+               let offset = 0;
+               let hasMore = true;
+
+               while (hasMore) {
+                  const batch = await adapter.getData(
+                     tableName,
+                     batchSize,
+                     offset,
+                  );
+                  if (batch.rows.length === 0) {
+                     break;
+                  }
+
+                  let insertStrs = '';
+                  for (const d of batch.rows) {
+                     const keys = Object.keys(d)
+                        .map((k) => adapter.quoteIdentifier(k))
+                        .join(', ');
+                     const vals = Object.values(d)
+                        .map((v) => {
+                           if (v === null) return 'NULL';
+                           if (typeof v === 'number') return v;
+                           return `'${String(v).replace(/'/g, "''")}'`;
+                        })
+                        .join(', ');
+                     insertStrs += `INSERT INTO ${adapter.quoteIdentifier(tableName)} (${keys}) VALUES (${vals});\n`;
+                  }
+                  controller.enqueue(encoder.encode(insertStrs));
+
+                  offset += batchSize;
+                  if (batch.rows.length < batchSize) {
+                     hasMore = false;
+                  }
+               }
+               controller.enqueue(encoder.encode('\n'));
+            }
+            controller.close();
+         } catch (e) {
+            controller.enqueue(
+               encoder.encode(`-- Error generating backup: ${e}\n`),
+            );
+            controller.close();
          }
-         sqlDump += '\n';
-      }
-   } catch (e) {
-      sqlDump += `-- Error generating backup: ${e}\n`;
-   }
-   return sqlDump;
+      },
+   });
 }
 
 // Fallback SQL generator for MySQL
-async function generateMysqlDump(adapter: DBAdapter): Promise<string> {
-   let sqlDump = '-- Drixio MySQL Fallback Backup\n\n';
-   try {
-      const tables = await adapter.getTables();
-      for (const table of tables) {
+function generateMysqlDumpStream(adapter: DBAdapter): ReadableStream {
+   return new ReadableStream({
+      async start(controller) {
+         const encoder = new TextEncoder();
          try {
-            const createTableResult = await adapter.query(
-               `SHOW CREATE TABLE ${adapter.quoteIdentifier(table)}`,
+            controller.enqueue(
+               encoder.encode('-- Drixio MySQL Fallback Backup\n\n'),
             );
-            if (createTableResult.rows && createTableResult.rows.length > 0) {
-               const row = createTableResult.rows[0] as Record<string, any>;
-               const vals = Object.values(row);
-               const createSql =
-                  row['Create Table'] ||
-                  row['Create View'] ||
-                  (vals.length > 1 ? vals[1] : null);
-               if (createSql) {
-                  sqlDump += `${createSql};\n\n`;
+            const tables = await adapter.getTables();
+
+            for (const table of tables) {
+               try {
+                  const createTableResult = await adapter.query(
+                     `SHOW CREATE TABLE ${adapter.quoteIdentifier(table)}`,
+                  );
+                  if (
+                     createTableResult.rows &&
+                     createTableResult.rows.length > 0
+                  ) {
+                     const row = createTableResult.rows[0] as Record<
+                        string,
+                        any
+                     >;
+                     const vals = Object.values(row);
+                     const createSql =
+                        row['Create Table'] ||
+                        row['Create View'] ||
+                        (vals.length > 1 ? vals[1] : null);
+                     if (createSql) {
+                        controller.enqueue(encoder.encode(`${createSql};\n\n`));
+                     }
+                  }
+
+                  const batchSize = 1000;
+                  let offset = 0;
+                  let hasMore = true;
+
+                  while (hasMore) {
+                     const batch = await adapter.getData(
+                        table,
+                        batchSize,
+                        offset,
+                     );
+                     if (batch.rows.length === 0) {
+                        break;
+                     }
+
+                     let insertStrs = '';
+                     for (const d of batch.rows) {
+                        const keys = Object.keys(d)
+                           .map((k) => adapter.quoteIdentifier(k))
+                           .join(', ');
+                        const vals = Object.values(d)
+                           .map((v) => {
+                              if (v === null) return 'NULL';
+                              if (typeof v === 'number') return v;
+                              let str = String(v);
+                              str = str.replace(/\\/g, '\\\\');
+                              str = str.replace(/'/g, "''");
+                              str = str.replace(/\n/g, '\\n');
+                              str = str.replace(/\r/g, '\\r');
+                              return `'${str}'`;
+                           })
+                           .join(', ');
+                        insertStrs += `INSERT INTO ${adapter.quoteIdentifier(table)} (${keys}) VALUES (${vals});\n`;
+                     }
+                     controller.enqueue(encoder.encode(insertStrs));
+
+                     offset += batchSize;
+                     if (batch.rows.length < batchSize) {
+                        hasMore = false;
+                     }
+                  }
+                  controller.enqueue(encoder.encode('\n'));
+               } catch (tableErr) {
+                  controller.enqueue(
+                     encoder.encode(
+                        `-- Error backing up table ${table}: ${tableErr}\n\n`,
+                     ),
+                  );
                }
             }
-
-            const data = await adapter.query(
-               `SELECT * FROM ${adapter.quoteIdentifier(table)}`,
+            controller.close();
+         } catch (e) {
+            controller.enqueue(
+               encoder.encode(`-- Error generating backup: ${e}\n`),
             );
-            for (const d of data.rows) {
-               const keys = Object.keys(d)
-                  .map((k) => adapter.quoteIdentifier(k))
-                  .join(', ');
-               const vals = Object.values(d)
-                  .map((v) => {
-                     if (v === null) return 'NULL';
-                     if (typeof v === 'number') return v;
-                     let str = String(v);
-                     str = str.replace(/\\/g, '\\\\');
-                     str = str.replace(/'/g, "''");
-                     str = str.replace(/\n/g, '\\n');
-                     str = str.replace(/\r/g, '\\r');
-                     return `'${str}'`;
-                  })
-                  .join(', ');
-               sqlDump += `INSERT INTO ${adapter.quoteIdentifier(table)} (${keys}) VALUES (${vals});\n`;
-            }
-            sqlDump += '\n';
-         } catch (tableErr) {
-            sqlDump += `-- Error backing up table ${table}: ${tableErr}\n\n`;
+            controller.close();
          }
-      }
-   } catch (e) {
-      sqlDump += `-- Error generating backup: ${e}\n`;
-   }
-   return sqlDump;
+      },
+   });
 }

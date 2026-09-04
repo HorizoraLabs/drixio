@@ -270,7 +270,7 @@ if (exportBtn && exportDropdown) {
    const triggerExport = (endpoint, format, useQueries = false) => {
       exportDropdown.classList.add('hidden');
       exportBtn.classList.remove('is-open');
-      if (endpoint === '/query/export') {
+      if (endpoint === '/api/query/export') {
          const sqlEditor =
             document.querySelector('#sql-editor textarea') ||
             document.querySelector('#sql-editor');
@@ -289,7 +289,13 @@ if (exportBtn && exportDropdown) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sql }),
          })
-            .then((res) => res.blob())
+            .then((res) => {
+               if (!res.ok)
+                  return res.json().then((j) => {
+                     throw new Error(j.error || 'Export failed');
+                  });
+               return res.blob();
+            })
             .then((blob) => {
                const url = URL.createObjectURL(blob);
                const a = document.createElement('a');
@@ -299,7 +305,7 @@ if (exportBtn && exportDropdown) {
                a.click();
                a.remove();
             })
-            .catch((err) => alert('Failed to export query: ' + err));
+            .catch((err) => alert('Failed to export query: ' + err.message));
          return;
       }
 

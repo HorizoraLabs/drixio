@@ -9,31 +9,65 @@ export function bindCellEditor(tableContainer, schema, columns) {
       const colName = td.dataset.col;
       const colSchema = schema.find((c) => c.name === colName);
       const typeUpper = colSchema?.type?.toUpperCase() || '';
-      const isEnum = typeUpper.includes('ENUM');
+      const isBlob =
+         typeUpper.includes('BLOB') ||
+         typeUpper === 'BYTEA' ||
+         typeUpper.includes('BINARY');
+      if (isBlob) {
+         if (window.showToast) {
+            window.showToast(
+               'Binary (BLOB) data cannot be edited directly.',
+               'info',
+            );
+         }
+         return;
+      }
+
+      const isEnum =
+         typeUpper.includes('ENUM') ||
+         (colSchema?.enumValues && colSchema.enumValues.length > 0);
       const isDate = typeUpper === 'DATE';
       const isDateTime =
          typeUpper.includes('DATETIME') || typeUpper.includes('TIMESTAMP');
       const isBool = typeUpper.includes('BOOL') || typeUpper === 'TINYINT(1)';
+      const isTime = typeUpper === 'TIME' || typeUpper.startsWith('TIME(');
 
       const isGhost =
          td.classList.contains('ghost-row') ||
          (td.dataset.insertIndex !== undefined &&
             !td.classList.contains('cell-edited'));
-      const textVal = (
-         td.dataset.original !== undefined
-            ? td.dataset.original
-            : td.textContent
-      ).trim();
-      const rawText =
-         isGhost ||
-         textVal === 'null' ||
-         textVal === '+ New' ||
-         textVal === '+ Add Row'
-            ? ''
-            : td.dataset.original !== undefined
-              ? td.dataset.original
-              : td.querySelector('.cell-text')?.textContent.trim() ||
-                td.textContent.trim();
+
+      const pk = td.dataset.pk;
+      const insertIdx = td.dataset.insertIndex;
+      const pendingVal =
+         insertIdx !== undefined
+            ? window.DataGrid?.pendingInserts?.[parseInt(insertIdx, 10)]?.[
+                 colName
+              ]
+            : pk !== undefined
+              ? window.DataGrid?.pendingEdits?.[pk]?.[colName]
+              : undefined;
+
+      let rawText = '';
+      if (!isGhost) {
+         if (pendingVal !== undefined) {
+            rawText = String(pendingVal);
+         } else if (td.dataset.original !== undefined) {
+            rawText = td.dataset.original;
+         } else {
+            rawText =
+               td.querySelector('.cell-text')?.textContent.trim() ||
+               td.textContent.trim();
+         }
+      }
+
+      if (
+         rawText === 'null' ||
+         rawText === '+ New' ||
+         rawText === '+ Add Row'
+      ) {
+         rawText = '';
+      }
 
       let inputEl;
       if (colSchema && colSchema.fkTarget) {
@@ -55,6 +89,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
                      const emptyOpt = document.createElement('option');
                      emptyOpt.value = '';
                      emptyOpt.textContent = '-- None --';
+                     if (!rawText) emptyOpt.selected = true;
                      inputEl.appendChild(emptyOpt);
                   }
 
@@ -103,14 +138,23 @@ export function bindCellEditor(tableContainer, schema, columns) {
                loadingOpt.textContent = 'Error loading options';
             });
       } else if (isEnum) {
-         const enumMatch = colSchema.type.match(/enum\((.*?)\)/i);
-         let options = [];
-         if (enumMatch) {
-            options = enumMatch[1]
-               .split(',')
-               .map((s) => s.trim().replace(/^'|'$/g, ''));
+         let options = colSchema?.enumValues || [];
+         if (options.length === 0 && colSchema?.type) {
+            const enumMatch = colSchema.type.match(/enum\((.*?)\)/i);
+            if (enumMatch) {
+               options = enumMatch[1]
+                  .split(',')
+                  .map((s) => s.trim().replace(/^'|'$/g, ''));
+            }
          }
          inputEl = document.createElement('select');
+         if (colSchema?.nullable) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- None --';
+            if (!rawText) emptyOpt.selected = true;
+            inputEl.appendChild(emptyOpt);
+         }
          options.forEach((opt) => {
             const op = document.createElement('option');
             op.value = opt;
@@ -121,12 +165,67 @@ export function bindCellEditor(tableContainer, schema, columns) {
       } else if (isDate) {
          inputEl = document.createElement('input');
          inputEl.type = 'date';
-         inputEl.value = rawText;
+         let dateVal = '';
+         if (rawText) {
+            if (/^\d{13}$/.test(rawText)) {
+               const d = new Date(parseInt(rawText, 10));
+               if (!isNaN(d.getTime())) {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, '0');
+                  dateVal = `${y}-${m}-${day}`;
+               }
+            } else if (/^\d{10}$/.test(rawText)) {
+               const d = new Date(parseInt(rawText, 10) * 1000);
+               if (!isNaN(d.getTime())) {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, '0');
+                  dateVal = `${y}-${m}-${day}`;
+               }
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(rawText)) {
+               dateVal = rawText.slice(0, 10);
+            } else {
+               const d = new Date(rawText);
+               if (!isNaN(d.getTime())) {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, '0');
+                  dateVal = `${y}-${m}-${day}`;
+               }
+            }
+         }
+         inputEl.value = dateVal;
       } else if (isDateTime) {
          inputEl = document.createElement('input');
          inputEl.type = 'datetime-local';
-         const formatted = rawText.replace(' ', 'T').slice(0, 16);
-         inputEl.value = formatted;
+         let dtVal = '';
+         if (rawText) {
+            let d = null;
+            if (/^\d{13}$/.test(rawText)) {
+               d = new Date(parseInt(rawText, 10));
+            } else if (/^\d{10}$/.test(rawText)) {
+               d = new Date(parseInt(rawText, 10) * 1000);
+            } else if (rawText.includes('T') || rawText.includes(' ')) {
+               d = new Date(rawText.replace(' ', 'T'));
+            } else {
+               d = new Date(rawText);
+            }
+            if (d && !isNaN(d.getTime())) {
+               const y = d.getFullYear();
+               const m = String(d.getMonth() + 1).padStart(2, '0');
+               const day = String(d.getDate()).padStart(2, '0');
+               const h = String(d.getHours()).padStart(2, '0');
+               const min = String(d.getMinutes()).padStart(2, '0');
+               dtVal = `${y}-${m}-${day}T${h}:${min}`;
+            }
+         }
+         inputEl.value = dtVal;
+      } else if (isTime) {
+         inputEl = document.createElement('input');
+         inputEl.type = 'time';
+         inputEl.step = '1';
+         inputEl.value = rawText ? rawText.slice(0, 8) : '';
       } else if (isBool) {
          inputEl = document.createElement('input');
          inputEl.type = 'checkbox';
@@ -184,6 +283,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
          (!isEnum &&
             !isDate &&
             !isDateTime &&
+            !isTime &&
             !isBool &&
             !(colSchema && colSchema.fkTarget))
       ) {
@@ -228,6 +328,8 @@ export function bindCellEditor(tableContainer, schema, columns) {
          inputEl.addEventListener('keydown', (e2) => {
             if (e2.key === 'Enter') inputEl.blur();
             if (e2.key === 'Tab') {
+               // Allow keyboard navigation between segments inside date/time inputs
+               if (isDate || isDateTime || isTime) return;
                e2.preventDefault();
                inputEl.blur();
                document.body.dispatchEvent(
@@ -246,7 +348,57 @@ export function bindCellEditor(tableContainer, schema, columns) {
       const commitEdit = () => {
          if (isModalOpen) return;
          let newVal = isBool ? (inputEl.checked ? '1' : '0') : inputEl.value;
-         if (isDateTime && newVal) newVal = newVal.replace('T', ' ') + ':00';
+
+         // Handle fixed-point decimal scaling (e.g. Numeric(30,2) or Decimal(10,2))
+         const decimalMatch = typeUpper.match(
+            /(?:NUMERIC|DECIMAL|FLOAT|DOUBLE)\s*\(\s*\d+\s*,\s*(\d+)\s*\)/,
+         );
+         if (
+            decimalMatch &&
+            newVal &&
+            !isNaN(Number(newVal)) &&
+            !newVal.toLowerCase().includes('e')
+         ) {
+            const scale = parseInt(decimalMatch[1], 10);
+            if (scale > 0) {
+               let [intPart, decPart = ''] = newVal.split('.');
+               if (decPart.length < scale) {
+                  decPart = decPart.padEnd(scale, '0');
+                  newVal = `${intPart}.${decPart}`;
+               }
+            }
+         }
+
+         if (isTime && newVal && /^\d{2}:\d{2}$/.test(newVal)) {
+            newVal += ':00';
+         }
+
+         if (isDate && newVal) {
+            // If rawText was originally a numeric timestamp, convert back to timestamp
+            if (/^\d{13}$/.test(rawText)) {
+               const parsed = new Date(newVal);
+               if (!isNaN(parsed.getTime())) newVal = String(parsed.getTime());
+            } else if (/^\d{10}$/.test(rawText)) {
+               const parsed = new Date(newVal);
+               if (!isNaN(parsed.getTime()))
+                  newVal = String(Math.floor(parsed.getTime() / 1000));
+            }
+         } else if (isDateTime && newVal) {
+            // Check if rawText was originally a numeric timestamp
+            if (/^\d{13}$/.test(rawText)) {
+               const parsed = new Date(newVal);
+               if (!isNaN(parsed.getTime())) newVal = String(parsed.getTime());
+            } else if (/^\d{10}$/.test(rawText)) {
+               const parsed = new Date(newVal);
+               if (!isNaN(parsed.getTime()))
+                  newVal = String(Math.floor(parsed.getTime() / 1000));
+            } else {
+               newVal = newVal.replace('T', ' ');
+               if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(newVal)) {
+                  newVal += ':00';
+               }
+            }
+         }
 
          window.DataGrid.currentTransaction = [];
          updateCell(td, newVal, columns);
@@ -257,8 +409,9 @@ export function bindCellEditor(tableContainer, schema, columns) {
 
       inputEl.addEventListener('blur', () => {
          setTimeout(() => {
-            if (!isModalOpen) commitEdit();
-         }, 100);
+            if (!isModalOpen && document.activeElement !== inputEl)
+               commitEdit();
+         }, 120);
       });
    });
 }

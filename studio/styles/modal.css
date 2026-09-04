@@ -692,6 +692,35 @@
    overflow-x: auto;
    max-height: 130px;
    background: var(--color-bg-primary);
+   scrollbar-width: thin;
+   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.mock-preview-table-wrap::-webkit-scrollbar,
+.mock-rules-list::-webkit-scrollbar {
+   width: 6px;
+   height: 6px;
+}
+
+.mock-preview-table-wrap::-webkit-scrollbar-track,
+.mock-rules-list::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+.mock-preview-table-wrap::-webkit-scrollbar-thumb,
+.mock-rules-list::-webkit-scrollbar-thumb {
+   background: rgba(255, 255, 255, 0.18);
+   border-radius: 4px;
+   transition: background 0.2s;
+}
+
+.mock-preview-table-wrap::-webkit-scrollbar-thumb:hover,
+.mock-rules-list::-webkit-scrollbar-thumb:hover {
+   background: rgba(255, 255, 255, 0.32);
+}
+
+.mock-preview-table-wrap::-webkit-scrollbar-corner {
+   background: transparent;
 }
 
 .mock-preview-table {

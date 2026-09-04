@@ -1,8 +1,10 @@
-import { executeRawQuery } from '../../lib/api.js';
+import { mutateTableRecords } from '../../lib/api.js';
+import { formatDisplayVal } from './utils.js';
 
 export async function saveDataGridEdits() {
    if (!window.DataGrid) return;
-   const { pendingEdits, pendingInserts, pkColumn } = window.DataGrid;
+   const { pendingEdits, pendingInserts, pendingDeletes, pkColumn, schema } =
+      window.DataGrid;
    const tableName = window.AppState.currentTable;
 
    if (!tableName || !pkColumn) {
@@ -10,84 +12,55 @@ export async function saveDataGridEdits() {
       return;
    }
 
-   let sqls = [];
+   const hasEdits = Object.keys(pendingEdits || {}).length > 0;
+   const hasInserts = pendingInserts?.some((row) =>
+      Object.values(row).some(
+         (val) => val !== '' && val !== null && val !== undefined,
+      ),
+   );
+   const hasDeletes = pendingDeletes && pendingDeletes.size > 0;
 
-   for (const [pkVal, edits] of Object.entries(pendingEdits)) {
-      if (Object.keys(edits).length === 0) continue;
-      const setClauses = Object.entries(edits)
-         .map(([col, val]) => {
-            if (val === '') return `"${col}" = NULL`;
-            return `"${col}" = '${val.replace(/'/g, "''")}'`;
-         })
-         .join(', ');
-      sqls.push(
-         `UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColumn}" = '${pkVal.replace(/'/g, "''")}';`,
-      );
-   }
+   if (!hasEdits && !hasInserts && !hasDeletes) return;
 
-   for (let i = 0; i < pendingInserts.length; i++) {
-      const row = pendingInserts[i];
-      if (Object.keys(row).length === 0) continue;
+   const deletesArray = pendingDeletes ? Array.from(pendingDeletes) : [];
 
-      const hasData = Object.values(row).some((val) => val !== '');
-      if (!hasData) continue;
-
-      const cols = Object.keys(row);
-      const vals = cols.map((c) => {
-         const val = row[c];
-         if (val === '') return 'NULL';
-         return `'${val.replace(/'/g, "''")}'`;
+   try {
+      const res = await mutateTableRecords(tableName, {
+         pkColumn,
+         edits: pendingEdits,
+         inserts: pendingInserts,
+         deletes: deletesArray,
+         schema: schema || [],
       });
-      sqls.push(
-         `INSERT INTO "${tableName}" ("${cols.join('", "')}") VALUES (${vals.join(', ')});`,
-      );
-   }
 
-   if (window.DataGrid.pendingDeletes) {
-      for (const pk of window.DataGrid.pendingDeletes) {
-         sqls.push(
-            `DELETE FROM "${tableName}" WHERE "${pkColumn}" = '${pk.replace(/'/g, "''")}';`,
-         );
-      }
-   }
-
-   if (sqls.length === 0) return;
-
-   let allSuccess = true;
-   let errorMsg = '';
-
-   for (const sql of sqls) {
-      try {
-         const res = await executeRawQuery(sql);
-         if (!res.success) {
-            allSuccess = false;
-            errorMsg = res.error;
-            break;
+      if (res.success) {
+         if (window.DataGrid) {
+            window.DataGrid.pendingEdits = {};
+            window.DataGrid.pendingInserts = [{}];
+            window.DataGrid.pendingDeletes = new Set();
+            window.DataGrid.history = [];
+            window.DataGrid.currentTransaction = null;
+            if (window.DataGrid.refreshData) {
+               window.DataGrid.refreshData();
+            } else {
+               window.renderCurrentView();
+            }
          }
-      } catch (e) {
-         allSuccess = false;
-         errorMsg = e.message;
-         break;
+         window.updateSidebarActiveTable?.();
+         window.loadTableStats?.();
+         if (window.showToast) window.showToast('Data saved successfully!');
+      } else {
+         const errorMsg = res.error || 'Failed to save changes';
+         if (window.showToast)
+            window.showToast('Save failed: ' + errorMsg, 'error');
+         else alert('Save failed:\n' + errorMsg);
+         document.querySelectorAll('.cell-edited').forEach((td) => {
+            td.classList.remove('cell-edited');
+            td.classList.add('cell-error');
+         });
       }
-   }
-
-   if (allSuccess) {
-      if (window.DataGrid) {
-         window.DataGrid.pendingEdits = {};
-         window.DataGrid.pendingInserts = [{}];
-         window.DataGrid.pendingDeletes = new Set();
-         window.DataGrid.history = [];
-         window.DataGrid.currentTransaction = null;
-         if (window.DataGrid.refreshData) {
-            window.DataGrid.refreshData();
-         } else {
-            window.renderCurrentView();
-         }
-      }
-      window.updateSidebarActiveTable?.();
-      window.loadTableStats?.();
-      if (window.showToast) window.showToast('Data saved successfully!');
-   } else {
+   } catch (e) {
+      const errorMsg = e.message || 'Network error';
       if (window.showToast)
          window.showToast('Save failed: ' + errorMsg, 'error');
       else alert('Save failed:\n' + errorMsg);
@@ -112,11 +85,20 @@ export function updateCell(td, newVal, columns, recordHistory = true) {
    const colIdx = td.dataset.colIdx;
    const ghostPlaceholder =
       colIdx === '0' ? `<span class="ghost-cell-hint">+ Add Row</span>` : '';
-   td.innerHTML =
-      newVal ||
-      (td.dataset.insertIndex !== undefined
-         ? ghostPlaceholder
-         : '<em>null</em>');
+   const schema = window.DataGrid?.schema || [];
+   const colSchema = schema.find((c) => c.name === colName);
+   const displayInfo = formatDisplayVal(newVal, colSchema);
+
+   td.innerHTML = newVal
+      ? `<span class="cell-text">${displayInfo.html}</span>`
+      : td.dataset.insertIndex !== undefined
+        ? ghostPlaceholder
+        : '<em>null</em>';
+   if (displayInfo.title) {
+      td.title = displayInfo.title;
+   } else {
+      td.removeAttribute('title');
+   }
 
    if (td.dataset.insertIndex !== undefined) {
       const idx = parseInt(td.dataset.insertIndex);

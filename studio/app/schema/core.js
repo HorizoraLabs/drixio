@@ -1,13 +1,18 @@
-import { executeRawQuery } from '../../lib/api.js';
+import { mutateTableSchema } from '../../lib/api.js';
 
 export async function saveSchemaEdits() {
    if (!window.SchemaGrid) return;
-   const { pendingEdits, pendingInserts, pendingDeletes } = window.SchemaGrid;
+   const {
+      pendingEdits,
+      pendingInserts,
+      pendingDeletes,
+      pendingIndexEdits,
+      schema,
+   } = window.SchemaGrid;
    const tableName = window.AppState.currentTable;
 
    if (!tableName) return;
 
-   const { pendingIndexEdits } = window.SchemaGrid;
    const hasColumnChanges =
       (pendingDeletes && pendingDeletes.size > 0) ||
       Object.keys(pendingEdits || {}).length > 0 ||
@@ -21,175 +26,27 @@ export async function saveSchemaEdits() {
 
    if (!hasColumnChanges && !hasIndexChanges) return;
 
-   // Handle SQLite via Backend Table Re-creation
-   if (window.AppState.dbType === 'sqlite' && hasColumnChanges) {
-      try {
-         const origSchema = window.SchemaGrid.schema || [];
-         const renames = {};
-         const updatedColumns = [];
+   const deletesArray = pendingDeletes ? Array.from(pendingDeletes) : [];
 
-         for (const col of origSchema) {
-            if (pendingDeletes && pendingDeletes.has(col.name)) {
-               continue; // Dropped column
-            }
+   try {
+      const res = await mutateTableSchema(tableName, {
+         pendingEdits,
+         pendingInserts,
+         pendingDeletes: deletesArray,
+         pendingIndexEdits,
+         columns: schema,
+      });
 
-            const edits = pendingEdits[col.name] || {};
-            let colName = col.name;
-            if (edits.name && edits.name !== col.name) {
-               renames[col.name] = edits.name;
-               colName = edits.name;
-            }
-
-            let type = edits.type !== undefined ? edits.type : col.type;
-
-            let isPk = col.isPk;
-            let fkTarget = col.fkTarget;
-            if (edits.isPk !== undefined) {
-               const isPkStr = String(edits.isPk).toUpperCase();
-               isPk =
-                  isPkStr === '1' ||
-                  isPkStr === 'TRUE' ||
-                  isPkStr === 'YES' ||
-                  isPkStr.includes('PK') ||
-                  isPkStr === 'KEY';
-
-               if (isPkStr.includes('FK:') || isPkStr.includes('PFK:')) {
-                  const fkMatch = String(edits.isPk).match(
-                     /(?:FK|PFK):\s*([^\s,]+)/i,
-                  );
-                  if (fkMatch && fkMatch[1]) {
-                     const parts = fkMatch[1].split('.');
-                     if (parts.length === 2) {
-                        fkTarget = { table: parts[0], column: parts[1] };
-                     }
-                  }
-               } else {
-                  fkTarget = undefined;
-               }
-            }
-
-            let nullable =
-               edits.nullable !== undefined ? edits.nullable : col.nullable;
-            const isNullable = !(
-               nullable === '0' ||
-               nullable === 'No' ||
-               nullable === false
-            );
-
-            let defaultValue =
-               edits.defaultValue !== undefined
-                  ? edits.defaultValue
-                  : col.defaultValue;
-
-            let isUnique = col.isUnique;
-            if (edits.isUnique !== undefined) {
-               isUnique =
-                  edits.isUnique === 'Yes' ||
-                  edits.isUnique === '1' ||
-                  edits.isUnique === true;
-            }
-
-            updatedColumns.push({
-               name: colName,
-               type: type || 'TEXT',
-               isPk: !!isPk,
-               nullable: isNullable,
-               defaultValue: defaultValue || undefined,
-               isUnique: !!isUnique,
-               fkTarget,
-            });
+      if (res.success) {
+         if (window.SchemaGrid) {
+            window.SchemaGrid.pendingEdits = {};
+            window.SchemaGrid.pendingInserts = [{}];
+            window.SchemaGrid.pendingDeletes = new Set();
+            window.SchemaGrid.pendingIndexEdits = { added: [], dropped: [] };
+            window.SchemaGrid.history = [];
+            window.SchemaGrid.currentTransaction = null;
          }
 
-         // Add newly inserted columns
-         if (pendingInserts) {
-            for (const row of pendingInserts) {
-               if (!row.name || row.name.trim() === '') continue;
-               const colName = row.name.trim();
-               const type = row.type || 'TEXT';
-               const isPkStr = String(row.isPk || '').toUpperCase();
-               const isPk =
-                  isPkStr === '1' ||
-                  isPkStr === 'TRUE' ||
-                  isPkStr === 'YES' ||
-                  isPkStr.includes('PK') ||
-                  isPkStr === 'KEY';
-
-               let fkTarget = undefined;
-               if (isPkStr.includes('FK:') || isPkStr.includes('PFK:')) {
-                  const fkMatch = String(row.isPk).match(
-                     /(?:FK|PFK):\s*([^\s,]+)/i,
-                  );
-                  if (fkMatch && fkMatch[1]) {
-                     const parts = fkMatch[1].split('.');
-                     if (parts.length === 2) {
-                        fkTarget = { table: parts[0], column: parts[1] };
-                     }
-                  }
-               }
-
-               const isNullable = !(
-                  row.nullable === '0' ||
-                  row.nullable === 'false' ||
-                  row.nullable === 'No'
-               );
-               const isUnique =
-                  String(row.isUnique || '').toUpperCase() === 'YES' ||
-                  row.isUnique === '1' ||
-                  row.isUnique === true;
-
-               updatedColumns.push({
-                  name: colName,
-                  type,
-                  isPk,
-                  nullable: isNullable,
-                  defaultValue: row.defaultValue || undefined,
-                  isUnique,
-                  fkTarget,
-               });
-            }
-         }
-
-         // Call Backend API
-         const res = await fetch(
-            `/api/tables/${encodeURIComponent(tableName)}/schema`,
-            {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ columns: updatedColumns, renames }),
-            },
-         );
-
-         const json = await res.json();
-         if (!json.success) {
-            throw new Error(json.error || 'Failed to recreate table');
-         }
-
-         // Handle any separate Index drops / adds if present
-         if (hasIndexChanges) {
-            for (const idxName of pendingIndexEdits.dropped) {
-               if (idxName) await executeRawQuery(`DROP INDEX "${idxName}";`);
-            }
-            for (const idx of pendingIndexEdits.added) {
-               const nameStr = idx.name
-                  ? `"${idx.name}"`
-                  : `"idx_${tableName}_${idx.columns.join('_')}_${Date.now()}"`;
-               const uniqueStr = idx.isUnique ? 'UNIQUE' : '';
-               const colsStr = idx.columns.map((c) => `"${c}"`).join(', ');
-               await executeRawQuery(
-                  `CREATE ${uniqueStr} INDEX IF NOT EXISTS ${nameStr} ON "${tableName}" (${colsStr});`,
-               );
-            }
-         }
-
-         // Success cleanup
-         window.SchemaGrid.pendingEdits = {};
-         window.SchemaGrid.pendingInserts = [{}];
-         window.SchemaGrid.pendingDeletes = new Set();
-         window.SchemaGrid.pendingIndexEdits = { added: [], dropped: [] };
-         window.SchemaGrid.history = [];
-         window.SchemaGrid.currentTransaction = null;
-
-         // Invalidate data cache so data tab re-fetches new column schema
          if (window.TableStates?.[tableName]) {
             window.TableStates[tableName].dataGrid = null;
          }
@@ -203,261 +60,24 @@ export async function saveSchemaEdits() {
          window.updateSidebarDirtyState?.();
          window.loadTableStats?.();
          if (window.showToast) {
-            window.showToast(
-               'Schema saved successfully via Table Re-creation!',
-               'success',
-            );
+            window.showToast('Schema saved successfully!', 'success');
          }
-         return;
-      } catch (e) {
+      } else {
+         const errorMsg = res.error || 'Failed to apply schema changes';
          if (window.showToast) {
-            window.showToast(`Migration failed: ${e.message}`, 'error');
+            window.showToast(`Migration failed: ${errorMsg}`, 'error');
          } else {
-            alert(`Migration failed: ${e.message}`);
+            alert(`Migration failed: ${errorMsg}`);
          }
-         return;
+      }
+   } catch (e) {
+      const errorMsg = e.message || 'Network error';
+      if (window.showToast) {
+         window.showToast(`Migration failed: ${errorMsg}`, 'error');
+      } else {
+         alert(`Migration failed: ${errorMsg}`);
       }
    }
-
-   let sqls = [];
-
-   // Handle Deletes
-   if (pendingDeletes) {
-      for (const colName of pendingDeletes) {
-         sqls.push(`ALTER TABLE "${tableName}" DROP COLUMN "${colName}";`);
-      }
-   }
-
-   // Handle Updates
-   for (const [colName, edits] of Object.entries(pendingEdits)) {
-      let newName = colName;
-      if (edits.name && edits.name !== colName) {
-         sqls.push(
-            `ALTER TABLE "${tableName}" RENAME COLUMN "${colName}" TO "${edits.name}";`,
-         );
-         newName = edits.name;
-      }
-
-      const otherKeys = Object.keys(edits).filter((k) => k !== 'name');
-      if (otherKeys.length > 0) {
-         const origCol =
-            window.SchemaGrid.schema?.find((c) => c.name === colName) || {};
-
-         let type = edits.type !== undefined ? edits.type : origCol.type;
-         let constraints = [];
-
-         const isPkRaw = edits.isPk !== undefined ? edits.isPk : origCol.isPk;
-         // isPkRaw might be boolean true, "1", "PK", "FK: table.col", or combination
-         const isPkStr = String(isPkRaw).toUpperCase();
-
-         if (
-            isPkStr === '1' ||
-            isPkStr === 'TRUE' ||
-            isPkStr === 'YES' ||
-            isPkStr.includes('PK') ||
-            isPkStr === 'KEY'
-         ) {
-            constraints.push('PRIMARY KEY');
-         }
-
-         if (isPkStr.includes('FK:')) {
-            const fkMatch = isPkStr.match(/FK:\s*([^\s,]+)/i);
-            if (fkMatch && fkMatch[1]) {
-               const target = fkMatch[1].split('.');
-               if (target.length === 2) {
-                  constraints.push(`REFERENCES "${target[0]}"("${target[1]}")`);
-               }
-            }
-         }
-
-         const nullable =
-            edits.nullable !== undefined ? edits.nullable : origCol.nullable;
-         if (nullable === '0' || nullable === 'No' || nullable === false)
-            constraints.push('NOT NULL');
-
-         const defVal =
-            edits.defaultValue !== undefined
-               ? edits.defaultValue
-               : origCol.defaultValue;
-         if (defVal)
-            constraints.push(`DEFAULT '${String(defVal).replace(/'/g, "''")}'`);
-
-         if (window.AppState.dbType === 'sqlite') {
-            alert(
-               'SQLite does not support altering column types directly. Please recreate the table or use Raw SQL.',
-            );
-            return;
-         } else if (window.AppState.dbType === 'postgres') {
-            sqls.push(
-               `ALTER TABLE "${tableName}" ALTER COLUMN "${newName}" TYPE ${type};`,
-            );
-            if (constraints.includes('NOT NULL')) {
-               sqls.push(
-                  `ALTER TABLE "${tableName}" ALTER COLUMN "${newName}" SET NOT NULL;`,
-               );
-            }
-            if (defVal) {
-               sqls.push(
-                  `ALTER TABLE "${tableName}" ALTER COLUMN "${newName}" SET DEFAULT '${String(defVal).replace(/'/g, "''")}';`,
-               );
-            }
-         } else {
-            sqls.push(
-               `ALTER TABLE "${tableName}" MODIFY COLUMN "${newName}" ${type} ${constraints.join(' ')};`,
-            );
-         }
-      }
-
-      // Handle isUnique for existing columns via Unique Index
-      if (edits.isUnique !== undefined) {
-         const isUniqueVal =
-            edits.isUnique === 'Yes' ||
-            edits.isUnique === '1' ||
-            edits.isUnique === true;
-         const indexName = `idx_${tableName}_${newName}_unique`;
-         if (isUniqueVal) {
-            sqls.push(
-               `CREATE UNIQUE INDEX IF NOT EXISTS "${indexName}" ON "${tableName}" ("${newName}");`,
-            );
-         } else {
-            sqls.push(`DROP INDEX IF EXISTS "${indexName}";`);
-         }
-      }
-   }
-
-   // Handle Inserts
-   for (let i = 0; i < pendingInserts.length; i++) {
-      const row = pendingInserts[i];
-      if (Object.keys(row).length === 0) continue;
-      if (!row.name || row.name.trim() === '') continue;
-
-      const colName = row.name.trim();
-      let type = row.type || 'TEXT';
-      let constraints = [];
-
-      const isPkStr = String(row.isPk || '').toUpperCase();
-      if (
-         isPkStr === '1' ||
-         isPkStr === 'TRUE' ||
-         isPkStr === 'YES' ||
-         isPkStr.includes('PK') ||
-         isPkStr === 'KEY'
-      ) {
-         constraints.push('PRIMARY KEY');
-      }
-
-      if (isPkStr.includes('FK:')) {
-         const fkMatch = isPkStr.match(/FK:\s*([^\s,]+)/i);
-         if (fkMatch && fkMatch[1]) {
-            const target = fkMatch[1].split('.');
-            if (target.length === 2) {
-               constraints.push(`REFERENCES "${target[0]}"("${target[1]}")`);
-            }
-         }
-      }
-      if (
-         row.nullable === '0' ||
-         row.nullable === 'false' ||
-         row.nullable === 'No'
-      ) {
-         constraints.push('NOT NULL');
-      }
-      const isUniqueStr = String(row.isUnique || '').toUpperCase();
-      if (
-         isUniqueStr === 'YES' ||
-         isUniqueStr === '1' ||
-         isUniqueStr === 'TRUE'
-      ) {
-         constraints.push('UNIQUE');
-      }
-      if (row.defaultValue) {
-         constraints.push(`DEFAULT '${row.defaultValue.replace(/'/g, "''")}'`);
-      }
-
-      sqls.push(
-         `ALTER TABLE "${tableName}" ADD COLUMN "${colName}" ${type} ${constraints.join(' ')};`,
-      );
-   }
-
-   // Handle Index Drops
-   if (window.SchemaGrid.pendingIndexEdits) {
-      for (const idxName of window.SchemaGrid.pendingIndexEdits.dropped) {
-         if (idxName && idxName.trim() !== '') {
-            sqls.push(`DROP INDEX "${idxName}";`);
-         }
-      }
-
-      // Handle Index Creates
-      for (const idx of window.SchemaGrid.pendingIndexEdits.added) {
-         let nameStr = '';
-         if (idx.name && idx.name.trim() !== '') {
-            nameStr = `"${idx.name}"`;
-         } else {
-            nameStr = `"idx_${tableName}_${idx.columns.join('_')}_${Date.now()}"`;
-         }
-
-         const uniqueStr = idx.isUnique ? 'UNIQUE' : '';
-         const colsStr = idx.columns.map((c) => `"${c}"`).join(', ');
-
-         sqls.push(
-            `CREATE ${uniqueStr} INDEX IF NOT EXISTS ${nameStr} ON "${tableName}" (${colsStr});`,
-         );
-      }
-   }
-
-   if (sqls.length === 0) return;
-
-   let allSuccess = true;
-   let errorMsg = '';
-
-   for (const sql of sqls) {
-      try {
-         const res = await executeRawQuery(sql);
-         if (!res.success) {
-            allSuccess = false;
-            errorMsg = res.error;
-            break;
-         }
-      } catch (e) {
-         allSuccess = false;
-         errorMsg = e.message;
-         break;
-      }
-   }
-
-   if (allSuccess) {
-      if (window.SchemaGrid) {
-         window.SchemaGrid.pendingEdits = {};
-         window.SchemaGrid.pendingInserts = [{}];
-         window.SchemaGrid.pendingDeletes = new Set();
-         window.SchemaGrid.pendingIndexEdits = { added: [], dropped: [] };
-         window.SchemaGrid.history = [];
-         window.SchemaGrid.currentTransaction = null;
-      }
-      const refreshBtn = document.getElementById(
-         `btn-refresh-schema-${tableName}`,
-      );
-      if (refreshBtn) refreshBtn.click();
-      else window.renderCurrentView();
-
-      if (window.showToast) window.showToast('Schema saved successfully!');
-   } else {
-      if (errorMsg.includes('near "MODIFY": syntax error')) {
-         errorMsg =
-            'SQLite: Currently does not support modifying existing column types or constraints directly. You can only Rename columns or Add new columns.';
-      } else if (errorMsg.includes('syntax error')) {
-         errorMsg = 'SQLite: ' + errorMsg;
-      }
-
-      if (window.showToast)
-         window.showToast('Save failed: ' + errorMsg, 'error');
-      else alert('Save failed:\n' + errorMsg);
-      document.querySelectorAll('.cell-edited').forEach((td) => {
-         td.classList.remove('cell-edited');
-         td.classList.add('cell-error');
-      });
-   }
-   window.updateSidebarDirtyState?.();
 }
 
 export function updateSchemaCell(td, newVal, columns, recordHistory = true) {

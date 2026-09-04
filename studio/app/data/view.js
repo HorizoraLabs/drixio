@@ -2,6 +2,7 @@ import {
    fetchTableSchema,
    fetchTableWithName,
    executeRawQuery,
+   truncateTableApi,
 } from '../../lib/api.js';
 import { bindColumnResizer, bindCellSelection } from '../grid/view.js';
 import { bindCellEditor } from './events.js';
@@ -438,9 +439,7 @@ export async function loadTableData(
                                  `Are you sure you want to delete ALL rows from table "${tableName}"? This cannot be undone!`,
                               )
                            ) {
-                              const res = await executeRawQuery(
-                                 `DELETE FROM "${tableName}";`,
-                              );
+                              const res = await truncateTableApi(tableName);
                               if (res.success) {
                                  if (window.showToast)
                                     window.showToast(

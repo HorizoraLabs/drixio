@@ -1,7 +1,7 @@
 import {
    fetchTables,
    fetchTableSchema,
-   executeRawQuery as runQuery,
+   mutateTableSchema,
 } from '../../lib/api.js';
 
 export async function fetchAllSchemaData() {
@@ -36,57 +36,29 @@ export function savePositions(positions) {
 }
 
 export async function saveErdDrafts(erdData) {
-   const queries = [];
-
-   erdData.forEach((schema) => {
-      if (schema.isDraft) {
-         // Create new table
-         const colDefs = schema.columns
-            .map((col) => {
-               let def = `${col.name} ${col.type}`;
-               if (col.isPk) {
-                  if (col.type.toUpperCase() === 'INTEGER') {
-                     def += ' PRIMARY KEY AUTOINCREMENT';
-                  } else {
-                     def += ' PRIMARY KEY';
-                  }
-               }
-               if (!col.nullable && !col.isPk) def += " NOT NULL DEFAULT ''"; // Default to avoid SQLite NOT NULL errors
-
-               if (col.fkTarget) {
-                  def += ` REFERENCES ${col.fkTarget.table}(${col.fkTarget.column})`;
-               }
-               return def;
-            })
-            .join(', ');
-
-         queries.push(`CREATE TABLE ${schema.table} (${colDefs});`);
-      } else {
-         // Existing table, check for draft columns
-         schema.columns.forEach((col) => {
-            if (col.isDraft) {
-               let def = `ALTER TABLE ${schema.table} ADD COLUMN ${col.name} ${col.type}`;
-               if (col.fkTarget) {
-                  def += ` REFERENCES ${col.fkTarget.table}(${col.fkTarget.column})`;
-               }
-               queries.push(def + ';');
-            }
-         });
-      }
-   });
-
-   if (queries.length === 0) return true;
-
+   if (!erdData) return true;
    try {
-      // SQLite doesn't natively support multiple statements in a single runQuery call easily
-      // depending on the adapter, so we run them sequentially.
-      for (const sql of queries) {
-         const res = await runQuery(sql);
-         if (!res.success) throw new Error(res.error || 'Query failed');
+      for (const schema of erdData) {
+         if (schema.isDraft) {
+            const res = await mutateTableSchema(schema.table, {
+               columns: schema.columns,
+            });
+            if (!res.success)
+               throw new Error(res.error || 'Failed to create table');
+         } else {
+            const draftCols = schema.columns.filter((c) => c.isDraft);
+            if (draftCols.length > 0) {
+               const res = await mutateTableSchema(schema.table, {
+                  pendingInserts: draftCols,
+               });
+               if (!res.success)
+                  throw new Error(res.error || 'Failed to add column');
+            }
+         }
       }
       return true;
    } catch (err) {
-      window.showToast('Failed to save: ' + err.message, 'error');
+      window.showToast?.('Failed to save: ' + err.message, 'error');
       return false;
    }
 }

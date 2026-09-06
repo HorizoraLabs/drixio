@@ -3,7 +3,7 @@ import {
    DBConfig,
    createDBAdapter,
    generateTypeScriptDefinitions,
-   TableSchemaInfo,
+   getTableSchemas,
 } from '../logic/index.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -22,17 +22,15 @@ export async function runGenerateTypesCommand(dbConfig: DBConfig) {
    );
 
    try {
-      const allTables = await adapter.getTables();
+      const schemasRes = await getTableSchemas(adapter);
+      if (!schemasRes.success) {
+         throw new Error(schemasRes.error);
+      }
+      const tableInfos = schemasRes.data;
 
-      if (allTables.length === 0) {
+      if (tableInfos.length === 0) {
          console.log(pc.yellow('No tables found in the database.'));
          process.exit(0);
-      }
-
-      const tableInfos: TableSchemaInfo[] = [];
-      for (const table of allTables) {
-         const columns = await adapter.getSchema(table);
-         tableInfos.push({ tableName: table, columns });
       }
 
       const tsCode = generateTypeScriptDefinitions(tableInfos, dbConfig.type);

@@ -1,9 +1,4 @@
-import { ColumnSchema } from './types.js';
-
-export interface TableSchemaInfo {
-   tableName: string;
-   columns: ColumnSchema[];
-}
+import { ColumnSchema, TableSchemaInfo } from './types.js';
 
 /**
  * Converts snake_case or table name to PascalCase singular (e.g. "users" -> "User")

@@ -289,6 +289,60 @@ export interface RestoreResult {
    message?: string;
 }
 
+export async function restoreTableFromJsonContent(
+   adapter: DBAdapter,
+   dbType: string,
+   content: string,
+   defaultTableName?: string,
+): Promise<Result<{ restoredTables: string[]; totalRows: number }>> {
+   try {
+      const parsed = JSON.parse(content);
+      const tableName =
+         parsed.table || defaultTableName || 'restored_table';
+      const schema = parsed.schema || [];
+      const rows = Array.isArray(parsed.data)
+         ? parsed.data
+         : Array.isArray(parsed)
+           ? parsed
+           : [];
+
+      const existingTables = await adapter.getTables();
+      if (!existingTables.includes(tableName)) {
+         if (schema.length > 0) {
+            const createRes = await createTable(
+               adapter,
+               dbType,
+               tableName,
+               schema,
+            );
+            if (!createRes.success) {
+               return createRes;
+            }
+         }
+      } else {
+         try {
+            await adapter.truncateTable(tableName);
+         } catch {
+            await adapter.executeSql(
+               `DELETE FROM ${adapter.quoteIdentifier(tableName)};`,
+            );
+         }
+      }
+
+      if (rows.length > 0) {
+         const CHUNK_SIZE = 500;
+         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+            const chunk = rows.slice(i, i + CHUNK_SIZE);
+            await adapter.insert(tableName, chunk);
+         }
+      }
+
+      return ok({ restoredTables: [tableName], totalRows: rows.length });
+   } catch (e: any) {
+      return err(e.message || 'Failed to restore table from JSON', undefined, e);
+   }
+}
+
 export async function restoreDatabase(
    adapter: DBAdapter,
    dbType: string,
@@ -296,7 +350,6 @@ export async function restoreDatabase(
 ): Promise<Result<RestoreResult>> {
    try {
       const stat = await fs.stat(sourcePath);
-      const existingTables = await adapter.getTables();
       const restoredTables: string[] = [];
       let totalRows = 0;
 
@@ -323,52 +376,17 @@ export async function restoreDatabase(
          for (const jf of jsonFiles) {
             const fullFilePath = path.join(sourcePath, jf);
             const content = await fs.readFile(fullFilePath, 'utf-8');
-            const parsed = JSON.parse(content);
-
-            const tableName = parsed.table || path.basename(jf, '.json');
-            const schema = parsed.schema || [];
-            const rows = Array.isArray(parsed.data)
-               ? parsed.data
-               : Array.isArray(parsed)
-                 ? parsed
-                 : [];
-
-            // 1. If table doesn't exist, create it if schema is available
-            if (!existingTables.includes(tableName)) {
-               if (schema.length > 0) {
-                  const createRes = await createTable(
-                     adapter,
-                     dbType,
-                     tableName,
-                     schema,
-                  );
-                  if (!createRes.success) {
-                     return createRes;
-                  }
-                  existingTables.push(tableName);
-               }
-            } else {
-               // Truncate existing table to avoid duplicate key conflicts
-               try {
-                  await adapter.truncateTable(tableName);
-               } catch {
-                  await adapter.executeSql(
-                     `DELETE FROM ${adapter.quoteIdentifier(tableName)};`,
-                  );
-               }
+            const res = await restoreTableFromJsonContent(
+               adapter,
+               dbType,
+               content,
+               path.basename(jf, '.json'),
+            );
+            if (!res.success) {
+               return res;
             }
-
-            // 2. Insert rows in chunks
-            if (rows.length > 0) {
-               const CHUNK_SIZE = 500;
-               for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-                  const chunk = rows.slice(i, i + CHUNK_SIZE);
-                  await adapter.insert(tableName, chunk);
-               }
-            }
-
-            restoredTables.push(tableName);
-            totalRows += rows.length;
+            restoredTables.push(...res.data.restoredTables);
+            totalRows += res.data.totalRows;
          }
 
          return ok({ restoredTables, totalRows });
@@ -388,47 +406,12 @@ export async function restoreDatabase(
             });
          } else if (lower.endsWith('.json')) {
             const content = await fs.readFile(sourcePath, 'utf-8');
-            const parsed = JSON.parse(content);
-            const tableName =
-               parsed.table || path.basename(sourcePath, '.json');
-            const schema = parsed.schema || [];
-            const rows = Array.isArray(parsed.data)
-               ? parsed.data
-               : Array.isArray(parsed)
-                 ? parsed
-                 : [];
-
-            if (!existingTables.includes(tableName)) {
-               if (schema.length > 0) {
-                  const createRes = await createTable(
-                     adapter,
-                     dbType,
-                     tableName,
-                     schema,
-                  );
-                  if (!createRes.success) {
-                     return createRes;
-                  }
-               }
-            } else {
-               try {
-                  await adapter.truncateTable(tableName);
-               } catch {
-                  await adapter.executeSql(
-                     `DELETE FROM ${adapter.quoteIdentifier(tableName)};`,
-                  );
-               }
-            }
-
-            if (rows.length > 0) {
-               const CHUNK_SIZE = 500;
-               for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-                  const chunk = rows.slice(i, i + CHUNK_SIZE);
-                  await adapter.insert(tableName, chunk);
-               }
-            }
-
-            return ok({ restoredTables: [tableName], totalRows: rows.length });
+            return await restoreTableFromJsonContent(
+               adapter,
+               dbType,
+               content,
+               path.basename(sourcePath, '.json'),
+            );
          } else {
             return err(
                `Unsupported backup file format: ${sourcePath}. Expected directory, .json, or .sql`,

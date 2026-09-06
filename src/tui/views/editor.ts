@@ -208,35 +208,6 @@ export async function viewTables(dbConfig: DBConfigProps) {
                   message:
                      'Enter Search (e.g. `age > 18` or `John` for fuzzy search):',
                });
-               const searchVal = searchInput.trim();
-               if (searchVal) {
-                  // Check if it looks like a SQL condition (contains =, >, <, LIKE, etc.)
-                  const isSqlCondition = /[=<>]|LIKE|IN|AND|OR/i.test(
-                     searchVal,
-                  );
-                  if (isSqlCondition) {
-                     currentWhere = searchVal;
-                  } else {
-                     // Fuzzy search across all string columns
-                     const strCols = schema.filter(
-                        (c) =>
-                           c.type.toLowerCase().includes('char') ||
-                           c.type.toLowerCase().includes('text'),
-                     );
-                     if (strCols.length > 0) {
-                        const likeOp =
-                           dbConfig.type === 'postgres' ? 'ILIKE' : 'LIKE';
-                        const conditions = strCols.map(
-                           (c) =>
-                              `${adapter.quoteIdentifier(c.name)} ${likeOp} '%${searchVal.replace(/'/g, "''")}%'`,
-                        );
-                        currentWhere = conditions.join(' OR ');
-                     } else {
-                        currentWhere = `${adapter.quoteIdentifier(schema[0].name)} = '${searchVal}'`;
-                     }
-                  }
-                  currentPage = 1;
-               }
                currentWhere = buildSearchWhereClause(
                   adapter,
                   dbConfig.type,

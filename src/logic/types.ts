@@ -15,6 +15,11 @@ export interface ColumnSchema {
    fkTarget?: { table: string; column: string };
 }
 
+export interface TableSchemaInfo {
+   tableName: string;
+   columns: ColumnSchema[];
+}
+
 export interface DatabaseStatus {
    status: 'connected' | 'disconnected' | 'error';
    dbType: 'mysql' | 'postgres' | 'sqlite' | 'unknown';

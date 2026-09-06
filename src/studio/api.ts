@@ -10,18 +10,19 @@ import {
    generateAndInsertMockData,
    batchMutateTableData,
    applySchemaChanges,
-   createTable,
    truncateTable,
    importDataToTable,
    generatePrismaSchema,
    generateDrizzleSchema,
-   TableSchemaInfo,
+   getTableSchemas,
    getTablesWithRowCount,
    generateDataDictionary,
    analyzeDangerousQuery,
    generateDatabaseSqlDumpStream,
    exportDatabaseSchemaDdl,
    exportQueryResult,
+   exportTable,
+   restoreTableFromJsonContent,
 } from '../logic/index.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -233,11 +234,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             );
          }
 
-         const schemaInfos: TableSchemaInfo[] = [];
-         for (const tbl of targetTables) {
-            const cols = await adapter.getSchema(tbl);
-            schemaInfos.push({ tableName: tbl, columns: cols });
+         const schemasRes = await getTableSchemas(adapter, targetTables);
+         if (!schemasRes.success) {
+            return c.json({ success: false, error: schemasRes.error }, 500);
          }
+         const schemaInfos = schemasRes.data;
 
          let code = '';
          if (target === 'drizzle') {
@@ -618,7 +619,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/tables/:name/export', async (c) => {
       const tableName = c.req.param('name');
-      const format = c.req.query('format') || 'csv';
+      const format = (c.req.query('format') || 'csv') as 'csv' | 'json';
       const whereClause = c.req.query('where') || '';
       const orderCol = c.req.query('orderCol');
       const orderAscStr = c.req.query('orderAsc');
@@ -629,94 +630,18 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
 
       try {
+         const res = await exportTable(getAdapter(), tableName, {
+            format,
+            whereClause,
+            orderBy,
+         });
+
+         if (!res.success) {
+            return c.text(`Export Failed: ${res.error}`, 500);
+         }
+
          const timestamp = getDatetimeStr();
          const exportFilename = `${tableName}_export_${timestamp}`;
-
-         const stream = new ReadableStream({
-            async start(controller) {
-               const encoder = new TextEncoder();
-               try {
-                  const batchSize = 1000;
-                  let batchOffset = 0;
-                  let hasMore = true;
-                  let isFirstChunk = true;
-
-                  if (format === 'json') {
-                     controller.enqueue(encoder.encode('[\n'));
-                  }
-
-                  while (hasMore) {
-                     const batch = await getAdapter().getData(
-                        tableName,
-                        batchSize,
-                        batchOffset,
-                        whereClause,
-                        orderBy,
-                     );
-
-                     if (batch.rows.length === 0) {
-                        break;
-                     }
-
-                     if (format === 'json') {
-                        let jsonStr = '';
-                        for (let i = 0; i < batch.rows.length; i++) {
-                           if (!isFirstChunk || i > 0) {
-                              jsonStr += ',\n';
-                           }
-                           jsonStr += JSON.stringify(batch.rows[i], null, 2);
-                        }
-                        controller.enqueue(encoder.encode(jsonStr));
-                     } else {
-                        // CSV format
-                        let csvStr = '';
-                        const headers =
-                           batch.columns || Object.keys(batch.rows[0] || {});
-
-                        if (isFirstChunk && headers.length > 0) {
-                           csvStr += headers.join(',') + '\n';
-                        }
-
-                        for (const r of batch.rows) {
-                           const rowStr = headers
-                              .map((h) => {
-                                 let val = r[h];
-                                 if (val === null || val === undefined)
-                                    val = '';
-                                 val = String(val);
-                                 if (
-                                    val.includes(',') ||
-                                    val.includes('"') ||
-                                    val.includes('\n')
-                                 ) {
-                                    val = `"${val.replace(/"/g, '""')}"`;
-                                 }
-                                 return val;
-                              })
-                              .join(',');
-                           csvStr += rowStr + '\n';
-                        }
-                        controller.enqueue(encoder.encode(csvStr));
-                     }
-
-                     isFirstChunk = false;
-                     batchOffset += batchSize;
-                     if (batch.rows.length < batchSize) {
-                        hasMore = false;
-                     }
-                  }
-
-                  if (format === 'json') {
-                     controller.enqueue(encoder.encode('\n]'));
-                  }
-
-                  controller.close();
-               } catch (e) {
-                  // If headers are already sent, we can only close the stream with an error
-                  controller.error(e);
-               }
-            },
-         });
 
          c.header(
             'Content-Disposition',
@@ -726,7 +651,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             'Content-Type',
             format === 'json' ? 'application/json' : 'text/csv',
          );
-         return c.body(stream);
+         return c.body(res.data);
       } catch (e: any) {
          return c.text(`Export Failed: ${e.message}`, 500);
       }
@@ -858,51 +783,18 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
          if (file.name.toLowerCase().endsWith('.json')) {
             const raw = await file.text();
-            const parsed = JSON.parse(raw);
-            const tableName = parsed.table || file.name.replace(/\.json$/i, '');
-            const schema = parsed.schema || [];
-            const rows = Array.isArray(parsed.data)
-               ? parsed.data
-               : Array.isArray(parsed)
-                 ? parsed
-                 : [];
-            const existingTables = await getAdapter().getTables();
-
-            if (!existingTables.includes(tableName)) {
-               if (schema.length > 0) {
-                  const ctRes = await createTable(
-                     getAdapter(),
-                     currentDbConfig.type,
-                     tableName,
-                     schema,
-                  );
-                  if (!ctRes.success) {
-                     return c.json({ success: false, error: ctRes.error }, 400);
-                  }
-               }
-            } else {
-               try {
-                  await getAdapter().truncateTable(tableName);
-               } catch {
-                  await getAdapter().executeSql(
-                     `DELETE FROM ${getAdapter().quoteIdentifier(tableName)};`,
-                  );
-               }
+            const res = await restoreTableFromJsonContent(
+               getAdapter(),
+               currentDbConfig.type,
+               raw,
+               file.name.replace(/\.json$/i, ''),
+            );
+            if (!res.success) {
+               return c.json({ success: false, error: res.error }, 400);
             }
-
-            if (rows.length > 0) {
-               const CHUNK_SIZE = 500;
-               for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-                  await getAdapter().insert(
-                     tableName,
-                     rows.slice(i, i + CHUNK_SIZE),
-                  );
-               }
-            }
-
             return c.json({
                success: true,
-               message: `Table '${tableName}' restored successfully (${rows.length} rows)`,
+               message: `Table '${res.data.restoredTables.join(', ')}' restored successfully (${res.data.totalRows} rows)`,
             });
          }
 
@@ -998,7 +890,6 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.text('No database connected', 400);
          }
          const dbName = getDbName();
-         const md = await generateDataDictionary(getAdapter(), dbName);
          const res = await generateDataDictionary(getAdapter(), dbName);
          if (!res.success) {
             return c.text(`Data Dictionary Export Failed: ${res.error}`, 500);
@@ -1300,162 +1191,3 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    app.route('/api', api);
 }
 
-// Fallback SQL generator for SQLite
-function generateSqliteDumpStream(adapter: DBAdapter): ReadableStream {
-   return new ReadableStream({
-      async start(controller) {
-         const encoder = new TextEncoder();
-         try {
-            controller.enqueue(
-               encoder.encode('-- Drixio SQLite Fallback Backup\n\n'),
-            );
-            const tablesResult = await adapter.query(
-               "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
-            );
-
-            for (const row of tablesResult.rows) {
-               if (!row.sql) continue;
-               controller.enqueue(encoder.encode(`${row.sql};\n\n`));
-
-               const tableName = row.name as string;
-               const batchSize = 1000;
-               let offset = 0;
-               let hasMore = true;
-
-               while (hasMore) {
-                  const batch = await adapter.getData(
-                     tableName,
-                     batchSize,
-                     offset,
-                  );
-                  if (batch.rows.length === 0) {
-                     break;
-                  }
-
-                  let insertStrs = '';
-                  for (const d of batch.rows) {
-                     const keys = Object.keys(d)
-                        .map((k) => adapter.quoteIdentifier(k))
-                        .join(', ');
-                     const vals = Object.values(d)
-                        .map((v) => {
-                           if (v === null) return 'NULL';
-                           if (typeof v === 'number') return v;
-                           return `'${String(v).replace(/'/g, "''")}'`;
-                        })
-                        .join(', ');
-                     insertStrs += `INSERT INTO ${adapter.quoteIdentifier(tableName)} (${keys}) VALUES (${vals});\n`;
-                  }
-                  controller.enqueue(encoder.encode(insertStrs));
-
-                  offset += batchSize;
-                  if (batch.rows.length < batchSize) {
-                     hasMore = false;
-                  }
-               }
-               controller.enqueue(encoder.encode('\n'));
-            }
-            controller.close();
-         } catch (e) {
-            controller.enqueue(
-               encoder.encode(`-- Error generating backup: ${e}\n`),
-            );
-            controller.close();
-         }
-      },
-   });
-}
-
-// Fallback SQL generator for MySQL
-function generateMysqlDumpStream(adapter: DBAdapter): ReadableStream {
-   return new ReadableStream({
-      async start(controller) {
-         const encoder = new TextEncoder();
-         try {
-            controller.enqueue(
-               encoder.encode('-- Drixio MySQL Fallback Backup\n\n'),
-            );
-            const tables = await adapter.getTables();
-
-            for (const table of tables) {
-               try {
-                  const createTableResult = await adapter.query(
-                     `SHOW CREATE TABLE ${adapter.quoteIdentifier(table)}`,
-                  );
-                  if (
-                     createTableResult.rows &&
-                     createTableResult.rows.length > 0
-                  ) {
-                     const row = createTableResult.rows[0] as Record<
-                        string,
-                        any
-                     >;
-                     const vals = Object.values(row);
-                     const createSql =
-                        row['Create Table'] ||
-                        row['Create View'] ||
-                        (vals.length > 1 ? vals[1] : null);
-                     if (createSql) {
-                        controller.enqueue(encoder.encode(`${createSql};\n\n`));
-                     }
-                  }
-
-                  const batchSize = 1000;
-                  let offset = 0;
-                  let hasMore = true;
-
-                  while (hasMore) {
-                     const batch = await adapter.getData(
-                        table,
-                        batchSize,
-                        offset,
-                     );
-                     if (batch.rows.length === 0) {
-                        break;
-                     }
-
-                     let insertStrs = '';
-                     for (const d of batch.rows) {
-                        const keys = Object.keys(d)
-                           .map((k) => adapter.quoteIdentifier(k))
-                           .join(', ');
-                        const vals = Object.values(d)
-                           .map((v) => {
-                              if (v === null) return 'NULL';
-                              if (typeof v === 'number') return v;
-                              let str = String(v);
-                              str = str.replace(/\\/g, '\\\\');
-                              str = str.replace(/'/g, "''");
-                              str = str.replace(/\n/g, '\\n');
-                              str = str.replace(/\r/g, '\\r');
-                              return `'${str}'`;
-                           })
-                           .join(', ');
-                        insertStrs += `INSERT INTO ${adapter.quoteIdentifier(table)} (${keys}) VALUES (${vals});\n`;
-                     }
-                     controller.enqueue(encoder.encode(insertStrs));
-
-                     offset += batchSize;
-                     if (batch.rows.length < batchSize) {
-                        hasMore = false;
-                     }
-                  }
-                  controller.enqueue(encoder.encode('\n'));
-               } catch (tableErr) {
-                  controller.enqueue(
-                     encoder.encode(
-                        `-- Error backing up table ${table}: ${tableErr}\n\n`,
-                     ),
-                  );
-               }
-            }
-            controller.close();
-         } catch (e) {
-            controller.enqueue(
-               encoder.encode(`-- Error generating backup: ${e}\n`),
-            );
-            controller.close();
-         }
-      },
-   });
-}

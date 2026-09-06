@@ -4,7 +4,7 @@ import {
    createDBAdapter,
    generatePrismaSchema,
    generateDrizzleSchema,
-   TableSchemaInfo,
+   getTableSchemas,
 } from '../logic/index.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -66,11 +66,11 @@ export async function runGenerateOrmCommand(
          process.exit(1);
       }
 
-      const schemaInfos: TableSchemaInfo[] = [];
-      for (const table of targetTables) {
-         const cols = await adapter.getSchema(table);
-         schemaInfos.push({ tableName: table, columns: cols });
+      const schemasRes = await getTableSchemas(adapter, targetTables);
+      if (!schemasRes.success) {
+         throw new Error(schemasRes.error);
       }
+      const schemaInfos = schemasRes.data;
 
       let generatedCode = '';
       let defaultFileName = '';

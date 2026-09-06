@@ -46,8 +46,6 @@ export async function runSqlRunner(dbConfig: DBConfig) {
             console.log(pc.dim('Executing SQL...'));
             const adapter = createDBAdapter(dbConfig as any);
             try {
-               await executeDatabaseScript(adapter, sqlToExecute);
-               console.log(pc.green('\n✓ SQL executed successfully!'));
                const res = await executeDatabaseScript(adapter, sqlToExecute);
                if (res.success) {
                   console.log(pc.green('\n✓ SQL executed successfully!'));

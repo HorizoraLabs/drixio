@@ -1,6 +1,7 @@
 import {
    DBAdapter,
    ColumnSchema,
+   TableSchemaInfo,
    SchemaChangeOptions,
    Result,
    ok,
@@ -402,6 +403,27 @@ export async function getTablesWithRowCount(
          undefined,
          e,
       );
+   }
+}
+
+/**
+ * Query schema information (columns) for multiple tables or all tables in the database.
+ * Single source of truth shared by ORM generation, TypeScript definitions generation, and Studio.
+ */
+export async function getTableSchemas(
+   adapter: DBAdapter,
+   tables?: string[],
+): Promise<Result<TableSchemaInfo[]>> {
+   try {
+      const allTables = tables || (await adapter.getTables());
+      const schemaInfos: TableSchemaInfo[] = [];
+      for (const table of allTables) {
+         const columns = await adapter.getSchema(table);
+         schemaInfos.push({ tableName: table, columns });
+      }
+      return ok(schemaInfos);
+   } catch (e: any) {
+      return err(e.message || 'Failed to get table schemas', undefined, e);
    }
 }
 

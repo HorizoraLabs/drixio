@@ -69,7 +69,7 @@ export const HeaderHTML = /* html */ `
           <button id="import-db-sql-btn" class="dropdown-item danger">
             <span class="material-symbols-outlined">database</span>
             <span class="dropdown-item-label">Restore Database</span>
-            <span class="dropdown-badge danger">SQL</span>
+            <span class="dropdown-badge danger">SQL / JSON</span>
           </button>
         </li>
       </ul>

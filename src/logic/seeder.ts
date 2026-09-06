@@ -1,4 +1,4 @@
-import { DBAdapter, ColumnSchema } from './types.js';
+import { DBAdapter, ColumnSchema, Result, ok, err } from './types.js';
 
 export interface MockStrategy {
    type: string;
@@ -406,30 +406,34 @@ export async function previewMockData(
    adapter: DBAdapter,
    tableName: string,
    previewCount = 3,
-): Promise<MockPreviewData> {
-   const schema = await adapter.getSchema(tableName);
-   const fkCache = await getFkCandidates(adapter, schema);
+): Promise<Result<MockPreviewData>> {
+   try {
+      const schema = await adapter.getSchema(tableName);
+      const fkCache = await getFkCandidates(adapter, schema);
 
-   const rules: MockColumnRule[] = schema.map((col) => ({
-      column: col,
-      strategy: inferColumnStrategy(col),
-   }));
+      const rules: MockColumnRule[] = schema.map((col) => ({
+         column: col,
+         strategy: inferColumnStrategy(col),
+      }));
 
-   const previewRows: Record<string, any>[] = [];
-   for (let i = 0; i < previewCount; i++) {
-      const row: Record<string, any> = {};
-      for (const { column, strategy } of rules) {
-         const val = generateFieldValue(strategy, fkCache);
-         row[column.name] = val !== undefined ? val : '(auto)';
+      const previewRows: Record<string, any>[] = [];
+      for (let i = 0; i < previewCount; i++) {
+         const row: Record<string, any> = {};
+         for (const { column, strategy } of rules) {
+            const val = generateFieldValue(strategy, fkCache);
+            row[column.name] = val !== undefined ? val : '(auto)';
+         }
+         previewRows.push(row);
       }
-      previewRows.push(row);
-   }
 
-   return {
-      tableName,
-      rules,
-      previewRows,
-   };
+      return ok({
+         tableName,
+         rules,
+         previewRows,
+      });
+   } catch (e: any) {
+      return err(e.message || 'Failed to generate mock preview', undefined, e);
+   }
 }
 
 /**
@@ -440,43 +444,51 @@ export async function generateAndInsertMockData(
    tableName: string,
    count: number,
    onProgress?: (inserted: number, total: number) => void,
-): Promise<number> {
-   const schema = await adapter.getSchema(tableName);
-   const fkCache = await getFkCandidates(adapter, schema);
+): Promise<Result<{ insertedCount: number }>> {
+   try {
+      const schema = await adapter.getSchema(tableName);
+      const fkCache = await getFkCandidates(adapter, schema);
 
-   const rules: MockColumnRule[] = schema.map((col) => ({
-      column: col,
-      strategy: inferColumnStrategy(col),
-   }));
+      const rules: MockColumnRule[] = schema.map((col) => ({
+         column: col,
+         strategy: inferColumnStrategy(col),
+      }));
 
-   const activeRules = rules.filter((r) => r.strategy.type !== 'pk_auto');
-   if (activeRules.length === 0) {
-      return 0;
-   }
+      const activeRules = rules.filter((r) => r.strategy.type !== 'pk_auto');
+      if (activeRules.length === 0) {
+         return ok({ insertedCount: 0 });
+      }
 
-   const rowsToInsert: Record<string, any>[] = [];
-   for (let i = 0; i < count; i++) {
-      const row: Record<string, any> = {};
-      for (const { column, strategy } of activeRules) {
-         const val = generateFieldValue(strategy, fkCache);
-         if (val !== undefined) {
-            row[column.name] = val;
+      const rowsToInsert: Record<string, any>[] = [];
+      for (let i = 0; i < count; i++) {
+         const row: Record<string, any> = {};
+         for (const { column, strategy } of activeRules) {
+            const val = generateFieldValue(strategy, fkCache);
+            if (val !== undefined) {
+               row[column.name] = val;
+            }
+         }
+         rowsToInsert.push(row);
+      }
+
+      const CHUNK_SIZE = 250;
+      let inserted = 0;
+
+      for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
+         const chunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
+         await adapter.insert(tableName, chunk);
+         inserted += chunk.length;
+         if (onProgress) {
+            onProgress(inserted, count);
          }
       }
-      rowsToInsert.push(row);
+
+      return ok({ insertedCount: inserted });
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to generate and insert mock data',
+         undefined,
+         e,
+      );
    }
-
-   const CHUNK_SIZE = 250;
-   let inserted = 0;
-
-   for (let i = 0; i < rowsToInsert.length; i += CHUNK_SIZE) {
-      const chunk = rowsToInsert.slice(i, i + CHUNK_SIZE);
-      await adapter.insert(tableName, chunk);
-      inserted += chunk.length;
-      if (onProgress) {
-         onProgress(inserted, count);
-      }
-   }
-
-   return inserted;
 }

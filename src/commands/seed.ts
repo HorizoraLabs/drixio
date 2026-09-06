@@ -51,7 +51,7 @@ export async function runSeedCommand(dbConfig: DBConfig, args: string[]) {
    );
 
    try {
-      const inserted = await generateAndInsertMockData(
+      const seedRes = await generateAndInsertMockData(
          adapter,
          tableName,
          count,
@@ -62,11 +62,15 @@ export async function runSeedCommand(dbConfig: DBConfig, args: string[]) {
          },
       );
 
-      console.log(
-         pc.green(
-            `\n\n✔ Successfully generated and seeded ${inserted} realistic records into ${tableName}!`,
-         ),
-      );
+      if (!seedRes.success) {
+         console.log(pc.red(`\n\n✘ Seed failed: ${seedRes.error}`));
+      } else {
+         console.log(
+            pc.green(
+               `\n\n✔ Successfully generated and seeded ${seedRes.data.insertedCount} realistic records into ${tableName}!`,
+            ),
+         );
+      }
    } catch (e: any) {
       console.log(pc.red(`\n✘ Seed failed: ${e.message}`));
    } finally {

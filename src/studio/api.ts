@@ -10,8 +10,18 @@ import {
    generateAndInsertMockData,
    batchMutateTableData,
    applySchemaChanges,
+   createTable,
    truncateTable,
    importDataToTable,
+   generatePrismaSchema,
+   generateDrizzleSchema,
+   TableSchemaInfo,
+   getTablesWithRowCount,
+   generateDataDictionary,
+   analyzeDangerousQuery,
+   generateDatabaseSqlDumpStream,
+   exportDatabaseSchemaDdl,
+   exportQueryResult,
 } from '../logic/index.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -149,24 +159,13 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          if (!currentAdapter || currentDbConfig.type === 'unknown') {
             return c.json({ success: true, data: {} });
          }
-         const tables = await currentAdapter.getTables();
+         const res = await getTablesWithRowCount(currentAdapter);
+         if (!res.success) {
+            return c.json({ success: false, error: res.error }, 500);
+         }
          const stats: Record<string, number> = {};
-         for (const t of tables) {
-            try {
-               const res = await currentAdapter.query(
-                  `SELECT COUNT(*) as c FROM ${currentAdapter.quoteIdentifier(t)}`,
-               );
-               // Different adapters might return row keys differently, try to extract count safely
-               if (res && res.rows && res.rows.length > 0) {
-                  const row = res.rows[0];
-                  const countVal = Object.values(row)[0];
-                  stats[t] = parseInt(String(countVal), 10) || 0;
-               } else {
-                  stats[t] = 0;
-               }
-            } catch (e) {
-               stats[t] = 0;
-            }
+         for (const t of res.data) {
+            stats[t.name] = typeof t.rows === 'number' ? t.rows : 0;
          }
          return c.json({ success: true, data: stats });
       } catch (e: any) {
@@ -206,6 +205,61 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
+   api.get('/generate-orm', async (c) => {
+      const target = c.req.query('target') || 'prisma';
+      const requestedTable = c.req.query('table');
+
+      try {
+         const adapter = getAdapter();
+         const allTables = await adapter.getTables();
+         const targetTables =
+            requestedTable && requestedTable !== '*'
+               ? allTables.filter(
+                    (t) => t.toLowerCase() === requestedTable.toLowerCase(),
+                 )
+               : allTables;
+
+         if (
+            targetTables.length === 0 &&
+            requestedTable &&
+            requestedTable !== '*'
+         ) {
+            return c.json(
+               {
+                  success: false,
+                  error: `Table "${requestedTable}" not found.`,
+               },
+               404,
+            );
+         }
+
+         const schemaInfos: TableSchemaInfo[] = [];
+         for (const tbl of targetTables) {
+            const cols = await adapter.getSchema(tbl);
+            schemaInfos.push({ tableName: tbl, columns: cols });
+         }
+
+         let code = '';
+         if (target === 'drizzle') {
+            code = generateDrizzleSchema(schemaInfos, currentDbConfig.type);
+         } else {
+            code = generatePrismaSchema(schemaInfos, currentDbConfig.type);
+         }
+
+         return c.json({
+            success: true,
+            data: {
+               target,
+               table: requestedTable || '*',
+               dialect: currentDbConfig.type,
+               code,
+            },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
    api.post('/tables/:name/records', async (c) => {
       const tableName = c.req.param('name');
       try {
@@ -224,7 +278,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             },
          );
          if (res.success) {
-            return c.json({ success: true, count: res.executedCount });
+            return c.json({ success: true, count: res.data.executedCount });
          } else {
             return c.json({ success: false, error: res.error }, 400);
          }
@@ -263,9 +317,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             format,
             text,
          );
+         if (!res.success) {
+            return c.json({ success: false, error: res.error }, 400);
+         }
          return c.json({
             success: true,
-            message: `Imported ${res.count} records successfully`,
+            message: `Imported ${res.data.count} records successfully`,
          });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
@@ -312,8 +369,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.get('/tables/:name/mock/preview', async (c) => {
       try {
          const tableName = c.req.param('name');
-         const data = await previewMockData(getAdapter(), tableName, 3);
-         return c.json({ success: true, data });
+         const res = await previewMockData(getAdapter(), tableName, 3);
+         if (!res.success) {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+         return c.json({ success: true, data: res.data });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }
@@ -324,12 +384,25 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          const tableName = c.req.param('name');
          const body = await c.req.json().catch(() => ({}));
          const count = Math.min(Math.max(Number(body.count) || 10, 1), 1000);
-         const inserted = await generateAndInsertMockData(
+         const res = await generateAndInsertMockData(
             getAdapter(),
             tableName,
             count,
          );
-         return c.json({ success: true, count: inserted });
+         if (!res.success) {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+         return c.json({ success: true, count: res.data.insertedCount });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/analyze-query', async (c) => {
+      try {
+         const { sql } = await c.req.json().catch(() => ({}));
+         const result = analyzeDangerousQuery(sql);
+         return c.json({ success: true, ...result });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }
@@ -446,9 +519,13 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                dbName,
             });
 
+            if (!result.success) {
+               return c.json({ success: false, error: result.error }, 400);
+            }
+
             const newConfig: DBConfig = {
                type: 'sqlite',
-               targetUrl: result.targetUrl,
+               targetUrl: result.data.targetUrl,
                source: 'manual',
             };
 
@@ -471,15 +548,15 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                   rows: [
                      {
                         Result: 'Created & Connected',
-                        Database: result.dbName,
-                        Path: result.targetUrl.replace('file:', ''),
+                        Database: result.data.dbName,
+                        Path: result.data.targetUrl.replace('file:', ''),
                      },
                   ],
                   affectedRows: 1,
                   connectionChanged: true,
                   dbConfig: {
                      type: 'sqlite',
-                     dbName: result.dbName,
+                     dbName: result.data.dbName,
                   },
                },
             });
@@ -505,60 +582,35 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.post('/query/export', async (c) => {
       try {
-         const { sql } = await c.req.json();
-         if (!sql) {
+         const body = await c.req.json();
+         let rows = body.rows;
+         if (!rows && body.sql) {
+            const result = await getAdapter().query(body.sql);
+            rows = result.rows;
+         }
+         if (!rows) {
             return c.json(
-               { success: false, error: 'No SQL query provided' },
+               { success: false, error: 'No SQL query or rows provided' },
                400,
             );
          }
 
-         const result = await getAdapter().query(sql);
-         const rows = result.rows;
+         const format = (c.req.query('format') || 'csv').toLowerCase() as
+            | 'csv'
+            | 'json';
          const timestamp = getDatetimeStr();
-         const format = c.req.query('format') || 'csv';
          const exportFilename = `query_result_${timestamp}`;
+         const content = exportQueryResult(rows, format);
 
-         if (format === 'json') {
-            const jsonStr = JSON.stringify(rows, null, 2);
-            c.header(
-               'Content-Disposition',
-               `attachment; filename="${exportFilename}.json"`,
-            );
-            c.header('Content-Type', 'application/json');
-            return c.body(jsonStr);
-         } else {
-            let csvStr = '';
-            if (rows.length > 0) {
-               const headers = Object.keys(rows[0]);
-               const headerStr = headers.join(',');
-               const rowStrs = rows.map((r) => {
-                  return headers
-                     .map((h) => {
-                        let val = r[h];
-                        if (val === null || val === undefined) val = '';
-                        val = String(val);
-                        if (
-                           val.includes(',') ||
-                           val.includes('"') ||
-                           val.includes('\n')
-                        ) {
-                           val = `"${val.replace(/"/g, '""')}"`;
-                        }
-                        return val;
-                     })
-                     .join(',');
-               });
-               csvStr = [headerStr, ...rowStrs].join('\n');
-            }
-
-            c.header(
-               'Content-Disposition',
-               `attachment; filename="${exportFilename}.csv"`,
-            );
-            c.header('Content-Type', 'text/csv');
-            return c.body(csvStr);
-         }
+         c.header(
+            'Content-Disposition',
+            `attachment; filename="${exportFilename}.${format}"`,
+         );
+         c.header(
+            'Content-Type',
+            format === 'json' ? 'application/json' : 'text/csv',
+         );
+         return c.body(content);
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }
@@ -767,16 +819,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          } catch (err: any) {
             // Fallback to JS dump if native tool is missing
             if (err.message.includes('Native tool')) {
-               let fallbackStream: ReadableStream;
                const baseName = getDbName();
                const timeStr = getDatetimeStr();
-               if (type === 'sqlite') {
-                  fallbackStream = generateSqliteDumpStream(getAdapter());
-               } else if (type === 'mysql') {
-                  fallbackStream = generateMysqlDumpStream(getAdapter());
-               } else {
-                  throw err;
-               }
+               const fallbackStream = generateDatabaseSqlDumpStream(
+                  getAdapter(),
+                  type,
+               );
                c.header(
                   'Content-Disposition',
                   `attachment; filename="${baseName}_backup_${timeStr}.sql"`,
@@ -801,13 +849,64 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.json({ success: false, error: 'No file uploaded' }, 400);
          }
 
-         const sqlContent = await file.text();
          if (!currentAdapter || currentDbConfig.type === 'unknown') {
             return c.json(
                { success: false, error: 'No database connected' },
                400,
             );
          }
+
+         if (file.name.toLowerCase().endsWith('.json')) {
+            const raw = await file.text();
+            const parsed = JSON.parse(raw);
+            const tableName = parsed.table || file.name.replace(/\.json$/i, '');
+            const schema = parsed.schema || [];
+            const rows = Array.isArray(parsed.data)
+               ? parsed.data
+               : Array.isArray(parsed)
+                 ? parsed
+                 : [];
+            const existingTables = await getAdapter().getTables();
+
+            if (!existingTables.includes(tableName)) {
+               if (schema.length > 0) {
+                  const ctRes = await createTable(
+                     getAdapter(),
+                     currentDbConfig.type,
+                     tableName,
+                     schema,
+                  );
+                  if (!ctRes.success) {
+                     return c.json({ success: false, error: ctRes.error }, 400);
+                  }
+               }
+            } else {
+               try {
+                  await getAdapter().truncateTable(tableName);
+               } catch {
+                  await getAdapter().executeSql(
+                     `DELETE FROM ${getAdapter().quoteIdentifier(tableName)};`,
+                  );
+               }
+            }
+
+            if (rows.length > 0) {
+               const CHUNK_SIZE = 500;
+               for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+                  await getAdapter().insert(
+                     tableName,
+                     rows.slice(i, i + CHUNK_SIZE),
+                  );
+               }
+            }
+
+            return c.json({
+               success: true,
+               message: `Table '${tableName}' restored successfully (${rows.length} rows)`,
+            });
+         }
+
+         const sqlContent = await file.text();
          const type = currentDbConfig.type;
          const url = currentDbConfig.targetUrl;
 
@@ -899,23 +998,17 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.text('No database connected', 400);
          }
          const dbName = getDbName();
-         let md = `# Data Dictionary: ${dbName}\n\n`;
-         const tables = await getAdapter().getTables();
-         for (const t of tables) {
-            md += `## Table: \`${t}\`\n\n`;
-            md += `| Column | Type | PK | Nullable |\n|---|---|---|---|\n`;
-            const schema = await getAdapter().getSchema(t);
-            for (const col of schema) {
-               md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} |\n`;
-            }
-            md += `\n`;
+         const md = await generateDataDictionary(getAdapter(), dbName);
+         const res = await generateDataDictionary(getAdapter(), dbName);
+         if (!res.success) {
+            return c.text(`Data Dictionary Export Failed: ${res.error}`, 500);
          }
          c.header(
             'Content-Disposition',
             `attachment; filename="${dbName}_dictionary_${getDatetimeStr()}.md"`,
          );
          c.header('Content-Type', 'text/markdown');
-         return c.body(md);
+         return c.body(res.data);
       } catch (e: any) {
          return c.text(`Data Dictionary Export Failed: ${e.message}`, 500);
       }
@@ -928,27 +1021,14 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
          const type = currentDbConfig.type;
          const filename = `${getDbName()}_schema_${getDatetimeStr()}.sql`;
-
-         if (type === 'sqlite') {
-            let sqlDump = '-- Drixio SQLite Schema Dump\n\n';
-            const tablesResult = await getAdapter().query(
-               "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
-            );
-            for (const row of tablesResult.rows) {
-               if (row.sql) sqlDump += `${row.sql};\n\n`;
-            }
-            c.header(
-               'Content-Disposition',
-               `attachment; filename="${filename}"`,
-            );
-            c.header('Content-Type', 'application/sql');
-            return c.body(sqlDump);
-         } else {
-            return c.text(
-               'Schema-only export for this DB type currently requires manual DDL extraction. Coming soon!',
-               501,
-            );
+         const dumpRes = await exportDatabaseSchemaDdl(getAdapter(), type);
+         if (!dumpRes.success) {
+            return c.text(`Schema Export Failed: ${dumpRes.error}`, 500);
          }
+
+         c.header('Content-Disposition', `attachment; filename="${filename}"`);
+         c.header('Content-Type', 'application/sql');
+         return c.body(dumpRes.data);
       } catch (e: any) {
          return c.text(`Schema Export Failed: ${e.message}`, 500);
       }
@@ -987,7 +1067,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                password,
             });
 
-            targetUrl = result.targetUrl;
+            if (!result.success) {
+               return c.json({ success: false, error: result.error }, 400);
+            }
+
+            targetUrl = result.data.targetUrl;
             newConfig = await detectDatabase(targetUrl);
          } else {
             // 2. Direct connect mode or SQLite existing file
@@ -1012,7 +1096,10 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                   dialect: 'sqlite',
                   dbName: targetUrl.replace(/^file:/, ''),
                });
-               targetUrl = result.targetUrl;
+               if (!result.success) {
+                  return c.json({ success: false, error: result.error }, 400);
+               }
+               targetUrl = result.data.targetUrl;
             }
 
             newConfig = await detectDatabase(targetUrl);
@@ -1045,6 +1132,141 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/test-connect', async (c) => {
+      const startTime = Date.now();
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { mode, dbType, host, port, user, password, dbName } = body;
+
+         const dialect = (dbType || 'sqlite').toLowerCase();
+
+         if (dialect === 'sqlite') {
+            const rawPath =
+               body.url || body.sqlitePath || dbName || 'drixio.sqlite';
+            const cleanPath = rawPath.replace(/^file:/, '').trim();
+            const fullPath = path.isAbsolute(cleanPath)
+               ? cleanPath
+               : path.resolve(process.cwd(), cleanPath);
+
+            if (mode === 'create') {
+               const dir = path.dirname(fullPath);
+               if (!fs.existsSync(dir)) {
+                  return c.json(
+                     {
+                        success: false,
+                        error: `Directory "${dir}" does not exist.`,
+                     },
+                     400,
+                  );
+               }
+               const exists = fs.existsSync(fullPath);
+               const latencyMs = Date.now() - startTime;
+               return c.json({
+                  success: true,
+                  data: {
+                     latencyMs,
+                     message: exists
+                        ? `File already exists at "${path.basename(fullPath)}". Will connect and reuse.`
+                        : `Target path is valid. File will be created on connect.`,
+                     fullPath,
+                  },
+               });
+            } else {
+               if (!fs.existsSync(fullPath)) {
+                  return c.json(
+                     {
+                        success: false,
+                        error: `Database file not found at: ${fullPath}`,
+                     },
+                     400,
+                  );
+               }
+               const stats = fs.statSync(fullPath);
+               if (stats.isDirectory()) {
+                  return c.json(
+                     {
+                        success: false,
+                        error: `Specified path is a directory, not a database file.`,
+                     },
+                     400,
+                  );
+               }
+               const tempConfig = await detectDatabase(fullPath);
+               const tempAdapter = createDBAdapter(tempConfig);
+               const tables = await tempAdapter.getTables();
+               await tempAdapter.close();
+               const latencyMs = Date.now() - startTime;
+               return c.json({
+                  success: true,
+                  data: {
+                     latencyMs,
+                     message: `SQLite database file verified (${tables.length} table${tables.length === 1 ? '' : 's'} found).`,
+                     fullPath,
+                     tablesCount: tables.length,
+                  },
+               });
+            }
+         }
+
+         // Server databases (PostgreSQL, MySQL)
+         let targetUrl = '';
+         if (mode === 'create') {
+            const targetHost = host || 'localhost';
+            const targetPort =
+               port || (dialect === 'postgres' ? '5432' : '3306');
+            const targetUser =
+               user || (dialect === 'postgres' ? 'postgres' : 'root');
+            const auth = password
+               ? `${encodeURIComponent(targetUser)}:${encodeURIComponent(password)}`
+               : encodeURIComponent(targetUser);
+            const defaultDb = dialect === 'postgres' ? 'postgres' : '';
+            targetUrl = `${dialect}://${auth}@${targetHost}:${targetPort}/${defaultDb}`;
+         } else {
+            const rawUrl = body.url;
+            if (!rawUrl) {
+               return c.json(
+                  { success: false, error: 'Connection URI is required.' },
+                  400,
+               );
+            }
+            targetUrl = rawUrl.trim();
+         }
+
+         const testConfig = await detectDatabase(targetUrl);
+         const testAdapter = createDBAdapter(testConfig);
+         await testAdapter.query('SELECT 1 as connected;');
+         let tablesCount = 0;
+         try {
+            const tables = await testAdapter.getTables();
+            tablesCount = tables.length;
+         } catch {}
+         await testAdapter.close();
+
+         const latencyMs = Date.now() - startTime;
+         return c.json({
+            success: true,
+            data: {
+               latencyMs,
+               message:
+                  mode === 'create'
+                     ? `Server instance is reachable. Ready to execute CREATE DATABASE.`
+                     : `Connected successfully (${tablesCount} table${tablesCount === 1 ? '' : 's'} found).`,
+               tablesCount,
+            },
+         });
+      } catch (e: any) {
+         const latencyMs = Date.now() - startTime;
+         return c.json(
+            {
+               success: false,
+               latencyMs,
+               error: e.message || 'Connection test failed',
+            },
+            400,
+         );
       }
    });
 

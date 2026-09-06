@@ -181,7 +181,7 @@ if (importBtn && importDropdown) {
          importBtn.classList.remove('is-open');
          const input = document.createElement('input');
          input.type = 'file';
-         input.accept = '.sql';
+         input.accept = '.sql,.json';
          input.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;

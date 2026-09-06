@@ -3,7 +3,7 @@ import {
    fetchTableStats,
    fetchConfig,
    fetchTableSchema,
-   executeRawQuery,
+   truncateTableApi,
 } from '../lib/api.js';
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
@@ -163,9 +163,7 @@ export async function initSidebar(isRefresh = false) {
                               `Are you sure you want to delete ALL data from table "${tableName}"? This cannot be undone!`,
                            )
                         ) {
-                           const res = await executeRawQuery(
-                              `DELETE FROM "${tableName}";`,
-                           );
+                           const res = await truncateTableApi(tableName);
                            if (res.success) {
                               if (window.showToast)
                                  window.showToast(

@@ -1,10 +1,5 @@
 import pc from 'picocolors';
-import {
-   DBConfig,
-   createDBAdapter,
-   exportTableToCsv,
-   exportTableToJson,
-} from '../logic/index.js';
+import { DBConfig, createDBAdapter, exportTable } from '../logic/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -22,7 +17,7 @@ export async function runExportCommand(
 
    const adapter = createDBAdapter(dbConfig as any);
    let tableName = args[0];
-   let format = options.format as string;
+   let format = (options.format as string)?.toLowerCase();
    const schemaOnly = options['schema-only'] as boolean;
 
    const { select } = await import('@inquirer/prompts');
@@ -45,7 +40,7 @@ export async function runExportCommand(
       });
    }
 
-   if (!format) {
+   if (!format || !['csv', 'json'].includes(format)) {
       format = await select({
          message: 'Which format do you want to export?',
          choices: [
@@ -65,47 +60,36 @@ export async function runExportCommand(
 
    for (const table of tablesToExport) {
       try {
-         if (schemaOnly) {
-            const schema = await adapter.getSchema(table);
-            if (format === 'json') {
-               const fp = path.join(exportDir, `${table}_schema.json`);
-               await fs.writeFile(fp, JSON.stringify(schema, null, 2), 'utf-8');
-               console.log(pc.green(`✔ Exported Schema (JSON): ${table}`));
-            } else {
-               const fp = path.join(exportDir, `${table}_schema.csv`);
-               const headers = 'Name,Type,IsPrimaryKey,Nullable\n';
-               const rows = schema
-                  .map(
-                     (c) =>
-                        `"${c.name}","${c.type}","${c.isPk}","${c.nullable}"`,
-                  )
-                  .join('\n');
-               await fs.writeFile(fp, headers + rows, 'utf-8');
-               console.log(pc.green(`✔ Exported Schema (CSV): ${table}`));
-            }
-         } else {
-            if (format === 'json') {
-               const jsonRows = await exportTableToJson(adapter, table);
-               const fp = path.join(exportDir, `${table}_data.json`);
-               await fs.writeFile(
-                  fp,
-                  JSON.stringify(jsonRows, null, 2),
-                  'utf-8',
-               );
-               console.log(pc.green(`✔ Exported Data (JSON): ${table}`));
-            } else {
-               const csvStr = await exportTableToCsv(adapter, table);
-               const fp = path.join(exportDir, `${table}_data.csv`);
-               await fs.writeFile(fp, csvStr, 'utf-8');
-               console.log(pc.green(`✔ Exported Data (CSV): ${table}`));
-            }
+         const exportRes = await exportTable(adapter, table, {
+            format: format as 'csv' | 'json',
+            schemaOnly,
+         });
+
+         if (!exportRes.success) {
+            console.log(
+               pc.red(`✘ Failed to export table ${table}: ${exportRes.error}`),
+            );
+            continue;
          }
+
+         const content = exportRes.data;
+         const suffix = schemaOnly ? '_schema' : '_data';
+         const ext = format === 'json' ? '.json' : '.csv';
+         const fp = path.join(exportDir, `${table}${suffix}${ext}`);
+
+         await fs.writeFile(fp, content, 'utf-8');
+         const typeLabel = schemaOnly ? 'Schema' : 'Data';
+         console.log(
+            pc.green(
+               `✔ Exported ${typeLabel} (${format.toUpperCase()}): ${table}`,
+            ),
+         );
       } catch (e: any) {
          console.log(pc.red(`✘ Failed to export table ${table}: ${e.message}`));
       }
    }
 
    await adapter.close();
-   console.log(pc.cyan('Export complete.'));
+   console.log(pc.cyan('\nExport complete.\n'));
    process.exit(0);
 }

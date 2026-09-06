@@ -90,3 +90,30 @@ export interface SchemaChangeOptions {
    pendingDeletes?: string[];
    pendingIndexEdits?: PendingIndexEdits;
 }
+
+/**
+ * Standard Result type for operations that may fail.
+ * Encapsulates success state with data or error message.
+ */
+export type Result<T = void> =
+   | { success: true; data: T }
+   | { success: false; error: string; code?: string; cause?: unknown };
+
+export function ok<T>(data: T): Result<T> {
+   return { success: true, data };
+}
+
+export function okVoid(): Result<void> {
+   return { success: true, data: undefined };
+}
+
+export function err<T = void>(
+   error: string,
+   code?: string,
+   cause?: unknown,
+): Result<T> {
+   return { success: false, error, code, cause };
+}
+
+export type SchemaResult = Result<void>;
+

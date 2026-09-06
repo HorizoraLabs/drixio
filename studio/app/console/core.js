@@ -1,32 +1,18 @@
-import { executeRawQuery } from '../../lib/api.js';
+import { executeRawQuery, exportQueryResultApi } from '../../lib/api.js';
+import {
+   isSafeModeEnabled,
+   analyzeDangerousQuery,
+   showSafeQueryModal,
+} from './safeModal.js';
 
 let queryCounter = 0;
 
-export const exportCSV = (cols, rows, fileName) => {
-   const csvContent = [
-      cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','),
-      ...rows.map((r) =>
-         cols
-            .map((c) => {
-               const val = r[c] === null ? '' : String(r[c]);
-               return `"${val.replace(/"/g, '""')}"`;
-            })
-            .join(','),
-      ),
-   ].join('\\n');
-
-   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-   const url = URL.createObjectURL(blob);
-   const link = document.createElement('a');
-   link.setAttribute('href', url);
-   link.setAttribute('download', fileName);
-   link.style.visibility = 'hidden';
-   document.body.appendChild(link);
-   link.click();
-   document.body.removeChild(link);
-};
-
-export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
+export const runConsoleQuery = async (
+   queryToRun,
+   editor,
+   historyPane,
+   bypassSafeCheck = false,
+) => {
    let sql =
       queryToRun ||
       editor.value.substring(editor.selectionStart, editor.selectionEnd).trim();
@@ -42,7 +28,28 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
       return;
    }
 
-   window.AppState.lastQuery = editor.value;
+   // Safe Mode Guard: Check destructive queries (DELETE/UPDATE without WHERE, DROP, TRUNCATE)
+   if (!bypassSafeCheck && isSafeModeEnabled()) {
+      const danger = analyzeDangerousQuery(sql);
+      if (danger.isDangerous) {
+         const isDirectEditor = !queryToRun;
+         showSafeQueryModal({
+            dangerInfo: danger,
+            fullSql: sql,
+            onConfirm: () => {
+               if (isDirectEditor) {
+                  editor.selectionStart = editor.selectionEnd;
+                  editor.value = '';
+                  editor.dispatchEvent(new Event('input'));
+               }
+               runConsoleQuery(sql, editor, historyPane, true);
+            },
+         });
+         return;
+      }
+   }
+
+   window.AppState.lastQuery = sql;
 
    if (!window.AppState.queryHistory) window.AppState.queryHistory = [];
    const history = window.AppState.queryHistory;
@@ -235,7 +242,7 @@ export const runConsoleQuery = async (queryToRun, editor, historyPane) => {
       resContainer.appendChild(statsHeader);
 
       statsHeader.querySelector('.export-btn').onclick = () => {
-         exportCSV(cols, rows, `drixio_export_${new Date().getTime()}.csv`);
+         exportQueryResultApi({ rows }, 'csv');
       };
 
       const tableContainer = document.createElement('div');

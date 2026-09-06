@@ -1,4 +1,4 @@
-import { executeRawQuery } from '../../lib/api.js';
+import { fetchTableWithName } from '../../lib/api.js';
 
 let popoverEl = null;
 let hoverTimer = null;
@@ -194,10 +194,12 @@ export function bindFkPreview(tableContainer, currentTableName) {
          const formattedVal = isNumeric
             ? targetVal
             : `'${targetVal.replace(/'/g, "''")}'`;
-         const sql = `SELECT * FROM "${targetTable}" WHERE "${targetCol}" = ${formattedVal} LIMIT 1`;
 
          try {
-            const res = await executeRawQuery(sql);
+            const res = await fetchTableWithName(targetTable, {
+               where: `"${targetCol}" = ${formattedVal}`,
+               limit: 1,
+            });
             if (currentTargetCell !== cell) return; // User already moved away
 
             if (

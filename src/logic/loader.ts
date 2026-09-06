@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { DBConfig } from './types.js';
+import { DBConfig, Result, okVoid, err } from './types.js';
 
 export async function detectDatabase(databaseUrl?: string): Promise<DBConfig> {
    const cwd = process.cwd();
@@ -168,24 +168,33 @@ export async function detectDatabase(databaseUrl?: string): Promise<DBConfig> {
    };
 }
 
-export async function saveDatabaseUrl(url: string): Promise<void> {
-   const envPath = path.join(process.cwd(), '.env');
-   let envContent = '';
+export async function saveDatabaseUrl(url: string): Promise<Result<void>> {
    try {
-      envContent = await fs.readFile(envPath, 'utf-8');
-   } catch (e) {
-      // File doesn't exist, which is fine
-   }
-
-   const regex = /DATABASE_URL\s*=\s*["']?([^"'\r\n]+)["']?/;
-   if (regex.test(envContent)) {
-      envContent = envContent.replace(regex, `DATABASE_URL="${url}"`);
-   } else {
-      if (envContent && !envContent.endsWith('\n')) {
-         envContent += '\n';
+      const envPath = path.join(process.cwd(), '.env');
+      let envContent = '';
+      try {
+         envContent = await fs.readFile(envPath, 'utf-8');
+      } catch (e) {
+         // File doesn't exist, which is fine
       }
-      envContent += `DATABASE_URL="${url}"\n`;
-   }
 
-   await fs.writeFile(envPath, envContent, 'utf-8');
+      const regex = /DATABASE_URL\s*=\s*["']?([^"'\r\n]+)["']?/;
+      if (regex.test(envContent)) {
+         envContent = envContent.replace(regex, `DATABASE_URL="${url}"`);
+      } else {
+         if (envContent && !envContent.endsWith('\n')) {
+            envContent += '\n';
+         }
+         envContent += `DATABASE_URL="${url}"\n`;
+      }
+
+      await fs.writeFile(envPath, envContent, 'utf-8');
+      return okVoid();
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to save database URL to .env',
+         undefined,
+         e,
+      );
+   }
 }

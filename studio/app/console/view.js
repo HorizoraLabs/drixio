@@ -41,6 +41,10 @@ export function loadSqlConsole(tableName, btnElement, container) {
               <span class="material-symbols-outlined" style="font-size: 14px;">code</span>
               SQL
             </span>
+            <button type="button" id="console-safe-toggle-btn" class="console-safe-toggle-btn active" title="Safe Mode: Destructive queries will prompt for confirmation">
+              <span class="safe-indicator-dot"></span>
+              <span id="console-safe-text">Safe Mode ON</span>
+            </button>
             <span class="editor-shortcut-info">Press <b>Ctrl+Enter</b> to run</span>
           </div>
           <div class="editor-toolbar-right">

@@ -1,17 +1,27 @@
-import { DBAdapter, ColumnSchema, TableMutationOptions } from './types.js';
+import {
+   DBAdapter,
+   ColumnSchema,
+   TableMutationOptions,
+   Result,
+   ok,
+   err,
+} from './types.js';
 import { getDialect } from './dialect.js';
 
-export interface MutationResult {
-   success: boolean;
+export interface BatchMutateData {
+   modifiedCount: number;
    executedCount: number;
    error?: string;
 }
+
+export type BatchMutateResult = Result<BatchMutateData>;
+export type MutationResult = BatchMutateResult;
 
 export async function batchMutateTableData(
    adapter: DBAdapter,
    dbType: string,
    options: TableMutationOptions,
-): Promise<MutationResult> {
+): Promise<BatchMutateResult> {
    const {
       tableName,
       pkColumn,
@@ -22,21 +32,13 @@ export async function batchMutateTableData(
    } = options;
 
    if (!tableName) {
-      return {
-         success: false,
-         executedCount: 0,
-         error: 'Missing tableName.',
-      };
+      return err('Missing tableName.');
    }
 
    const hasEditsOrDeletes =
       Object.keys(edits).length > 0 || deletes.length > 0;
    if (hasEditsOrDeletes && !pkColumn) {
-      return {
-         success: false,
-         executedCount: 0,
-         error: 'Primary key (pkColumn) is required for updates and deletes.',
-      };
+      return err('Primary key (pkColumn) is required for updates and deletes.');
    }
 
    const dialect = getDialect(dbType as any);
@@ -146,7 +148,7 @@ export async function batchMutateTableData(
    }
 
    if (sqls.length === 0) {
-      return { success: true, executedCount: 0 };
+      return ok({ modifiedCount: 0, executedCount: 0 });
    }
 
    // 4. Execute queries sequentially
@@ -156,12 +158,12 @@ export async function batchMutateTableData(
          await adapter.executeSql(sql);
          executedCount++;
       }
-      return { success: true, executedCount };
+      return ok({ modifiedCount: executedCount, executedCount });
    } catch (e: any) {
-      return {
-         success: false,
-         executedCount,
-         error: e.message || 'Failed to execute database mutations',
-      };
+      return err(
+         e.message || 'Failed to execute database mutations',
+         undefined,
+         e,
+      );
    }
 }

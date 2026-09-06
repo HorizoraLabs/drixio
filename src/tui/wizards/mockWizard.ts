@@ -82,7 +82,7 @@ export async function runMockWizard(dbConfig: DBConfig) {
          ),
       );
 
-      const inserted = await generateAndInsertMockData(
+      const res = await generateAndInsertMockData(
          adapter,
          tableName,
          count,
@@ -91,11 +91,15 @@ export async function runMockWizard(dbConfig: DBConfig) {
          },
       );
 
-      console.log(
-         pc.green(
-            `\n\n✔ Successfully generated and inserted ${inserted} mock records into '${tableName}'!`,
-         ),
-      );
+      if (!res.success) {
+         console.log(pc.red(`\n\n✘ Mock data generation failed: ${res.error}`));
+      } else {
+         console.log(
+            pc.green(
+               `\n\n✔ Successfully generated and inserted ${res.data.insertedCount} mock records into '${tableName}'!`,
+            ),
+         );
+      }
    } catch (e: any) {
       console.log(pc.red(`\n✘ Mock data generation failed: ${e.message}`));
    } finally {

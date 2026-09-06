@@ -31,10 +31,18 @@ export async function runInitCommand(args: string[]) {
             dialect: 'sqlite',
             dbName,
          });
-         dbUrl = result.targetUrl;
+         if (!result.success) {
+            console.log(
+               pc.red(
+                  `✘ Failed to initialize SQLite database: ${result.error}`,
+               ),
+            );
+            process.exit(1);
+         }
+         dbUrl = result.data.targetUrl;
          console.log(
             pc.green(
-               `✔ Created/verified local database file: ${result.dbName}.sqlite`,
+               `✔ Created/verified local database file: ${result.data.dbName}.sqlite`,
             ),
          );
       } catch (e: any) {
@@ -88,62 +96,73 @@ export async function runInitCommand(args: string[]) {
             user,
             password: pass,
          });
-         dbUrl = result.targetUrl;
-         console.log(pc.green(`✔ Created local database: ${result.dbName}`));
+
+         if (!result.success) {
+            console.log(
+               pc.red(`✘ Failed to create database on server: ${result.error}`),
+            );
+            console.log(
+               pc.dim(
+                  `\nCould not connect to the local ${dialect} server on ${host}:${port}.`,
+               ),
+            );
+
+            const errStr = result.error || '';
+            if (
+               (result as any).code === 'ECONNREFUSED' ||
+               errStr.includes('ECONNREFUSED') ||
+               errStr.includes('connect')
+            ) {
+               console.log(
+                  pc.yellow(
+                     `\n💡 It seems you don't have ${dialect} installed or running locally.`,
+                  ),
+               );
+               if (dialect === 'mysql') {
+                  console.log(
+                     pc.white(
+                        `👉 Download MySQL here: ${pc.cyan('https://dev.mysql.com/downloads/installer/')}`,
+                     ),
+                  );
+               } else if (dialect === 'postgres') {
+                  console.log(
+                     pc.white(
+                        `👉 Download PostgreSQL here: ${pc.cyan('https://www.postgresql.org/download/')}`,
+                     ),
+                  );
+                  console.log(
+                     pc.white(
+                        `👉 Or use Postgres.app for Mac: ${pc.cyan('https://postgresapp.com/')}`,
+                     ),
+                  );
+               }
+               console.log(
+                  pc.dim(
+                     `(Alternatively, you can run 'drixio init sqlite' for a zero-install local database!)`,
+                  ),
+               );
+            }
+            process.exit(1);
+         }
+
+         dbUrl = result.data.targetUrl;
+         console.log(
+            pc.green(`✔ Created local database: ${result.data.dbName}`),
+         );
       } catch (e: any) {
          console.log(
             pc.red(`✘ Failed to create database on server: ${e.message}`),
          );
-         console.log(
-            pc.dim(
-               `\nCould not connect to the local ${dialect} server on ${host}:${port}.`,
-            ),
-         );
-
-         if (
-            e.code === 'ECONNREFUSED' ||
-            e.message.includes('ECONNREFUSED') ||
-            e.message.includes('connect')
-         ) {
-            console.log(
-               pc.yellow(
-                  `\n💡 It seems you don't have ${dialect} installed or running locally.`,
-               ),
-            );
-            if (dialect === 'mysql') {
-               console.log(
-                  pc.white(
-                     `👉 Download MySQL here: ${pc.cyan('https://dev.mysql.com/downloads/installer/')}`,
-                  ),
-               );
-            } else if (dialect === 'postgres') {
-               console.log(
-                  pc.white(
-                     `👉 Download PostgreSQL here: ${pc.cyan('https://www.postgresql.org/download/')}`,
-                  ),
-               );
-               console.log(
-                  pc.white(
-                     `👉 Or use Postgres.app for Mac: ${pc.cyan('https://postgresapp.com/')}`,
-                  ),
-               );
-            }
-            console.log(
-               pc.dim(
-                  `(Alternatively, you can run 'drixio init sqlite' for a zero-install local database!)`,
-               ),
-            );
-         }
          process.exit(1);
       }
    }
 
    // Update .env file
-   try {
-      await saveDatabaseUrl(dbUrl);
+   const envRes = await saveDatabaseUrl(dbUrl);
+   if (envRes.success) {
       console.log(pc.green(`✔ Saved connection string to .env file`));
-   } catch (e: any) {
-      console.log(pc.yellow(`⚠️  Could not save to .env: ${e.message}`));
+   } else {
+      console.log(pc.yellow(`⚠️  Could not save to .env: ${envRes.error}`));
    }
 
    console.log(pc.green(`\n🎉 Initialization Complete!`));

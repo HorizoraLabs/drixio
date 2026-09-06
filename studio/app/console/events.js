@@ -1,4 +1,5 @@
 import { runConsoleQuery } from './core.js';
+import { isSafeModeEnabled, setSafeModeEnabled } from './safeModal.js';
 
 export const bindConsoleEvents = (editor, historyPane) => {
    // History Navigation State
@@ -11,6 +12,45 @@ export const bindConsoleEvents = (editor, historyPane) => {
       draftQuery = '';
       updateHighlight();
    };
+
+   const safeBtn = document.getElementById('console-safe-toggle-btn');
+   const safeText = document.getElementById('console-safe-text');
+
+   const updateSafeBtnUi = () => {
+      if (!safeBtn || !safeText) return;
+      const enabled = isSafeModeEnabled();
+      if (enabled) {
+         safeBtn.className = 'console-safe-toggle-btn active';
+         safeText.textContent = 'Safe Mode ON';
+         safeBtn.title =
+            'Safe Mode: Protection ON (Destructive queries will prompt for confirmation)';
+      } else {
+         safeBtn.className = 'console-safe-toggle-btn disabled';
+         safeText.textContent = 'Safe Mode OFF';
+         safeBtn.title = 'Safe Mode: Protection OFF (Click to re-enable guard)';
+      }
+   };
+
+   if (safeBtn) {
+      updateSafeBtnUi();
+      safeBtn.onclick = () => {
+         const current = isSafeModeEnabled();
+         setSafeModeEnabled(!current);
+         updateSafeBtnUi();
+         if (window.showToast) {
+            window.showToast(
+               !current
+                  ? 'Safe Mode enabled (Destructive query guard ON)'
+                  : 'Safe Mode disabled (Guard OFF)',
+               !current ? 'success' : 'info',
+            );
+         }
+      };
+
+      window.addEventListener('drixio-safemode-changed', () => {
+         updateSafeBtnUi();
+      });
+   }
 
    const runBtn = document.getElementById('run-sql-btn');
    if (runBtn) {

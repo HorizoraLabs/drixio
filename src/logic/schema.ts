@@ -2,28 +2,26 @@ import {
    DBAdapter,
    ColumnSchema,
    SchemaChangeOptions,
-   IndexSchema,
+   Result,
+   ok,
+   okVoid,
+   err,
 } from './types.js';
 import { getDialect } from './dialect.js';
-
-export interface SchemaResult {
-   success: boolean;
-   error?: string;
-}
 
 export async function createTable(
    adapter: DBAdapter,
    dbType: string,
    tableName: string,
    columns: ColumnSchema[],
-): Promise<SchemaResult> {
+): Promise<Result<void>> {
    try {
       const dialect = getDialect(dbType as any);
       const sql = dialect.buildCreateTable(tableName, columns);
       await adapter.executeSql(sql);
-      return { success: true };
+      return okVoid();
    } catch (e: any) {
-      return { success: false, error: e.message };
+      return err(e.message || 'Failed to create table', undefined, e);
    }
 }
 
@@ -31,26 +29,26 @@ export async function dropTable(
    adapter: DBAdapter,
    dbType: string,
    tableName: string,
-): Promise<SchemaResult> {
+): Promise<Result<void>> {
    try {
       const dialect = getDialect(dbType as any);
       const quoted = dialect.quoteIdentifier(tableName);
       await adapter.executeSql(`DROP TABLE ${quoted};`);
-      return { success: true };
+      return okVoid();
    } catch (e: any) {
-      return { success: false, error: e.message };
+      return err(e.message || 'Failed to drop table', undefined, e);
    }
 }
 
 export async function truncateTable(
    adapter: DBAdapter,
    tableName: string,
-): Promise<SchemaResult> {
+): Promise<Result<void>> {
    try {
       await adapter.truncateTable(tableName);
-      return { success: true };
+      return okVoid();
    } catch (e: any) {
-      return { success: false, error: e.message };
+      return err(e.message || 'Failed to truncate table', undefined, e);
    }
 }
 
@@ -58,7 +56,7 @@ export async function applySchemaChanges(
    adapter: DBAdapter,
    dbType: string,
    options: SchemaChangeOptions,
-): Promise<SchemaResult> {
+): Promise<Result<void>> {
    const {
       tableName,
       columns,
@@ -70,7 +68,7 @@ export async function applySchemaChanges(
    } = options;
 
    if (!tableName) {
-      return { success: false, error: 'Table name is required.' };
+      return err('Table name is required.');
    }
 
    const dialect = getDialect(dbType as any);
@@ -83,7 +81,7 @@ export async function applySchemaChanges(
       if (columns && columns.length > 0) {
          return createTable(adapter, dbType, tableName, columns);
       }
-      return { success: false, error: `Table "${tableName}" does not exist.` };
+      return err(`Table "${tableName}" does not exist.`);
    }
 
    // Case A: Explicit newColumns array passed (used by SQLite recreation or direct column array)
@@ -196,7 +194,7 @@ export async function applySchemaChanges(
          try {
             await adapter.recreateTable(tableName, targetColumns, renames);
          } catch (e: any) {
-            return { success: false, error: e.message };
+            return err(e.message || 'Failed to recreate table', undefined, e);
          }
       }
 
@@ -225,11 +223,11 @@ export async function applySchemaChanges(
                );
             }
          } catch (e: any) {
-            return { success: false, error: e.message };
+            return err(e.message || 'Failed to update index', undefined, e);
          }
       }
 
-      return { success: true };
+      return okVoid();
    }
 
    // Case B: Postgres / MySQL DDL Execution
@@ -337,8 +335,200 @@ export async function applySchemaChanges(
       for (const sql of sqls) {
          await adapter.executeSql(sql);
       }
-      return { success: true };
+      return okVoid();
    } catch (e: any) {
-      return { success: false, error: e.message };
+      return err(e.message || 'Failed to apply schema changes', undefined, e);
+   }
+}
+
+/**
+ * Safely query the number of rows in a table, handling cross-dialect count field aliases.
+ */
+export async function getTableRowCount(
+   adapter: DBAdapter,
+   tableName: string,
+): Promise<Result<number>> {
+   try {
+      const quoted = adapter.quoteIdentifier(tableName);
+      const countRes = await adapter.query(
+         `SELECT COUNT(*) as cnt FROM ${quoted}`,
+      );
+      if (countRes && countRes.rows && countRes.rows.length > 0) {
+         const row = countRes.rows[0];
+         const rawCount =
+            row.cnt ??
+            row.CNT ??
+            row.count ??
+            row.COUNT ??
+            row['count(*)'] ??
+            Object.values(row)[0];
+         return ok(Number(rawCount) || 0);
+      }
+      return ok(0);
+   } catch (e: any) {
+      return err(
+         e.message || `Failed to count rows in table ${tableName}`,
+         undefined,
+         e,
+      );
+   }
+}
+
+export interface TableStatsInfo {
+   name: string;
+   rows: number | string;
+}
+
+/**
+ * Query all tables and their respective row count.
+ */
+export async function getTablesWithRowCount(
+   adapter: DBAdapter,
+): Promise<Result<TableStatsInfo[]>> {
+   try {
+      const tables = await adapter.getTables();
+      const result: TableStatsInfo[] = [];
+
+      for (const table of tables) {
+         const rowRes = await getTableRowCount(adapter, table);
+         const rows = rowRes.success ? rowRes.data : 'N/A';
+         result.push({ name: table, rows });
+      }
+
+      return ok(result);
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to list tables with row counts',
+         undefined,
+         e,
+      );
+   }
+}
+
+/**
+ * Generate a Mermaid ER diagram definition from all tables in the database.
+ */
+export async function generateMermaidErDiagram(
+   adapter: DBAdapter,
+): Promise<Result<string>> {
+   try {
+      const allTables = await adapter.getTables();
+      if (allTables.length === 0) {
+         return ok('erDiagram\n');
+      }
+
+      let mermaidCode = 'erDiagram\n';
+
+      for (const table of allTables) {
+         mermaidCode += `    ${table} {\n`;
+         const schema = await adapter.getSchema(table);
+         for (const col of schema) {
+            const safeType = col.type
+               .replace(/\s+/g, '_')
+               .replace(/[^a-zA-Z0-9_]/g, '');
+            const pk = col.isPk ? ' PK' : '';
+            mermaidCode += `        ${safeType} ${col.name}${pk}\n`;
+         }
+         mermaidCode += `    }\n`;
+      }
+
+      return ok(mermaidCode);
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to generate Mermaid ER diagram',
+         undefined,
+         e,
+      );
+   }
+}
+
+/**
+ * Generate a Markdown Data Dictionary document for all tables in the database.
+ */
+export async function generateDataDictionary(
+   adapter: DBAdapter,
+   dbName: string = 'Database',
+): Promise<Result<string>> {
+   try {
+      let md = `# Data Dictionary: ${dbName}\n\n`;
+      const tables = await adapter.getTables();
+
+      for (const t of tables) {
+         md += `## Table: \`${t}\`\n\n`;
+         md += `| Column | Type | PK | Nullable | Default | Extra |\n|---|---|---|---|---|---|\n`;
+         const schema = await adapter.getSchema(t);
+         for (const col of schema) {
+            let extra = '-';
+            if (col.fkTarget) {
+               extra = `FK -> ${col.fkTarget.table}(${col.fkTarget.column})`;
+            } else if (col.isUnique) {
+               extra = 'UNIQUE';
+            }
+            md += `| ${col.name} | ${col.type} | ${col.isPk ? 'Yes' : 'No'} | ${col.nullable ? 'Yes' : 'No'} | ${col.defaultValue || '-'} | ${extra} |\n`;
+         }
+         md += `\n`;
+      }
+
+      return ok(md);
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to generate data dictionary',
+         undefined,
+         e,
+      );
+   }
+}
+
+/**
+ * Export DDL creation statements for all tables in the database.
+ */
+export async function exportDatabaseSchemaDdl(
+   adapter: DBAdapter,
+   dbType: string,
+): Promise<Result<string>> {
+   try {
+      if (dbType === 'sqlite') {
+         let sqlDump = '-- Drixio SQLite Schema Dump\n\n';
+         const tablesResult = await adapter.query(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+         );
+         for (const row of tablesResult.rows) {
+            if (row.sql) sqlDump += `${row.sql};\n\n`;
+         }
+         return ok(sqlDump);
+      } else if (dbType === 'mysql') {
+         let sqlDump = '-- Drixio MySQL Schema Dump\n\n';
+         const tables = await adapter.getTables();
+         for (const table of tables) {
+            const createResult = await adapter.query(
+               `SHOW CREATE TABLE ${adapter.quoteIdentifier(table)}`,
+            );
+            if (createResult.rows && createResult.rows.length > 0) {
+               const row = createResult.rows[0] as Record<string, any>;
+               const createSql =
+                  row['Create Table'] ||
+                  row['Create View'] ||
+                  Object.values(row)[1];
+               if (createSql) sqlDump += `${createSql};\n\n`;
+            }
+         }
+         return ok(sqlDump);
+      }
+
+      // Generic fallback using getDialect().buildCreateTable()
+      const dialect = getDialect(dbType as any);
+      const tables = await adapter.getTables();
+      let sqlDump = `-- Drixio ${dbType.toUpperCase()} Schema Dump\n\n`;
+      for (const table of tables) {
+         const schema = await adapter.getSchema(table);
+         sqlDump += `${dialect.buildCreateTable(table, schema)};\n\n`;
+      }
+      return ok(sqlDump);
+   } catch (e: any) {
+      return err(
+         e.message || 'Failed to export database schema DDL',
+         undefined,
+         e,
+      );
    }
 }

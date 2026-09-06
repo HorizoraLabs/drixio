@@ -1,5 +1,9 @@
 import pc from 'picocolors';
-import { DBConfig, createDBAdapter } from '../logic/index.js';
+import {
+   DBConfig,
+   createDBAdapter,
+   generateMermaidErDiagram,
+} from '../logic/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -25,21 +29,15 @@ export async function runDiagramCommand(dbConfig: DBConfig) {
          process.exit(0);
       }
 
-      let mermaidCode = 'erDiagram\n';
-
-      for (const table of allTables) {
-         mermaidCode += `    ${table} {\n`;
-         const schema = await adapter.getSchema(table);
-         for (const col of schema) {
-            // Mermaid format: type name constraints
-            const safeType = col.type
-               .replace(/\s+/g, '_')
-               .replace(/[^a-zA-Z0-9_]/g, '');
-            const pk = col.isPk ? ' PK' : '';
-            mermaidCode += `        ${safeType} ${col.name}${pk}\n`;
-         }
-         mermaidCode += `    }\n`;
+      const diagramRes = await generateMermaidErDiagram(adapter);
+      if (!diagramRes.success) {
+         console.log(
+            pc.red(`\n✘ Failed to generate diagram: ${diagramRes.error}`),
+         );
+         await adapter.close();
+         process.exit(1);
       }
+      const mermaidCode = diagramRes.data;
 
       const markdownOutput = `
 # Database Schema Diagram

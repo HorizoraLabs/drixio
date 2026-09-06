@@ -94,3 +94,33 @@ export async function truncateTableApi(tableName) {
    );
    return await res.json();
 }
+
+export async function analyzeQueryApi(sql) {
+   const res = await fetch('/api/analyze-query', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
+   });
+   return await res.json();
+}
+
+export async function exportQueryResultApi(payload, format = 'csv') {
+   const res = await fetch(`/api/query/export?format=${format}`, {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+   });
+   const blob = await res.blob();
+   const url = URL.createObjectURL(blob);
+   const link = document.createElement('a');
+   link.href = url;
+   link.download = `query_result_${new Date().getTime()}.${format}`;
+   document.body.appendChild(link);
+   link.click();
+   document.body.removeChild(link);
+   URL.revokeObjectURL(url);
+}

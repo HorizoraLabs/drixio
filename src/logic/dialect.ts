@@ -1,4 +1,4 @@
-import { ColumnSchema } from './types.js';
+import { ColumnSchema, DBAdapter } from './types.js';
 
 export interface Dialect {
    quoteIdentifier(name: string): string;
@@ -212,4 +212,53 @@ export function getDialect(
       default:
          return new SqliteDialect();
    }
+}
+
+/**
+ * Construct a SQL WHERE clause from user search input.
+ * Detects explicit SQL expressions vs multi-column fuzzy text search.
+ */
+export function buildSearchWhereClause(
+   adapter: DBAdapter,
+   dbType: string,
+   columns: ColumnSchema[],
+   searchInput: string,
+): string {
+   const searchVal = (searchInput || '').trim();
+   if (!searchVal) return '';
+
+   // 1. Explicit SQL condition
+   const isSqlCondition = /[=<>]|LIKE|IN|AND|OR/i.test(searchVal);
+   if (isSqlCondition) {
+      return searchVal;
+   }
+
+   // 2. Multi-column fuzzy search
+   const strCols = columns.filter((c) => {
+      const t = c.type.toLowerCase();
+      return (
+         t.includes('char') ||
+         t.includes('text') ||
+         t.includes('string') ||
+         t.includes('uuid')
+      );
+   });
+
+   if (strCols.length > 0) {
+      const likeOp = dbType === 'postgres' ? 'ILIKE' : 'LIKE';
+      const escaped = searchVal.replace(/'/g, "''");
+      const conditions = strCols.map(
+         (c) => `${adapter.quoteIdentifier(c.name)} ${likeOp} '%${escaped}%'`,
+      );
+      return conditions.join(' OR ');
+   }
+
+   // Fallback: match first column
+   if (columns.length > 0) {
+      const col = columns[0];
+      const escaped = searchVal.replace(/'/g, "''");
+      return `${adapter.quoteIdentifier(col.name)} = '${escaped}'`;
+   }
+
+   return '';
 }

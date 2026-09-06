@@ -7,6 +7,7 @@ import {
    ColumnSchema,
    batchMutateTableData,
    executeDatabaseScript,
+   extractSqlFromMarkdown,
 } from '../../logic/index.js';
 
 export async function runBeginnerAdd(
@@ -174,22 +175,17 @@ export async function runExpertMode(adapter: DBAdapter) {
 
          let sqlToExecute = fileContent;
          if (absolutePath.toLowerCase().endsWith('.md')) {
-            const matches = [
-               ...fileContent.matchAll(/```(?:sql)?\n([\s\S]*?)```/gi),
-            ];
-            if (matches.length > 0) {
-               sqlToExecute = matches.map((m) => m[1].trim()).join('\n\n');
-            }
+            sqlToExecute = extractSqlFromMarkdown(fileContent);
          }
 
          if (sqlToExecute.trim()) {
             console.log(pc.dim('\nExecuting SQL...'));
             console.log(pc.yellow(sqlToExecute));
-            try {
-               await executeDatabaseScript(adapter, sqlToExecute);
+            const execRes = await executeDatabaseScript(adapter, sqlToExecute);
+            if (execRes.success) {
                console.log(pc.green('\n✓ SQL executed successfully!'));
-            } catch (e: any) {
-               console.log(pc.red(`\nx Error executing SQL: ${e.message}`));
+            } else {
+               console.log(pc.red(`\nx Error executing SQL: ${execRes.error}`));
             }
          } else {
             console.log(pc.yellow('\n⚠️  No SQL found in the file. Aborted.'));

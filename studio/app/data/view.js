@@ -1,7 +1,6 @@
 import {
    fetchTableSchema,
    fetchTableWithName,
-   executeRawQuery,
    truncateTableApi,
 } from '../../lib/api.js';
 import { bindColumnResizer, bindCellSelection } from '../grid/view.js';

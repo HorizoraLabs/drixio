@@ -6,10 +6,14 @@ import { runSeedCommand } from './seed.js';
 import { runTruncateCommand } from './truncate.js';
 import { runExecCommand } from './exec.js';
 import { runBackupCommand } from './backup.js';
+import { runRestoreCommand } from './restore.js';
 import { runDiagramCommand } from './diagram.js';
 import { runGenerateTypesCommand } from './generateTypes.js';
+import { runGenerateOrmCommand } from './generateOrm.js';
 import { runInitCommand } from './init.js';
 import { runDropDbCommand } from './drop.js';
+import { runTablesCommand } from './tables.js';
+import { runDescribeCommand } from './describe.js';
 
 export {
    runQueryCommand,
@@ -19,10 +23,14 @@ export {
    runTruncateCommand,
    runExecCommand,
    runBackupCommand,
+   runRestoreCommand,
    runDiagramCommand,
    runGenerateTypesCommand,
+   runGenerateOrmCommand,
    runInitCommand,
    runDropDbCommand,
+   runTablesCommand,
+   runDescribeCommand,
 };
 
 export async function runQuickCommand(
@@ -32,6 +40,14 @@ export async function runQuickCommand(
    dbConfig: DBConfig,
 ): Promise<boolean> {
    switch (command) {
+      case 'tables':
+      case 'ls':
+         await runTablesCommand(dbConfig, options);
+         return true;
+      case 'describe':
+      case 'desc':
+         await runDescribeCommand(dbConfig, args, options);
+         return true;
       case 'query':
          await runQueryCommand(dbConfig, args);
          return true;
@@ -51,6 +67,9 @@ export async function runQuickCommand(
       case 'backup':
          await runBackupCommand(dbConfig);
          return true;
+      case 'restore':
+         await runRestoreCommand(dbConfig, args, options);
+         return true;
       case 'exec':
          await runExecCommand(dbConfig, args);
          return true;
@@ -59,6 +78,15 @@ export async function runQuickCommand(
          return true;
       case 'generate-types':
          await runGenerateTypesCommand(dbConfig);
+         return true;
+      case 'generate-orm':
+      case 'orm':
+         await runGenerateOrmCommand(dbConfig, {
+            target: args[0] as any,
+            table: options.table,
+            out: options.out,
+            print: options.print,
+         });
          return true;
       case 'init':
          await runInitCommand(args);

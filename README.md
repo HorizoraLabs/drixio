@@ -1,105 +1,153 @@
-# 🌟 Drixio - The Ultimate Zero-Dependency Database CLI & TUI
+# Drixio
 
-**Drixio** is a lightning-fast, zero-dependency Database Manager designed entirely for your terminal. It supports **SQLite**, **PostgreSQL**, and **MySQL**.
+Drixio is a lightweight database manager for local development. It provides a
+terminal UI, a browser-based Studio, and scriptable CLI commands for inspecting
+and changing SQLite, PostgreSQL, and MySQL databases.
 
-Say goodbye to heavy GUI tools like DBeaver or TablePlus. Drixio allows you to instantly view, edit, query, backup, and visually diagram your databases right from your CLI!
+## Requirements
 
-## ✨ Features
+- Node.js 22 or newer
+- SQLite, PostgreSQL, or MySQL, depending on the database you want to use
 
-- **📱 Interactive TUI**: A beautiful, mouse-free Terminal User Interface.
-- **⚡ Zero Dependencies**: Blazing fast, runs instantly via `npx`.
-- **🛠️ Multi-Database Support**: Connects seamlessly to SQLite, PostgreSQL, and MySQL.
-- **📦 Smart Data Importer & Exporter**: Import CSV/JSON safely, or export your tables in seconds.
-- **🌱 Intelligent Data Seeder**: Automatically generates realistic fake data (emails, phones, dates) to populate your tables for testing.
-- **🗺️ ER Diagram Generator**: Scans your database and generates a Mermaid ER diagram that can be instantly imported into Draw.io or viewed on GitHub!
-- **🧩 TypeScript Types Generator**: Instantly generate TypeScript interfaces (`.d.ts`) directly from your database schema!
+## Install and connect
 
-## 🚀 Quick Start
-
-You don't need to install anything. Just run:
+Run Drixio from a project that contains a supported database:
 
 ```bash
 npx drixio
 ```
-Drixio will automatically scan your project for a `.env` file containing a `DATABASE_URL` (e.g., `DATABASE_URL=postgres://user:pass@localhost:5432/mydb`). If it doesn't find one, it will launch a setup wizard to help you connect!
 
-You can also pass a connection string directly:
+Drixio looks for a database in this order:
+
+1. SQLite files in the project root, `prisma`, `db`, `database`, `src/db`, or
+   `src/database`
+2. A Prisma schema in `prisma/schema.prisma`
+3. A connection URL in `.env`
+
+The following environment variable names are recognized: `DATABASE_URL`,
+`DB_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and `MYSQL_URL`.
+
+You can also pass a connection URL directly:
+
 ```bash
-npx drixio "mysql://user:pass@localhost:3306/mydb"
+npx drixio "postgresql://user:password@localhost:5432/mydb"
+npx drixio "mysql://user:password@localhost:3306/mydb"
+npx drixio "file:./database.sqlite"
 ```
 
----
+## Interfaces
 
-## 🛠️ Powerful Subcommands
+### Interactive TUI
 
-Drixio is not just a TUI; it comes with powerful quick-commands for your CI/CD pipelines or rapid local development.
+Running `npx drixio` opens the terminal interface. It includes database setup,
+table browsing and editing, table creation and modification wizards, and a SQL
+REPL.
 
-### 🔌 1. Initialize a Local Database
-Don't have a database yet? Drixio can create one for you!
+### Drixio Studio
+
+Open the browser-based interface with:
+
 ```bash
-npx drixio init sqlite
-npx drixio init postgres
-npx drixio init mysql
-```
-*(For Postgres and MySQL, it connects to your local server and runs `CREATE DATABASE`, then automatically drops a configured `.env` file in your workspace!)*
-
-### 🔍 2. Quick Query
-Run SQL instantly and get a beautifully formatted ASCII table result.
-```bash
-npx drixio query "SELECT * FROM users WHERE age > 18"
+npx drixio studio
+npx drixio studio "postgresql://user:password@localhost:5432/mydb"
 ```
 
-### 📥 3. Import Data
-Import massive CSV or JSON files safely. Drixio uses smart chunking to prevent memory overload.
-```bash
-npx drixio import data.csv --table users
-```
+Studio starts a local server, opens the browser automatically, and chooses an
+available port starting at `51213` (or the value of `PORT`). It includes:
 
-### 📤 4. Export Data
-Export your tables to CSV or JSON.
+- **Connect Workbench**: Zero-config database setup, dialect switching (SQLite, PostgreSQL, MySQL), pre-flight overview, live connection diagnostics, and smart `DATABASE_URL` auto-fill.
+- **Data View**: High-performance grid with pagination, inline editing, column sorting, search filtering, and CSV/JSON export/import.
+- **Schema & Table Manager**: Visual table inspector, column editor, foreign key explorer, table creation wizards, and modern ORM generator (Prisma & Drizzle).
+- **SQL Console**: Multi-tab SQL runner with intelligent autocomplete, query history, Safe Mode guard for destructive queries (DELETE/UPDATE without WHERE, DROP, TRUNCATE), and beginner-friendly query snippets.
+- **Status & Analytics**: Real-time database metrics, table size breakdown, and row distribution statistics.
+- **Interactive ERD**: Pan-and-zoom entity relationship diagram with table node dragging and relation link visualization.
+
+## CLI commands
+
+All commands use the database detected from the current project unless a
+connection URL is supplied where noted.
+
+| Command                                        | Description                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `npx drixio tables`                            | List all tables with row counts in terminal. `ls` is an alias.           |
+| `npx drixio describe [table]`                  | Inspect table columns, types, PKs, FKs, and indexes. `desc` is an alias. |
+| `npx drixio query "<sql>"`                     | Run SQL and print the result as a table.                                 |
+| `npx drixio exec <file.sql>`                   | Execute a SQL script file.                                               |
+| `npx drixio export [table]`                    | Export one table or all tables as CSV or JSON.                           |
+| `npx drixio import [file]`                     | Import a `.csv` or `.json` file into a table.                            |
+| `npx drixio seed [table] [count]`              | Generate realistic mock rows for a table. `mock` is an alias.            |
+| `npx drixio truncate [table]`                  | Delete all rows from a table and reset its sequence.                     |
+| `npx drixio backup`                            | Create a timestamped backup directory with schema and data JSON files.   |
+| `npx drixio restore [dir\|file]`               | Restore database from a backup directory, JSON dump, or SQL script.      |
+| `npx drixio diagram`                           | Generate `drixio_schema.md` with Mermaid schema output.                  |
+| `npx drixio generate-types`                    | Generate `drixio-types.d.ts` from the database schema.                   |
+| `npx drixio generate-orm [prisma\|drizzle]`    | Generate Prisma (`schema.prisma`) or Drizzle (`schema.ts`) ORM schema.   |
+| `npx drixio init [sqlite\|postgres\|mysql]`    | Create or configure a local database and save `DATABASE_URL` to `.env`.  |
+| `npx drixio drop-db [sqlite\|postgres\|mysql]` | Permanently delete a local database after confirmation.                  |
+
+### Common options
+
 ```bash
+npx drixio tables
+npx drixio tables --json
+npx drixio describe users
 npx drixio export users --format csv
-npx drixio export * --format json --schema-only
-```
-
-### 🌱 5. Generate Fake Data (Seed)
-Need 500 fake users for testing? Easy. Drixio intelligently analyzes your column names and types to generate realistic data.
-```bash
-npx drixio seed users 500
-```
-
-### 🗺️ 6. Generate ER Diagram
-Automatically generates a `drixio_schema.md` containing a Mermaid.js diagram of your database.
-```bash
-npx drixio diagram
-```
-*Tip: Paste the output into Draw.io (Arrange > Insert > Advanced > Mermaid) for a stunning visual layout!*
-
-### 🧩 7. Generate TypeScript Interfaces
-Tired of manually writing types? Auto-generate them from your schema!
-```bash
-npx drixio generate-types
-```
-*(Outputs `drixio-types.d.ts` with all your table interfaces)*
-
-### 📜 8. Execute SQL Script
-Run entire `.sql` files instantly. Perfect for database migrations.
-```bash
-npx drixio exec ./migrations/init.sql
-```
-
-### 📦 9. Database Backup
-Backup your entire database. For SQLite, it performs a secure binary copy. For Postgres/MySQL, it dumps schema and data into JSON.
-```bash
-npx drixio backup
-```
-
-## ❓ Help
-To view all commands and options:
-```bash
+npx drixio export --format json --schema-only
+npx drixio import data.json --table users
+npx drixio --version
 npx drixio --help
 ```
 
----
+- `-v, --version` prints the drixio version.
+- `--json` outputs result as structured JSON (supported by `tables`, `describe`).
+- `--format csv|json` selects the export format.
+- `--schema-only` exports table definitions without data.
+- `--table <name>` selects the destination table for imports or ORM generation.
+- `--force`, `-y` skips confirmation prompts during restore or database drops.
 
-**Built with ❤️ for Developers who love the Terminal.**
+Exports are written to `drixio_exports/` in the current directory. Backups are
+written to a timestamped `drixio_backup_<timestamp>/` directory.
+
+## Local database setup
+
+SQLite needs no server:
+
+```bash
+npx drixio init sqlite
+npx drixio init sqlite my-app
+```
+
+For PostgreSQL and MySQL, `init` asks for local server credentials, creates the
+database, and writes the resulting connection URL to `.env`:
+
+```bash
+npx drixio init postgres mydb
+npx drixio init mysql mydb
+```
+
+`drop-db` permanently removes a SQLite file or drops a PostgreSQL/MySQL
+database. `truncate` permanently removes all rows from one table. Both commands
+ask for confirmation; use them carefully.
+
+## Development
+
+Install dependencies and run the project locally:
+
+```bash
+pnpm install
+pnpm dev
+pnpm dev:studio
+```
+
+Build both the CLI and Studio bundles:
+
+```bash
+pnpm build
+```
+
+The package is published as `drixio`, and `prepublishOnly` builds both bundles
+before publishing.
+
+## License
+
+MIT

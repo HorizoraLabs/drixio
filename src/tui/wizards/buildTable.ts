@@ -82,10 +82,19 @@ export async function runWizard(dbConfig: DBConfig) {
    if (proceed) {
       try {
          console.log(pc.dim('Executing SQL...'));
-         await adapter.executeSql(sql);
-         console.log(
-            pc.green(`\n✓ Table '${tableName}' created successfully!`),
+         const res = await createTable(
+            adapter,
+            dbConfig.type,
+            tableName,
+            columns,
          );
+         if (res.success) {
+            console.log(
+               pc.green(`\n✓ Table '${tableName}' created successfully!`),
+            );
+         } else {
+            console.log(pc.red(`\nx Error creating table: ${res.error}`));
+         }
       } catch (e: any) {
          console.log(pc.red(`\nx Error creating table: ${e.message}`));
       } finally {

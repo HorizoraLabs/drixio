@@ -43,6 +43,12 @@ export async function runExecCommand(dbConfig: DBConfig, args: string[]) {
    try {
       await executeDatabaseScript(adapter, sqlContent);
       console.log(pc.green(`✔ Script executed successfully!`));
+      const res = await executeDatabaseScript(adapter, sqlContent);
+      if (!res.success) {
+         console.log(pc.red(`✘ Execution failed: ${res.error}`));
+      } else {
+         console.log(pc.green(`✔ Script executed successfully!`));
+      }
    } catch (e: any) {
       console.log(pc.red(`✘ Execution failed: ${e.message}`));
    } finally {

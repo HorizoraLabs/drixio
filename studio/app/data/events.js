@@ -1,5 +1,5 @@
 import { updateCell } from './core.js';
-import { executeRawQuery } from '../../lib/api.js';
+import { fetchTableWithName } from '../../lib/api.js';
 
 export function bindCellEditor(tableContainer, schema, columns) {
    tableContainer.addEventListener('dblclick', (e) => {
@@ -79,7 +79,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
 
          // Fetch FK options asynchronously
          const { table, column } = colSchema.fkTarget;
-         executeRawQuery(`SELECT * FROM "${table}" LIMIT 100`)
+         fetchTableWithName(table, { limit: 100 })
             .then((res) => {
                if (res.success && res.data && res.data.rows) {
                   inputEl.innerHTML = ''; // clear loading

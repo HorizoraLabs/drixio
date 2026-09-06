@@ -6,6 +6,7 @@ import {
    DBConfig,
    createDBAdapter,
    executeDatabaseScript,
+   extractSqlFromMarkdown,
 } from '../../logic/index.js';
 
 export async function runSqlRunner(dbConfig: DBConfig) {
@@ -38,20 +39,21 @@ export async function runSqlRunner(dbConfig: DBConfig) {
 
          let sqlToExecute = fileContent;
          if (absolutePath.toLowerCase().endsWith('.md')) {
-            const matches = [
-               ...fileContent.matchAll(/```(?:sql)?\n([\s\S]*?)```/gi),
-            ];
-            if (matches.length > 0) {
-               sqlToExecute = matches.map((m) => m[1].trim()).join('\n\n');
-            }
+            sqlToExecute = extractSqlFromMarkdown(fileContent);
          }
 
          if (sqlToExecute.trim()) {
             console.log(pc.dim('Executing SQL...'));
             const adapter = createDBAdapter(dbConfig as any);
             try {
-               await adapter.executeSql(sqlToExecute);
+               await executeDatabaseScript(adapter, sqlToExecute);
                console.log(pc.green('\n✓ SQL executed successfully!'));
+               const res = await executeDatabaseScript(adapter, sqlToExecute);
+               if (res.success) {
+                  console.log(pc.green('\n✓ SQL executed successfully!'));
+               } else {
+                  console.log(pc.red(`\nx Error executing SQL: ${res.error}`));
+               }
             } finally {
                await adapter.close();
             }

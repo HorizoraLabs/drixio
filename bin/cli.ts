@@ -5,6 +5,21 @@ import { detectDatabase } from '../src/logic/index.js';
 import { runQuickCommand } from '../src/commands/index.js';
 import { runTui } from '../src/tui/index.js';
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+function getVersion(): string {
+   try {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const pkgPath = join(__dirname, '../package.json');
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      return pkg.version || '1.1.8';
+   } catch {
+      return '1.1.8';
+   }
+}
+
 async function main() {
    const args = process.argv.slice(2);
    let customUrl: string | undefined;
@@ -23,14 +38,25 @@ async function main() {
    const { positionals, values } = parseArgs({
       args,
       options: {
+         version: { type: 'boolean', short: 'v' },
+         json: { type: 'boolean' },
          format: { type: 'string' },
          'schema-only': { type: 'boolean' },
          table: { type: 'string' },
+         out: { type: 'string' },
+         print: { type: 'boolean' },
+         force: { type: 'boolean' },
+         y: { type: 'boolean' },
          help: { type: 'boolean' },
       },
       strict: false,
       allowPositionals: true,
    });
+
+   if (values.version) {
+      console.log(`drixio v${getVersion()}`);
+      process.exit(0);
+   }
 
    if (values.help) {
       console.log(pc.cyan(`\nDrixio - Modern Database Manager\n`));
@@ -43,6 +69,12 @@ async function main() {
          `  Web Studio:           ${pc.green('npx drixio studio')} (Browser UI for bulk inspection)`,
       );
       console.log(`\n${pc.bold('Quick Commands (Headless / Pro):')}`);
+      console.log(
+         `  ${pc.green('tables')}                 List all database tables and row counts (alias: ls)`,
+      );
+      console.log(
+         `  ${pc.green('describe')} [table]       Inspect columns, types, PKs, and indexes (alias: desc)`,
+      );
       console.log(
          `  ${pc.green('query')} "<sql>"         Run a quick SQL query`,
       );
@@ -68,7 +100,13 @@ async function main() {
          `  ${pc.green('generate-types')}        Generate TypeScript interfaces`,
       );
       console.log(
+         `  ${pc.green('generate-orm')} [target] Generate Prisma or Drizzle ORM schema`,
+      );
+      console.log(
          `  ${pc.green('backup')}                Backup the entire database`,
+      );
+      console.log(
+         `  ${pc.green('restore')} [dir|file]    Restore database from a backup directory or .sql file`,
       );
       console.log(
          `  ${pc.green('init')} [db_type]        Initialize a local database & .env`,
@@ -77,22 +115,40 @@ async function main() {
          `  ${pc.green('drop-db')} [db_type]     Drop a local database`,
       );
       console.log(`\n${pc.bold('Options:')}`);
+      console.log(`  -v, --version         Show drixio version`);
       console.log(`  --help                Show this help message`);
+      console.log(`  --json                Output results as JSON`);
       console.log(`  --format <type>       Specify export format (csv|json)`);
       console.log(`  --schema-only         Export schema without data`);
-      console.log(`  --table <name>        Specify table for import`);
+      console.log(
+         `  --table <name>        Specify table for import/export/orm`,
+      );
+      console.log(`  --out <file>          Specify output file for ORM schema`);
+      console.log(
+         `  --print               Print generated schema directly to terminal`,
+      );
       console.log(
          `\nIf you don't provide a command, Drixio will launch the Interactive TUI!`,
       );
       process.exit(0);
    }
 
-   const command = customUrl ? undefined : positionals[0];
+   let command: string | undefined;
+   let commandArgs: string[] = [];
+
+   if (customUrl) {
+      // e.g. npx drixio "postgres://..." tables OR npx drixio "postgres://..." studio
+      command = positionals[1];
+      commandArgs = positionals.slice(2);
+   } else {
+      command = positionals[0];
+      commandArgs = positionals.slice(1);
+   }
 
    // 1. Studio Tier
    if (command === 'studio') {
       const { runStudio } = await import('../src/studio/index.js');
-      const customTarget = positionals[1] || customUrl;
+      const customTarget = customUrl || positionals[1];
       const dbConfig = await detectDatabase(customTarget);
       await runStudio(dbConfig);
       return;
@@ -100,10 +156,10 @@ async function main() {
 
    // 2. Quick Command Tier
    if (command) {
-      const dbConfig = await detectDatabase();
+      const dbConfig = await detectDatabase(customUrl);
       const handled = await runQuickCommand(
          command,
-         positionals.slice(1),
+         commandArgs,
          values as any,
          dbConfig,
       );

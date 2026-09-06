@@ -1,6 +1,11 @@
 import { select, Separator } from '@inquirer/prompts';
 import pc from 'picocolors';
-import { createDBAdapter } from '../../logic/index.js';
+import {
+   createDBAdapter,
+   getTablesWithRowCount,
+   buildSearchWhereClause,
+   exportTable,
+} from '../../logic/index.js';
 import { selectTable } from '../menus/table.js';
 import {
    runBeginnerAdd,
@@ -28,22 +33,18 @@ export async function viewTables(dbConfig: DBConfigProps) {
       let totalRows = 0;
       let totalDataCount = 'Scanning...';
       try {
-         tables = await adapter.getTables();
-         for (const table of tables) {
-            try {
-               // Quote table names properly based on dialect
-               const quote = dbConfig.type === 'mysql' ? '`' : '"';
-               const res = await adapter.query(
-                  `SELECT COUNT(*) as count FROM ${quote}${table}${quote}`,
-               );
-               if (res.rows.length > 0 && res.rows[0].count != null) {
-                  totalRows += Number(res.rows[0].count);
-               }
-            } catch (e) {
-               // Ignore tables that can't be queried
-            }
+         const statsRes = await getTablesWithRowCount(adapter);
+         if (statsRes.success) {
+            const tableStats = statsRes.data;
+            tables = tableStats.map((t) => t.name);
+            totalRows = tableStats.reduce(
+               (acc, t) => acc + (typeof t.rows === 'number' ? t.rows : 0),
+               0,
+            );
+            totalDataCount = `${totalRows.toLocaleString()} rows across ${tables.length} tables`;
+         } else {
+            totalDataCount = pc.red(statsRes.error);
          }
-         totalDataCount = `${totalRows.toLocaleString()} rows across ${tables.length} tables`;
       } catch (e: any) {
          totalDataCount = pc.red(e.message);
       }
@@ -236,68 +237,43 @@ export async function viewTables(dbConfig: DBConfigProps) {
                   }
                   currentPage = 1;
                }
+               currentWhere = buildSearchWhereClause(
+                  adapter,
+                  dbConfig.type,
+                  schema,
+                  searchInput,
+               );
+               currentPage = 1;
                continue;
             }
 
             if (action === 'exportCsv' || action === 'exportJson') {
                try {
                   console.log(pc.yellow('\nExporting data...'));
-                  // Fetch all rows in batches to avoid OOM on large tables
-                  const batchSize = 1000;
-                  let batchOffset = 0;
-                  const allExportRows: Record<string, any>[] = [];
-                  let exportColumns: string[] = [];
-                  let lastBatch;
-                  do {
-                     lastBatch = await adapter.getData(
-                        selectedTable,
-                        batchSize,
-                        batchOffset,
-                        currentWhere,
-                     );
-                     if (exportColumns.length === 0)
-                        exportColumns = lastBatch.columns;
-                     allExportRows.push(...lastBatch.rows);
-                     batchOffset += batchSize;
-                  } while (lastBatch.rows.length === batchSize);
+                  const format = action === 'exportCsv' ? 'csv' : 'json';
+                  const exportRes = await exportTable(adapter, selectedTable, {
+                     format,
+                     whereClause: currentWhere,
+                  });
 
-                  const allData = {
-                     columns: exportColumns,
-                     rows: allExportRows,
-                  };
-                  const fs = await import('fs/promises');
-                  const path = await import('path');
-
-                  const exportDir = path.join(process.cwd(), 'drixio_exports');
-                  await fs.mkdir(exportDir, { recursive: true });
-
-                  if (action === 'exportCsv') {
-                     const headers = allData.columns.join(',') + '\n';
-                     const rowsStr = allData.rows
-                        .map((r: any) => {
-                           return allData.columns
-                              .map((c) => {
-                                 const val = String(r[c] ?? '').replace(
-                                    /"/g,
-                                    '""',
-                                 );
-                                 return `"${val}"`;
-                              })
-                              .join(',');
-                        })
-                        .join('\n');
-
-                     const fp = path.join(exportDir, `${selectedTable}.csv`);
-                     await fs.writeFile(fp, headers + rowsStr, 'utf-8');
-                     console.log(pc.green(`\nExported to ${fp}`));
+                  if (!exportRes.success) {
+                     console.log(pc.red(`\nExport Error: ${exportRes.error}`));
                   } else {
-                     const fp = path.join(exportDir, `${selectedTable}.json`);
-                     await fs.writeFile(
-                        fp,
-                        JSON.stringify(allData.rows, null, 2),
-                        'utf-8',
+                     const fs = await import('fs/promises');
+                     const path = await import('path');
+
+                     const exportDir = path.join(
+                        process.cwd(),
+                        'drixio_exports',
                      );
-                     console.log(pc.green(`\nExported to ${fp}`));
+                     await fs.mkdir(exportDir, { recursive: true });
+
+                     const fp = path.join(
+                        exportDir,
+                        `${selectedTable}.${format}`,
+                     );
+                     await fs.writeFile(fp, exportRes.data, 'utf-8');
+                     console.log(pc.green(`\n✔ Exported to ${fp}`));
                   }
                } catch (e: any) {
                   console.log(pc.red(`\nExport Error: ${e.message}`));

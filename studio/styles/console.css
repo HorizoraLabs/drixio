@@ -538,3 +538,218 @@ textarea#sql-editor {
    color: var(--color-text-soft);
    opacity: 0.4;
 }
+
+/* ==================== SAFE MODE (DANGEROUS QUERY GUARD) ==================== */
+.console-safe-toggle-btn {
+   display: inline-flex;
+   align-items: center;
+   gap: 6px;
+   padding: 3px 9px;
+   border-radius: 6px;
+   font-size: 11px;
+   font-family: var(--font-mono);
+   font-weight: 600;
+   cursor: pointer;
+   border: 1px solid var(--color-border);
+   background: var(--color-bg-primary);
+   color: var(--color-text-secondary);
+   transition: all 0.15s ease;
+}
+
+.console-safe-toggle-btn:hover {
+   border-color: var(--color-primary);
+   color: var(--color-text);
+}
+
+.console-safe-toggle-btn.active {
+   background: rgba(16, 185, 129, 0.08);
+   border-color: rgba(16, 185, 129, 0.3);
+   color: #10b981;
+}
+
+.console-safe-toggle-btn.disabled {
+   background: rgba(239, 68, 68, 0.06);
+   border-color: rgba(239, 68, 68, 0.25);
+   color: #ef4444;
+}
+
+.safe-indicator-dot {
+   width: 6px;
+   height: 6px;
+   border-radius: 50%;
+   background-color: currentColor;
+}
+
+/* Safe Mode Modal */
+.safe-modal-container {
+   width: 520px;
+   max-width: 92vw;
+   background: var(--color-bg-primary);
+   border: 1px solid rgba(239, 68, 68, 0.3);
+   border-radius: 12px;
+   box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.5);
+   overflow: hidden;
+   display: flex;
+   flex-direction: column;
+}
+
+.safe-modal-header {
+   padding: 16px 20px;
+   border-bottom: 1px solid var(--color-border);
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   background: rgba(239, 68, 68, 0.04);
+}
+
+.safe-modal-title-wrap {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+}
+
+.safe-modal-icon {
+   width: 36px;
+   height: 36px;
+   border-radius: 8px;
+   background: rgba(239, 68, 68, 0.12);
+   border: 1px solid rgba(239, 68, 68, 0.25);
+   color: #ef4444;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+
+.safe-modal-title {
+   font-size: 15px;
+   font-weight: 700;
+   color: var(--color-text);
+   margin: 0 0 2px 0;
+}
+
+.safe-modal-badge {
+   display: inline-block;
+   font-size: 10px;
+   font-family: var(--font-mono);
+   font-weight: 700;
+   padding: 1px 6px;
+   border-radius: 4px;
+   background: rgba(239, 68, 68, 0.15);
+   color: #ef4444;
+   letter-spacing: 0.04em;
+}
+
+.safe-modal-body {
+   padding: 18px 20px;
+   display: flex;
+   flex-direction: column;
+   gap: 14px;
+}
+
+.safe-modal-desc {
+   font-size: 13px;
+   color: var(--color-text-secondary);
+   line-height: 1.6;
+   margin: 0;
+}
+
+.safe-modal-desc code {
+   background: var(--color-bg-secondary);
+   padding: 2px 6px;
+   border-radius: 4px;
+   border: 1px solid var(--color-border);
+   font-family: var(--font-mono);
+   color: var(--color-text);
+   font-size: 12px;
+}
+
+.safe-sql-preview-label {
+   font-size: 11px;
+   font-weight: 600;
+   color: var(--color-text-soft);
+   text-transform: uppercase;
+   letter-spacing: 0.05em;
+}
+
+.safe-sql-preview {
+   background: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+   border-radius: 8px;
+   padding: 12px 14px;
+   max-height: 140px;
+   overflow-y: auto;
+}
+
+.safe-sql-preview code {
+   font-family: var(--font-mono);
+   font-size: 12px;
+   color: var(--color-text);
+   white-space: pre-wrap;
+   word-break: break-all;
+   line-height: 1.5;
+}
+
+.safe-modal-preference {
+   display: flex;
+   flex-direction: column;
+   gap: 4px;
+   padding: 10px 12px;
+   border-radius: 8px;
+   background: var(--color-bg-secondary);
+   border: 1px solid var(--color-border);
+}
+
+.safe-checkbox-label {
+   display: inline-flex;
+   align-items: center;
+   gap: 8px;
+   cursor: pointer;
+   user-select: none;
+}
+
+.safe-checkbox-label input[type='checkbox'] {
+   accent-color: var(--color-primary);
+   width: 15px;
+   height: 15px;
+   cursor: pointer;
+}
+
+.safe-checkbox-text {
+   font-size: 12px;
+   font-weight: 600;
+   color: var(--color-text);
+}
+
+.safe-preference-hint {
+   font-size: 11px;
+   color: var(--color-text-soft);
+   padding-left: 23px;
+}
+
+.safe-modal-footer {
+   padding: 14px 20px;
+   border-top: 1px solid var(--color-border);
+   display: flex;
+   justify-content: flex-end;
+   gap: 10px;
+   background-color: var(--color-bg-secondary);
+}
+
+.safe-btn-confirm {
+   display: inline-flex;
+   align-items: center;
+   gap: 6px;
+   padding: 7px 16px;
+   border-radius: 6px;
+   border: none;
+   cursor: pointer;
+   background: #dc2626;
+   color: #ffffff;
+   font-size: 12px;
+   font-weight: 600;
+   transition: background 0.15s ease;
+}
+
+.safe-btn-confirm:hover {
+   background: #b91c1c;
+}

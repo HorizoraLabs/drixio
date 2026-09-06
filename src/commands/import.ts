@@ -78,11 +78,15 @@ export async function runImportCommand(
          format,
          fileContent,
       );
-      console.log(
-         pc.green(
-            `\n✔ Successfully imported ${res.count} rows into ${tableName}!`,
-         ),
-      );
+      if (!res.success) {
+         console.log(pc.red(`\n✘ Import failed: ${res.error}`));
+      } else {
+         console.log(
+            pc.green(
+               `\n✔ Successfully imported ${res.data.count} rows into ${tableName}!`,
+            ),
+         );
+      }
    } catch (e: any) {
       console.log(pc.red(`\n✘ Import failed: ${e.message}`));
    } finally {

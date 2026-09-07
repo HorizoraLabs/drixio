@@ -23,6 +23,14 @@ import {
    exportQueryResult,
    exportTable,
    restoreTableFromJsonContent,
+   createSchemaSnapshot,
+   diffDatabases,
+   diffDatabaseWithSnapshot,
+   SchemaSnapshot,
+   loadSnippets,
+   saveSnippet,
+   updateSnippet,
+   deleteSnippet,
 } from '../logic/index.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -925,6 +933,230 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
+   api.get('/schema/snapshot', async (c) => {
+      try {
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json(
+               { success: false, error: 'No database connected' },
+               400,
+            );
+         }
+         const dbName = getDbName();
+         const res = await createSchemaSnapshot(
+            getAdapter(),
+            currentDbConfig.type,
+            dbName,
+         );
+         if (!res.success) {
+            return c.json({ success: false, error: res.error }, 500);
+         }
+
+         const filename = `${dbName}_snapshot_${getDatetimeStr()}.json`;
+         c.header('Content-Disposition', `attachment; filename="${filename}"`);
+         c.header('Content-Type', 'application/json');
+         return c.body(JSON.stringify(res.data, null, 2));
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/schema/diff', async (c) => {
+      try {
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json(
+               { success: false, error: 'No database connected' },
+               400,
+            );
+         }
+
+         const body = await c.req.json().catch(() => ({}));
+         const { targetUrl, snapshot, reverse } = body;
+
+         if (!targetUrl && !snapshot) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'Either targetUrl or snapshot JSON must be provided.',
+               },
+               400,
+            );
+         }
+
+         if (targetUrl) {
+            const targetConfig = await detectDatabase(targetUrl);
+            const targetAdapter = createDBAdapter(targetConfig as any);
+            try {
+               const diffRes = await diffDatabases(
+                  getAdapter(),
+                  targetAdapter,
+                  currentDbConfig.type,
+                  getDbName(),
+                  targetUrl,
+               );
+               if (!diffRes.success) {
+                  return c.json({ success: false, error: diffRes.error }, 400);
+               }
+               return c.json({
+                  success: true,
+                  data: {
+                     diff: diffRes.data,
+                     migrationSql: reverse
+                        ? diffRes.data.rollbackSql
+                        : diffRes.data.migrationSql,
+                     rollbackSql: diffRes.data.rollbackSql,
+                  },
+               });
+            } finally {
+               await targetAdapter.close().catch(() => {});
+            }
+         } else {
+            // Snapshot mode
+            let snapshotData: SchemaSnapshot = snapshot;
+            if (typeof snapshot === 'string') {
+               try {
+                  snapshotData = JSON.parse(snapshot);
+               } catch {
+                  return c.json(
+                     {
+                        success: false,
+                        error: 'Invalid JSON snapshot provided.',
+                     },
+                     400,
+                  );
+               }
+            }
+
+            const diffRes = await diffDatabaseWithSnapshot(
+               getAdapter(),
+               snapshotData,
+               currentDbConfig.type,
+               getDbName(),
+               snapshotData.dbName
+                  ? `Snapshot (${snapshotData.dbName})`
+                  : undefined,
+            );
+
+            if (!diffRes.success) {
+               return c.json({ success: false, error: diffRes.error }, 400);
+            }
+
+            return c.json({
+               success: true,
+               data: {
+                  diff: diffRes.data,
+                  migrationSql: reverse
+                     ? diffRes.data.rollbackSql
+                     : diffRes.data.migrationSql,
+                  rollbackSql: diffRes.data.rollbackSql,
+               },
+            });
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/schema/apply-migration', async (c) => {
+      try {
+         if (!currentAdapter || currentDbConfig.type === 'unknown') {
+            return c.json(
+               { success: false, error: 'No database connected' },
+               400,
+            );
+         }
+
+         const { sql } = await c.req.json().catch(() => ({}));
+         if (!sql || typeof sql !== 'string' || !sql.trim()) {
+            return c.json(
+               { success: false, error: 'SQL migration script is required.' },
+               400,
+            );
+         }
+
+         await getAdapter().executeSql(sql);
+         return c.json({
+            success: true,
+            message: 'Migration SQL executed successfully.',
+         });
+      } catch (e: any) {
+         return c.json(
+            {
+               success: false,
+               error: `Migration execution failed: ${e.message}`,
+            },
+            500,
+         );
+      }
+   });
+
+   // Saved Queries / Snippets Endpoints
+   api.get('/snippets', async (c) => {
+      try {
+         const snippets = await loadSnippets();
+         return c.json({ success: true, data: snippets });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/snippets', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { title, sql, description, tags } = body;
+         if (!sql || typeof sql !== 'string' || !sql.trim()) {
+            return c.json(
+               { success: false, error: 'SQL query text is required.' },
+               400,
+            );
+         }
+         const snippet = await saveSnippet({
+            title: title || 'Untitled Snippet',
+            sql,
+            description,
+            tags,
+         });
+         return c.json({ success: true, data: snippet });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.put('/snippets/:id', async (c) => {
+      try {
+         const id = c.req.param('id');
+         const body = await c.req.json().catch(() => ({}));
+         const updated = await updateSnippet(id, body);
+         if (!updated) {
+            return c.json(
+               { success: false, error: `Snippet "${id}" not found.` },
+               404,
+            );
+         }
+         return c.json({ success: true, data: updated });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.delete('/snippets/:id', async (c) => {
+      try {
+         const id = c.req.param('id');
+         const deleted = await deleteSnippet(id);
+         if (!deleted) {
+            return c.json(
+               { success: false, error: `Snippet "${id}" not found.` },
+               404,
+            );
+         }
+         return c.json({
+            success: true,
+            message: 'Snippet deleted successfully.',
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
    api.post('/connect', async (c) => {
       try {
          const body = await c.req.json().catch(() => ({}));
@@ -1190,4 +1422,3 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    app.route('/api', api);
 }
-

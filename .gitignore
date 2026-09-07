@@ -4,3 +4,10 @@ tgz
 .env
 *.sqlite
 function.md
+
+# Drixio generated artifacts & backups
+drixio_exports/
+drixio_backup_*/
+drixio_schema.md
+drixio-types.d.ts
+.drixio/

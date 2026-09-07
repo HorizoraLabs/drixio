@@ -4,6 +4,7 @@ import { TabHTML } from '../components/tab.js';
 import { initSidebar } from '../components/sidebar.js';
 import { loadTableData, saveDataGridEdits } from './data/view.js';
 import { loadTableSchema, saveSchemaEdits } from './schema/view.js';
+import { openSchemaDiffModal } from './schema/diffModal.js';
 import { loadSqlConsole } from './console/view.js';
 import { loadErd } from './erd/view.js';
 import { loadStatusDashboard, refreshStatusDashboard } from './status/view.js';
@@ -376,6 +377,20 @@ if (exportBtn && exportDropdown) {
          window.open(`/api/database/schema-only`, '_blank');
          exportDropdown.classList.add('hidden');
          exportBtn.classList.remove('is-open');
+      });
+
+   document
+      .getElementById('export-schema-snapshot-btn')
+      ?.addEventListener('click', () => {
+         window.open(`/api/schema/snapshot`, '_blank');
+         exportDropdown.classList.add('hidden');
+         exportBtn.classList.remove('is-open');
+      });
+
+   document
+      .getElementById('header-schema-diff-btn')
+      ?.addEventListener('click', () => {
+         openSchemaDiffModal();
       });
 
    document

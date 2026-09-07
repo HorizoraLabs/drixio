@@ -4,6 +4,7 @@ import {
    analyzeDangerousQuery,
    showSafeQueryModal,
 } from './safeModal.js';
+import { openSaveSnippetModal } from './snippetsModal.js';
 
 let queryCounter = 0;
 
@@ -75,6 +76,7 @@ export const runConsoleQuery = async (
     <div class="console-history-header">
       <div class="console-history-sql">${sql.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       <div class="console-history-actions">
+        <button class="icon-btn save-snippet-btn" title="Save as Snippet"><span class="material-symbols-outlined" class="icon-16">bookmark_add</span></button>
         <button class="icon-btn copy-btn" title="Copy SQL"><span class="material-symbols-outlined" class="icon-16">content_copy</span></button>
         <button class="icon-btn rerun-btn" title="Re-run"><span class="material-symbols-outlined" class="icon-16">refresh</span></button>
       </div>
@@ -87,6 +89,18 @@ export const runConsoleQuery = async (
   `;
 
    historyPane.appendChild(block);
+
+   const saveBtn = block.querySelector('.save-snippet-btn');
+   if (saveBtn) {
+      saveBtn.onclick = () => {
+         openSaveSnippetModal({
+            defaultSql: sql,
+            onSaved: () => {
+               window.dispatchEvent(new CustomEvent('drixio-snippets-updated'));
+            },
+         });
+      };
+   }
 
    block.querySelector('.copy-btn').onclick = () => {
       navigator.clipboard.writeText(sql);

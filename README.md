@@ -58,7 +58,8 @@ available port starting at `51213` (or the value of `PORT`). It includes:
 - **Connect Workbench**: Zero-config database setup, dialect switching (SQLite, PostgreSQL, MySQL), pre-flight overview, live connection diagnostics, and smart `DATABASE_URL` auto-fill.
 - **Data View**: High-performance grid with pagination, inline editing, column sorting, search filtering, and CSV/JSON export/import.
 - **Schema & Table Manager**: Visual table inspector, column editor, foreign key explorer, table creation wizards, and modern ORM generator (Prisma & Drizzle).
-- **SQL Console**: Multi-tab SQL runner with intelligent autocomplete, query history, Safe Mode guard for destructive queries (DELETE/UPDATE without WHERE, DROP, TRUNCATE), and beginner-friendly query snippets.
+- **SQL Console**: Multi-tab SQL runner with intelligent autocomplete, query history, Safe Mode guard for destructive queries (DELETE/UPDATE without WHERE, DROP, TRUNCATE), and built-in SQL Snippets manager.
+- **Schema Diff & Migrations**: Visual schema comparison against snapshots or external databases, live preview of Up / Down migration DDL, and one-click apply.
 - **Status & Analytics**: Real-time database metrics, table size breakdown, and row distribution statistics.
 - **Interactive ERD**: Pan-and-zoom entity relationship diagram with table node dragging and relation link visualization.
 
@@ -79,6 +80,9 @@ connection URL is supplied where noted.
 | `npx drixio truncate [table]`                  | Delete all rows from a table and reset its sequence.                     |
 | `npx drixio backup`                            | Create a timestamped backup directory with schema and data JSON files.   |
 | `npx drixio restore [dir\|file]`               | Restore database from a backup directory, JSON dump, or SQL script.      |
+| `npx drixio diff [target]`                     | Compare schemas with snapshot or DB & generate Up/Down migration SQL.    |
+| `npx drixio snippets`                          | List saved SQL snippets and templates. `snip` is an alias.               |
+| `npx drixio run [snippet]`                     | Interactively execute a saved snippet or parametric query.               |
 | `npx drixio diagram`                           | Generate `drixio_schema.md` with Mermaid schema output.                  |
 | `npx drixio generate-types`                    | Generate `drixio-types.d.ts` from the database schema.                   |
 | `npx drixio generate-orm [prisma\|drizzle]`    | Generate Prisma (`schema.prisma`) or Drizzle (`schema.ts`) ORM schema.   |
@@ -94,19 +98,29 @@ npx drixio describe users
 npx drixio export users --format csv
 npx drixio export --format json --schema-only
 npx drixio import data.json --table users
+npx drixio diff --snapshot
+npx drixio diff "postgres://..." --apply
+npx drixio run snip_recent_records
 npx drixio --version
 npx drixio --help
 ```
 
 - `-v, --version` prints the drixio version.
+- `--help` displays command help and options.
 - `--json` outputs result as structured JSON (supported by `tables`, `describe`).
 - `--format csv|json` selects the export format.
 - `--schema-only` exports table definitions without data.
 - `--table <name>` selects the destination table for imports or ORM generation.
+- `--out <file>` specifies output file path for ORM schemas, diff SQL, or snapshots.
+- `--snapshot` exports a schema snapshot JSON for git tracking or offline comparison.
+- `--apply` automatically executes and applies generated migration SQL to the current database.
+- `--reverse` generates rollback (down) migration SQL.
+- `--print` prints generated ORM or schema directly to terminal.
 - `--force`, `-y` skips confirmation prompts during restore or database drops.
 
 Exports are written to `drixio_exports/` in the current directory. Backups are
-written to a timestamped `drixio_backup_<timestamp>/` directory.
+written to a timestamped `drixio_backup_<timestamp>/` directory. Snapshots and custom
+snippets are stored in `.drixio/`.
 
 ## Local database setup
 

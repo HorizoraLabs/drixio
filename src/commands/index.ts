@@ -14,6 +14,8 @@ import { runInitCommand } from './init.js';
 import { runDropDbCommand } from './drop.js';
 import { runTablesCommand } from './tables.js';
 import { runDescribeCommand } from './describe.js';
+import { runDiffCommand } from './diff.js';
+import { runSnippetsCommand, runRunCommand } from './snippets.js';
 
 export {
    runQueryCommand,
@@ -31,6 +33,9 @@ export {
    runDropDbCommand,
    runTablesCommand,
    runDescribeCommand,
+   runDiffCommand,
+   runSnippetsCommand,
+   runRunCommand,
 };
 
 export async function runQuickCommand(
@@ -93,6 +98,16 @@ export async function runQuickCommand(
          return true;
       case 'drop-db':
          await runDropDbCommand(args);
+         return true;
+      case 'diff':
+         await runDiffCommand(dbConfig, args, options);
+         return true;
+      case 'snippets':
+      case 'snip':
+         await runSnippetsCommand(args, options);
+         return true;
+      case 'run':
+         await runRunCommand(dbConfig, args, options);
          return true;
       default:
          return false;

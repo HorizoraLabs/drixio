@@ -124,3 +124,63 @@ export async function exportQueryResultApi(payload, format = 'csv') {
    document.body.removeChild(link);
    URL.revokeObjectURL(url);
 }
+
+export async function fetchSchemaDiff(payload) {
+   const res = await fetch('/api/schema/diff', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function applySchemaMigration(sql) {
+   const res = await fetch('/api/schema/apply-migration', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
+   });
+   return await res.json();
+}
+
+export function downloadSchemaSnapshot() {
+   window.location.href = '/api/schema/snapshot';
+}
+
+export async function fetchSnippetsApi() {
+   const res = await fetch('/api/snippets');
+   return await res.json();
+}
+
+export async function createSnippetApi(payload) {
+   const res = await fetch('/api/snippets', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function updateSnippetApi(id, payload) {
+   const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function deleteSnippetApi(id) {
+   const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+   });
+   return await res.json();
+}

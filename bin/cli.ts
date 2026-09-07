@@ -47,6 +47,9 @@ async function main() {
          print: { type: 'boolean' },
          force: { type: 'boolean' },
          y: { type: 'boolean' },
+         snapshot: { type: 'boolean' },
+         apply: { type: 'boolean' },
+         reverse: { type: 'boolean' },
          help: { type: 'boolean' },
       },
       strict: false,
@@ -103,6 +106,15 @@ async function main() {
          `  ${pc.green('generate-orm')} [target] Generate Prisma or Drizzle ORM schema`,
       );
       console.log(
+         `  ${pc.green('diff')} [target]         Compare schemas & generate migration SQL`,
+      );
+      console.log(
+         `  ${pc.green('snippets')}              List saved SQL snippets & templates (alias: snip)`,
+      );
+      console.log(
+         `  ${pc.green('run')} [snippet]         Execute a saved snippet or parametric query`,
+      );
+      console.log(
          `  ${pc.green('backup')}                Backup the entire database`,
       );
       console.log(
@@ -123,7 +135,18 @@ async function main() {
       console.log(
          `  --table <name>        Specify table for import/export/orm`,
       );
-      console.log(`  --out <file>          Specify output file for ORM schema`);
+      console.log(
+         `  --out <file>          Specify output file for schema/SQL/snapshot`,
+      );
+      console.log(
+         `  --snapshot            Export schema snapshot JSON for git tracking`,
+      );
+      console.log(
+         `  --apply               Apply generated migration SQL to current database`,
+      );
+      console.log(
+         `  --reverse             Generate rollback (down) migration SQL`,
+      );
       console.log(
          `  --print               Print generated schema directly to terminal`,
       );

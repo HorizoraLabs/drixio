@@ -143,6 +143,13 @@ export const HeaderHTML = /* html */ `
                 <span class="dropdown-badge">SQL</span>
               </button>
             </li>
+            <li>
+              <button id="export-schema-snapshot-btn" class="dropdown-item">
+                <span class="material-symbols-outlined">data_object</span>
+                <span class="dropdown-item-label">Schema Snapshot</span>
+                <span class="dropdown-badge">JSON</span>
+              </button>
+            </li>
           </ul>
         </li>
 
@@ -198,6 +205,12 @@ export const HeaderHTML = /* html */ `
         </li>
       </ul>
     </div>
+
+    <!-- Schema Diff Action Button -->
+    <button id="header-schema-diff-btn" class="header-btn secondary" title="Compare schemas and generate migration SQL">
+      <span class="material-symbols-outlined" style="font-size: 16px; color: #10b981;">compare_arrows</span>
+      <span>Diff</span>
+    </button>
   </div>
 </header>
 `;

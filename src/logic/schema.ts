@@ -413,13 +413,22 @@ export async function getTablesWithRowCount(
 export async function getTableSchemas(
    adapter: DBAdapter,
    tables?: string[],
+   includeIndexes: boolean = true,
 ): Promise<Result<TableSchemaInfo[]>> {
    try {
       const allTables = tables || (await adapter.getTables());
       const schemaInfos: TableSchemaInfo[] = [];
       for (const table of allTables) {
          const columns = await adapter.getSchema(table);
-         schemaInfos.push({ tableName: table, columns });
+         let indexes = undefined;
+         if (includeIndexes && typeof adapter.getIndexes === 'function') {
+            try {
+               indexes = await adapter.getIndexes(table);
+            } catch {
+               indexes = [];
+            }
+         }
+         schemaInfos.push({ tableName: table, columns, indexes });
       }
       return ok(schemaInfos);
    } catch (e: any) {

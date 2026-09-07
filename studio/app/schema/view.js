@@ -2,6 +2,7 @@ import { fetchTableSchema, fetchTableIndexes } from '../../lib/api.js';
 import { bindSchemaCellEditor } from './events.js';
 import { bindColumnResizer, bindCellSelection } from '../grid/view.js';
 import { openExportOrmModal } from './ormModal.js';
+import { openSchemaDiffModal } from './diffModal.js';
 
 export { saveSchemaEdits } from './core.js';
 
@@ -71,6 +72,10 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
           <button type="button" id="btn-export-orm-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Export Prisma / Drizzle ORM Schema">
             <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">bolt</span>
             <span>Export ORM</span>
+          </button>
+          <button type="button" id="btn-schema-diff-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Compare Schemas & Generate Migration SQL">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: #10b981;">compare_arrows</span>
+            <span>Schema Diff</span>
           </button>
           <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)"><span class="material-symbols-outlined">refresh</span></button>
         </div>
@@ -371,6 +376,13 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
          );
          if (exportOrmBtn) {
             exportOrmBtn.onclick = () => openExportOrmModal(tableName);
+         }
+
+         const schemaDiffBtn = document.getElementById(
+            `btn-schema-diff-${tableName}`,
+         );
+         if (schemaDiffBtn) {
+            schemaDiffBtn.onclick = () => openSchemaDiffModal();
          }
 
          const refreshBtn = document.getElementById(

@@ -48,6 +48,14 @@ export function loadSqlConsole(tableName, btnElement, container) {
             <span class="editor-shortcut-info">Press <b>Ctrl+Enter</b> to run</span>
           </div>
           <div class="editor-toolbar-right">
+            <button type="button" id="console-snippets-toggle-btn" class="header-btn secondary" style="height: 28px; padding: 0 10px; font-size: 12px; gap: 5px;" title="Toggle Saved Queries & Snippets Library">
+              <span class="material-symbols-outlined" style="font-size: 15px; color: #f59e0b;">bookmark</span>
+              <span>Snippets</span>
+            </button>
+            <button type="button" id="console-save-snippet-btn" class="header-btn secondary" style="height: 28px; padding: 0 10px; font-size: 12px; gap: 5px;" title="Save current editor SQL as snippet">
+              <span class="material-symbols-outlined" style="font-size: 15px; color: var(--color-primary);">bookmark_add</span>
+              <span>Save</span>
+            </button>
             <button type="button" id="console-clear-editor-btn" class="header-btn secondary" style="height: 28px; padding: 0 10px; font-size: 12px;" title="Clear Editor">
               <span class="material-symbols-outlined" style="font-size: 14px;">backspace</span>
               Clear
@@ -68,6 +76,33 @@ export function loadSqlConsole(tableName, btnElement, container) {
             <!-- Real Textarea (Foreground) -->
             <textarea id="sql-editor" class="sql-editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
           </div>
+        </div>
+      </div>
+
+      <!-- Collapsible Snippets Drawer -->
+      <div id="console-snippets-drawer" class="console-snippets-drawer hidden">
+        <div class="snippets-drawer-header">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: #f59e0b;">bookmark</span>
+            <span class="font-semibold text-13">Saved Queries</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" id="snippets-drawer-new-btn" class="diff-mini-btn" title="Create New Snippet">
+              <span class="material-symbols-outlined" style="font-size: 13px;">add</span>
+              <span>New</span>
+            </button>
+            <button type="button" id="close-snippets-drawer-btn" class="modal-close-btn" style="padding: 2px;" title="Close Drawer">
+              <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="snippets-drawer-search">
+          <input type="text" id="snippets-search-input" class="diff-url-input" placeholder="Search snippets..." style="height: 28px; font-size: 11.5px;" />
+        </div>
+
+        <div id="snippets-list-container" class="snippets-list-container">
+          <div class="p-3 text-12 text-center" style="color: var(--color-text-soft);">Loading snippets...</div>
         </div>
       </div>
     </div>

@@ -18,6 +18,58 @@ export interface ColumnSchema {
 export interface TableSchemaInfo {
    tableName: string;
    columns: ColumnSchema[];
+   indexes?: IndexSchema[];
+}
+
+export interface SchemaSnapshot {
+   version: number;
+   createdAt: string;
+   dbType: string;
+   dbName?: string;
+   tables: TableSchemaInfo[];
+}
+
+export interface ColumnDiff {
+   name: string;
+   oldType?: string;
+   newType?: string;
+   oldNullable?: boolean;
+   newNullable?: boolean;
+   oldDefault?: string;
+   newDefault?: string;
+   oldPk?: boolean;
+   newPk?: boolean;
+}
+
+export interface TableDiff {
+   tableName: string;
+   type: 'added' | 'dropped' | 'altered';
+   addedColumns: ColumnSchema[];
+   droppedColumns: ColumnSchema[];
+   modifiedColumns: ColumnDiff[];
+   addedIndexes: IndexSchema[];
+   droppedIndexes: IndexSchema[];
+}
+
+export interface SchemaDiffStats {
+   addedTablesCount: number;
+   droppedTablesCount: number;
+   alteredTablesCount: number;
+   addedColumnsCount: number;
+   droppedColumnsCount: number;
+   modifiedColumnsCount: number;
+   addedIndexesCount: number;
+   droppedIndexesCount: number;
+}
+
+export interface SchemaDiffResult {
+   hasChanges: boolean;
+   sourceName: string;
+   targetName: string;
+   tables: TableDiff[];
+   stats: SchemaDiffStats;
+   migrationSql: string;
+   rollbackSql: string;
 }
 
 export interface DatabaseStatus {
@@ -122,3 +174,13 @@ export function err<T = void>(
 
 export type SchemaResult = Result<void>;
 
+export interface QuerySnippet {
+   id: string;
+   title: string;
+   sql: string;
+   description?: string;
+   tags?: string[];
+   isBuiltin?: boolean;
+   createdAt: string;
+   updatedAt?: string;
+}

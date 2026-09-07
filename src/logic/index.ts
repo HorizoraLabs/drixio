@@ -10,3 +10,5 @@ export * from './adapters/index.js';
 export * from './creator.js';
 export * from './orm.js';
 export * from './safety.js';
+export * from './diff.js';
+export * from './snippets.js';

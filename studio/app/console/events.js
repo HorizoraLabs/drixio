@@ -1,5 +1,11 @@
 import { runConsoleQuery } from './core.js';
 import { isSafeModeEnabled, setSafeModeEnabled } from './safeModal.js';
+import { fetchSnippetsApi, deleteSnippetApi } from '../../lib/api.js';
+import {
+   openSaveSnippetModal,
+   openParametricQueryModal,
+   extractVariables,
+} from './snippetsModal.js';
 
 export const bindConsoleEvents = (editor, historyPane) => {
    // History Navigation State
@@ -477,6 +483,225 @@ export const bindConsoleEvents = (editor, historyPane) => {
             closePopup();
             executeAndReset();
          }
+      }
+   });
+
+   // ==================== SNIPPETS DRAWER LOGIC ====================
+   const snippetsDrawer = document.getElementById('console-snippets-drawer');
+   const snippetsList = document.getElementById('snippets-list-container');
+   const snippetsSearchInput = document.getElementById('snippets-search-input');
+   const snippetsToggleBtn = document.getElementById(
+      'console-snippets-toggle-btn',
+   );
+   const consoleSaveSnippetBtn = document.getElementById(
+      'console-save-snippet-btn',
+   );
+   const drawerCloseBtn = document.getElementById('close-snippets-drawer-btn');
+   const drawerNewBtn = document.getElementById('snippets-drawer-new-btn');
+
+   let cachedSnippets = [];
+
+   const loadAndRenderSnippets = async () => {
+      if (!snippetsList) return;
+      try {
+         const res = await fetchSnippetsApi();
+         if (res.success && Array.isArray(res.data)) {
+            cachedSnippets = res.data;
+            applySnippetsFilter();
+         } else {
+            snippetsList.innerHTML = `<div class="p-3 text-12 text-center" style="color: var(--color-error);">Failed to load snippets</div>`;
+         }
+      } catch (err) {
+         snippetsList.innerHTML = `<div class="p-3 text-12 text-center" style="color: var(--color-error);">Error loading snippets: ${err.message}</div>`;
+      }
+   };
+
+   const applySnippetsFilter = () => {
+      if (!snippetsList) return;
+      const query = (snippetsSearchInput?.value || '').trim().toLowerCase();
+      let list = cachedSnippets;
+      if (query) {
+         list = cachedSnippets.filter((s) => {
+            const matchTitle = (s.title || '').toLowerCase().includes(query);
+            const matchDesc = (s.description || '')
+               .toLowerCase()
+               .includes(query);
+            const matchSql = (s.sql || '').toLowerCase().includes(query);
+            const matchTag = (s.tags || []).some((t) =>
+               t.toLowerCase().includes(query),
+            );
+            return matchTitle || matchDesc || matchSql || matchTag;
+         });
+      }
+
+      if (list.length === 0) {
+         snippetsList.innerHTML = `<div class="p-3 text-12 text-center" style="color: var(--color-text-soft);">No snippets found.</div>`;
+         return;
+      }
+
+      snippetsList.innerHTML = list
+         .map((s) => {
+            const hasParams = extractVariables(s.sql).length > 0;
+            const tagsHtml = (s.tags || [])
+               .map((t) => `<span class="snippet-tag-pill">${t}</span>`)
+               .join('');
+            const escapedSql = (s.sql || '')
+               .replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;');
+            return /* html */ `
+            <div class="snippet-card" data-id="${s.id}">
+              <div class="snippet-card-title-row">
+                <span class="snippet-card-title" title="${s.title}">${s.title}</span>
+                ${s.isBuiltin ? `<span class="snippet-tag-pill" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">Built-in</span>` : ''}
+              </div>
+              ${s.description ? `<div class="snippet-card-desc">${s.description}</div>` : ''}
+              ${tagsHtml ? `<div class="snippet-card-tags">${tagsHtml}</div>` : ''}
+              <pre class="snippet-sql-preview">${escapedSql}</pre>
+              <div class="snippet-card-actions">
+                <div class="snippet-card-actions-left">
+                  <button type="button" class="header-btn primary snip-run-btn" style="height: 24px; padding: 0 8px; font-size: 11px; gap: 3px;" title="${hasParams ? 'Run with Parameters' : 'Run Query'}">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">play_arrow</span>
+                    <span>Run</span>
+                  </button>
+                  <button type="button" class="header-btn secondary snip-insert-btn" style="height: 24px; padding: 0 8px; font-size: 11px; gap: 3px;" title="Insert into Editor">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">input</span>
+                    <span>Insert</span>
+                  </button>
+                </div>
+                <div class="snippet-card-actions-right">
+                  <button type="button" class="icon-btn snip-edit-btn" title="Edit Snippet">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
+                  </button>
+                  ${
+                     !s.isBuiltin
+                        ? `
+                  <button type="button" class="icon-btn snip-delete-btn" title="Delete Snippet">
+                    <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-error);">delete</span>
+                  </button>`
+                        : ''
+                  }
+                </div>
+              </div>
+            </div>
+          `;
+         })
+         .join('');
+
+      // Attach card listeners
+      snippetsList.querySelectorAll('.snippet-card').forEach((cardEl) => {
+         const id = cardEl.getAttribute('data-id');
+         const snippet = cachedSnippets.find((s) => s.id === id);
+         if (!snippet) return;
+
+         cardEl
+            .querySelector('.snip-run-btn')
+            ?.addEventListener('click', () => {
+               const vars = extractVariables(snippet.sql);
+               if (vars.length > 0) {
+                  openParametricQueryModal({
+                     snippet,
+                     onExecute: (finalSql) => {
+                        runConsoleQuery(finalSql, editor, historyPane);
+                     },
+                  });
+               } else {
+                  runConsoleQuery(snippet.sql, editor, historyPane);
+               }
+            });
+
+         cardEl
+            .querySelector('.snip-insert-btn')
+            ?.addEventListener('click', () => {
+               editor.value = snippet.sql;
+               updateHighlight();
+               editor.focus();
+            });
+
+         cardEl
+            .querySelector('.snip-edit-btn')
+            ?.addEventListener('click', () => {
+               openSaveSnippetModal({
+                  snippetId: snippet.id,
+                  defaultTitle: snippet.title,
+                  defaultSql: snippet.sql,
+                  defaultDescription: snippet.description,
+                  defaultTags: snippet.tags || [],
+                  onSaved: () => loadAndRenderSnippets(),
+               });
+            });
+
+         cardEl
+            .querySelector('.snip-delete-btn')
+            ?.addEventListener('click', async () => {
+               if (
+                  confirm(
+                     `Are you sure you want to delete snippet "${snippet.title}"?`,
+                  )
+               ) {
+                  const res = await deleteSnippetApi(snippet.id);
+                  if (res.success) {
+                     if (window.showToast)
+                        window.showToast('Snippet deleted', 'info');
+                     loadAndRenderSnippets();
+                  } else {
+                     alert(`Failed to delete snippet: ${res.error}`);
+                  }
+               }
+            });
+      });
+   };
+
+   if (snippetsToggleBtn && snippetsDrawer) {
+      snippetsToggleBtn.onclick = () => {
+         const isHidden = snippetsDrawer.classList.contains('hidden');
+         if (isHidden) {
+            snippetsDrawer.classList.remove('hidden');
+            loadAndRenderSnippets();
+         } else {
+            snippetsDrawer.classList.add('hidden');
+         }
+      };
+   }
+
+   if (drawerCloseBtn && snippetsDrawer) {
+      drawerCloseBtn.onclick = () => {
+         snippetsDrawer.classList.add('hidden');
+      };
+   }
+
+   if (consoleSaveSnippetBtn) {
+      consoleSaveSnippetBtn.onclick = () => {
+         openSaveSnippetModal({
+            defaultSql: editor.value,
+            onSaved: () => {
+               if (
+                  snippetsDrawer &&
+                  !snippetsDrawer.classList.contains('hidden')
+               ) {
+                  loadAndRenderSnippets();
+               }
+            },
+         });
+      };
+   }
+
+   if (drawerNewBtn) {
+      drawerNewBtn.onclick = () => {
+         openSaveSnippetModal({
+            defaultSql: '',
+            onSaved: () => loadAndRenderSnippets(),
+         });
+      };
+   }
+
+   if (snippetsSearchInput) {
+      snippetsSearchInput.addEventListener('input', applySnippetsFilter);
+   }
+
+   window.addEventListener('drixio-snippets-updated', () => {
+      if (snippetsDrawer && !snippetsDrawer.classList.contains('hidden')) {
+         loadAndRenderSnippets();
       }
    });
 };

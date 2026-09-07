@@ -1,6 +1,6 @@
 {
   "name": "drixio",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "A lightweight interactive TUI database client",
   "bin": {
     "drixio": "dist/cli.js"

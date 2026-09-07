@@ -6,6 +6,7 @@ import {
    detectDatabase,
    saveDatabaseUrl,
    createDatabase,
+   createTable,
    previewMockData,
    generateAndInsertMockData,
    batchMutateTableData,
@@ -110,6 +111,41 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
          const tables = await currentAdapter.getTables();
          return c.json({ success: true, data: tables });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/tables', async (c) => {
+      try {
+         const { tableName, columns } = await c.req.json().catch(() => ({}));
+         if (!tableName || typeof tableName !== 'string') {
+            return c.json(
+               { success: false, error: 'Table name is required' },
+               400,
+            );
+         }
+         if (!columns || !Array.isArray(columns) || columns.length === 0) {
+            return c.json(
+               { success: false, error: 'At least one column is required' },
+               400,
+            );
+         }
+         const adapter = getAdapter();
+         const res = await createTable(
+            adapter,
+            currentDbConfig.type,
+            tableName.trim(),
+            columns,
+         );
+         if (res.success) {
+            return c.json({
+               success: true,
+               message: `Table "${tableName.trim()}" created successfully`,
+            });
+         } else {
+            return c.json({ success: false, error: res.error }, 400);
+         }
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

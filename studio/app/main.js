@@ -4,7 +4,6 @@ import { TabHTML } from '../components/tab.js';
 import { initSidebar } from '../components/sidebar.js';
 import { loadTableData, saveDataGridEdits } from './data/view.js';
 import { loadTableSchema, saveSchemaEdits } from './schema/view.js';
-import { openSchemaDiffModal } from './schema/diffModal.js';
 import { loadSqlConsole } from './console/view.js';
 import { loadErd } from './erd/view.js';
 import { loadStatusDashboard, refreshStatusDashboard } from './status/view.js';
@@ -388,12 +387,6 @@ if (exportBtn && exportDropdown) {
       });
 
    document
-      .getElementById('header-schema-diff-btn')
-      ?.addEventListener('click', () => {
-         openSchemaDiffModal();
-      });
-
-   document
       .getElementById('export-console-csv-btn')
       ?.addEventListener('click', () => {
          triggerExport(`/api/query/export`, 'csv');
@@ -620,8 +613,19 @@ window.renderEmptyState = function (container) {
       </div>
       <h2>No Table Selected</h2>
       <p>Select a table from the sidebar to view its data, schema, or run SQL queries.</p>
+      <button type="button" id="btn-empty-create-table" class="header-btn primary" style="margin-top: 18px; padding: 8px 18px; gap: 6px; font-size: 13px; cursor: pointer;">
+        <span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+        <span>Create Table</span>
+      </button>
     </div>
   `;
+
+   const btn = container.querySelector('#btn-empty-create-table');
+   if (btn) {
+      btn.onclick = () => {
+         window.openCreateTableModal?.();
+      };
+   }
 };
 
 window.renderCurrentView = function (whereClause = '', preserveState = false) {

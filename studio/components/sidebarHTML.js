@@ -32,6 +32,9 @@ export const SideBarHTML = /* html */ `
         <span id="table-count-badge" class="section-count">0</span>
       </div>
       <div class="section-actions">
+        <button id="add-table-btn" class="sidebar-icon-btn" title="Create New Table" aria-label="Create New Table">
+          <span class="material-symbols-outlined">add</span>
+        </button>
         <button id="refresh-tables-btn" class="sidebar-icon-btn" title="Refresh Table List" aria-label="Refresh Table List">
           <span class="material-symbols-outlined">refresh</span>
         </button>

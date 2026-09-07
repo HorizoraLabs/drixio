@@ -1,108 +1,113 @@
-@import url("./styles/utilities.css");
-@import url("./styles/sidebar.css");
-@import url("./styles/header.css");
-@import url("./styles/tab.css");
-@import url("./styles/main.css");
-@import url("./styles/console.css");
-@import url("./styles/modal.css");
-@import url("./styles/grid.css");
-@import url("./styles/toast.css");
-@import url("./styles/erd.css");
-@import url("./styles/status.css");
+@import url('./styles/utilities.css');
+@import url('./styles/sidebar.css');
+@import url('./styles/header.css');
+@import url('./styles/tab.css');
+@import url('./styles/main.css');
+@import url('./styles/console.css');
+@import url('./styles/modal.css');
+@import url('./styles/grid.css');
+@import url('./styles/toast.css');
+@import url('./styles/erd.css');
+@import url('./styles/status.css');
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
-@import url("./styles/searchBar.css");
-@import url("./styles/contextMenu.css");
-@import url("./styles/data.css");
-@import url("./styles/schema.css");
-@import url("./styles/connect.css");
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('./styles/searchBar.css');
+@import url('./styles/contextMenu.css');
+@import url('./styles/data.css');
+@import url('./styles/schema.css');
+@import url('./styles/connect.css');
 
 :root {
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-secondary-dark: #f1f5f9;
-  --color-primary: #2c68ec;
-  --color-primary-active: #eff6ff;
-  --color-primary-dark: #285bb8;
-  --color-text: #0f172a;
-  --color-text-soft: #94a3b8;
-  --color-text-secondary: #64748b;
-  --color-border: #e2e8f0;
-  --color-border-soft: #f1f5f9;
-  --ring-primary-2: 0 0 0 2px #2c68ec33;
-  --font-inter: "Inter", sans-serif;
-  --color-btn-active-text: var(--color-primary);
+   --color-bg-primary: #ffffff;
+   --color-bg-secondary: #f8fafc;
+   --color-bg-secondary-dark: #f1f5f9;
+   --color-primary: #2c68ec;
+   --color-primary-active: #eff6ff;
+   --color-primary-dark: #285bb8;
+   --color-text: #0f172a;
+   --color-text-soft: #94a3b8;
+   --color-text-secondary: #64748b;
+   --color-border: #e2e8f0;
+   --color-border-soft: #f1f5f9;
+   --ring-primary-2: 0 0 0 2px #2c68ec33;
+   --font-inter: 'Inter', sans-serif;
+   --color-btn-active-text: var(--color-primary);
 
-  --color-brand-500: #2c68ec;
-  --color-error: #ef4444;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+   --color-brand-500: #2c68ec;
+   --color-error: #ef4444;
+   --color-success: #10b981;
+   --color-warning: #f59e0b;
+   --font-mono:
+      'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo,
+      Monaco, Consolas, monospace;
 
-  /* Grid Interactive States (Light) */
-  --color-cell-range-bg: #dbeafe;
-  --color-copy-flash: #bfdbfe;
-  --color-cell-edited-bg: rgba(245, 158, 11, 0.08);
-  --color-cell-edited-text: var(--color-text);
-  --color-cell-error-bg: rgba(244, 63, 94, 0.08);
-  --color-row-deleted-bg: #fee2e2;
-  --color-row-deleted-text: #ef4444;
-  --color-ghost-row-bg: #f8fafc;
+   /* Grid Interactive States (Light) */
+   --color-cell-range-bg: #dbeafe;
+   --color-copy-flash: #bfdbfe;
+   --color-cell-edited-bg: rgba(245, 158, 11, 0.08);
+   --color-cell-edited-text: var(--color-text);
+   --color-cell-error-bg: rgba(244, 63, 94, 0.08);
+   --color-row-deleted-bg: #fee2e2;
+   --color-row-deleted-text: #ef4444;
+   --color-ghost-row-bg: #f8fafc;
 }
 
-[data-theme="dark"] {
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-secondary-dark: #334155;
-  --color-primary: #3b82f6;
-  --color-primary-active: #1e3a8a;
-  --color-primary-dark: #60a5fa;
-  --color-text: #f8fafc;
-  --color-text-soft: #64748b;
-  --color-text-secondary: #cbd5e1;
-  --color-border: #334155;
-  --color-border-soft: #1e293b;
-  --ring-primary-2: 0 0 0 2px #3b82f633;
-  --color-btn-active-text: #ffffff;
-  --color-brand-500: #3b82f6;
-  --color-error: #f43f5e;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
+[data-theme='dark'] {
+   --color-bg-primary: #0f172a;
+   --color-bg-secondary: #1e293b;
+   --color-bg-secondary-dark: #334155;
+   --color-primary: #3b82f6;
+   --color-primary-active: #1e3a8a;
+   --color-primary-dark: #60a5fa;
+   --color-text: #f8fafc;
+   --color-text-soft: #64748b;
+   --color-text-secondary: #cbd5e1;
+   --color-border: #334155;
+   --color-border-soft: #1e293b;
+   --ring-primary-2: 0 0 0 2px #3b82f633;
+   --color-btn-active-text: #ffffff;
+   --color-brand-500: #3b82f6;
+   --color-error: #f43f5e;
+   --color-success: #10b981;
+   --color-warning: #f59e0b;
 
-  /* Grid Interactive States (Dark) */
-  --color-cell-range-bg: rgba(59, 130, 246, 0.15); /* translucent primary */
-  --color-copy-flash: rgba(59, 130, 246, 0.4);
-  --color-cell-edited-bg: rgba(245, 158, 11, 0.12);
-  --color-cell-edited-text: var(--color-text);
-  --color-cell-error-bg: rgba(244, 63, 94, 0.12);
-  --color-row-deleted-bg: rgba(239, 68, 68, 0.15);
-  --color-row-deleted-text: #f87171;
-  --color-ghost-row-bg: var(--color-bg-secondary);
+   /* Grid Interactive States (Dark) */
+   --color-cell-range-bg: rgba(59, 130, 246, 0.15); /* translucent primary */
+   --color-copy-flash: rgba(59, 130, 246, 0.4);
+   --color-cell-edited-bg: rgba(245, 158, 11, 0.12);
+   --color-cell-edited-text: var(--color-text);
+   --color-cell-error-bg: rgba(244, 63, 94, 0.12);
+   --color-row-deleted-bg: rgba(239, 68, 68, 0.15);
+   --color-row-deleted-text: #f87171;
+   --color-ghost-row-bg: var(--color-bg-secondary);
 }
 
 * {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-inter);
+   box-sizing: border-box;
+   margin: 0;
+   padding: 0;
+   font-family: var(--font-inter);
 }
 
 body,
 html {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text);
-  font-family: var(--font-inter);
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
+   display: flex;
+   width: 100vw;
+   height: 100vh;
+   background-color: var(--color-bg-primary);
+   color: var(--color-text);
+   font-family: var(--font-inter);
+   padding: 0;
+   margin: 0;
+   overflow: hidden;
 }
 
 main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
+   display: flex;
+   flex-direction: column;
+   flex: 1;
+   min-width: 0;
+   height: 100vh;
+   max-height: 100vh;
+   overflow: hidden;
 }

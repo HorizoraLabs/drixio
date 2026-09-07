@@ -229,6 +229,12 @@ aside.collapsed .theme-toggle-btn {
    margin-top: 2px;
 }
 
+.section-actions {
+   display: flex;
+   align-items: center;
+   gap: 2px;
+}
+
 .status-indicator-dot {
    width: 6px;
    height: 6px;

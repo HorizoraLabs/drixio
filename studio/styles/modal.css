@@ -1323,7 +1323,7 @@
 .diff-dropzone.dragover {
    border-color: var(--color-primary);
    background: rgba(59, 130, 246, 0.05);
-} 
+}
 
 .diff-url-input {
    flex: 1;
@@ -1579,4 +1579,50 @@
    overflow-y: auto;
    white-space: pre-wrap;
    border: none;
+}
+
+/* ==================== GLOBAL & MODAL CUSTOM SCROLLBAR ==================== */
+.modal-overlay *,
+.modal-container *,
+.modal-body-scroll,
+.modal-body-scroll * {
+   scrollbar-width: thin;
+   scrollbar-color: var(--color-border) transparent;
+}
+
+.modal-overlay *::-webkit-scrollbar,
+.modal-container *::-webkit-scrollbar,
+.modal-body-scroll::-webkit-scrollbar,
+.modal-body-scroll *::-webkit-scrollbar {
+   width: 6px;
+   height: 6px;
+}
+
+.modal-overlay *::-webkit-scrollbar-track,
+.modal-container *::-webkit-scrollbar-track,
+.modal-body-scroll::-webkit-scrollbar-track,
+.modal-body-scroll *::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+.modal-overlay *::-webkit-scrollbar-thumb,
+.modal-container *::-webkit-scrollbar-thumb,
+.modal-body-scroll::-webkit-scrollbar-thumb,
+.modal-body-scroll *::-webkit-scrollbar-thumb {
+   background: var(--color-border);
+   border-radius: 9999px;
+}
+
+.modal-overlay *::-webkit-scrollbar-thumb:hover,
+.modal-container *::-webkit-scrollbar-thumb:hover,
+.modal-body-scroll::-webkit-scrollbar-thumb:hover,
+.modal-body-scroll *::-webkit-scrollbar-thumb:hover {
+   background: var(--color-text-soft);
+}
+
+.modal-overlay *::-webkit-scrollbar-corner,
+.modal-container *::-webkit-scrollbar-corner,
+.modal-body-scroll::-webkit-scrollbar-corner,
+.modal-body-scroll *::-webkit-scrollbar-corner {
+   background: transparent;
 }

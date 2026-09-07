@@ -205,12 +205,6 @@ export const HeaderHTML = /* html */ `
         </li>
       </ul>
     </div>
-
-    <!-- Schema Diff Action Button -->
-    <button id="header-schema-diff-btn" class="header-btn secondary" title="Compare schemas and generate migration SQL">
-      <span class="material-symbols-outlined" style="font-size: 16px; color: #10b981;">compare_arrows</span>
-      <span>Diff</span>
-    </button>
   </div>
 </header>
 `;

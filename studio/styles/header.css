@@ -185,6 +185,7 @@ header {
 }
 
 .dropdown-item {
+   text-wrap: nowrap;
    padding: 7px 10px;
    text-align: left;
    background: transparent;
@@ -194,12 +195,13 @@ header {
    color: var(--color-text);
    font-size: 13px;
    font-weight: 500;
+   min-width: 200px;
    transition:
       background-color 0.15s ease,
       color 0.15s ease;
    display: flex;
    align-items: center;
-   gap: 8px;
+   gap: 16px;
    width: 100%;
    box-sizing: border-box;
    text-decoration: none;

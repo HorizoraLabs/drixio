@@ -7,6 +7,10 @@ import {
 } from '../lib/api.js';
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
+import { openCreateTableModal } from '../app/schema/createTableModal.js';
+
+window.openCreateTableModal = openCreateTableModal;
+window.refreshTableList = initSidebar;
 
 let isEventsBound = false;
 
@@ -406,6 +410,14 @@ function bindSidebarEvents() {
             searchInput.focus();
          });
       }
+   }
+
+   // Add table button
+   const addTableBtn = document.getElementById('add-table-btn');
+   if (addTableBtn) {
+      addTableBtn.addEventListener('click', () => {
+         openCreateTableModal();
+      });
    }
 
    // Refresh tables button

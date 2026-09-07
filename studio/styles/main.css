@@ -6,6 +6,7 @@
    background-color: var(--color-bg-primary);
    overflow: hidden; /* Prevent body scroll */
    min-width: 0;
+   min-height: 0;
 }
 
 /* ==================== SEAMLESS INTEGRATED TOOLBAR ==================== */
@@ -181,4 +182,32 @@
 .refresh-btn .material-symbols-outlined {
    font-size: 18px;
    margin-bottom: 0.5px;
+}
+
+/* ==================== GLOBAL MODERN CUSTOM SCROLLBAR ==================== */
+* {
+   scrollbar-width: thin;
+   scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+   width: 6px;
+   height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+   background: var(--color-border);
+   border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+   background: var(--color-text-soft);
+}
+
+*::-webkit-scrollbar-corner {
+   background: transparent;
 }

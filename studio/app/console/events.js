@@ -68,7 +68,7 @@ export const bindConsoleEvents = (editor, historyPane) => {
       clearBtn.onclick = () => {
          editor.value = '';
          updateHighlight();
-         editor.focus();
+         editor.focus({ preventScroll: true });
       };
    }
 
@@ -78,7 +78,7 @@ export const bindConsoleEvents = (editor, historyPane) => {
          if (templateSql) {
             editor.value = templateSql;
             updateHighlight();
-            editor.focus();
+            editor.focus({ preventScroll: true });
          }
       });
    });
@@ -373,7 +373,7 @@ export const bindConsoleEvents = (editor, historyPane) => {
 
       closePopup();
       updateHighlight();
-      editor.focus();
+      editor.focus({ preventScroll: true });
    };
 
    editor.addEventListener('input', () => {
@@ -476,6 +476,52 @@ export const bindConsoleEvents = (editor, historyPane) => {
          e.preventDefault();
          closePopup();
          executeAndReset();
+      } else if (e.key === 'Tab') {
+         e.preventDefault();
+         const start = editor.selectionStart;
+         const end = editor.selectionEnd;
+         const val = editor.value;
+
+         if (start === end) {
+            // No text selected: insert 2 spaces at cursor
+            const tabSpaces = '  ';
+            if (document.queryCommandSupported?.('insertText')) {
+               document.execCommand('insertText', false, tabSpaces);
+            } else {
+               editor.value =
+                  val.substring(0, start) + tabSpaces + val.substring(end);
+               editor.selectionStart = editor.selectionEnd =
+                  start + tabSpaces.length;
+            }
+         } else {
+            // Multi-line selection: indent or outdent
+            const before = val.substring(0, start);
+            const after = val.substring(end);
+
+            // Find start of the first selected line
+            const lineStart = before.lastIndexOf('\n') + 1;
+            const fullSelectedText = val.substring(lineStart, end);
+            const lines = fullSelectedText.split('\n');
+
+            if (e.shiftKey) {
+               // Outdent: remove up to 2 leading spaces per line
+               const unindentedLines = lines.map((line) =>
+                  line.replace(/^(?:  | )/, ''),
+               );
+               const newText = unindentedLines.join('\n');
+               editor.value = val.substring(0, lineStart) + newText + after;
+               editor.selectionStart = lineStart;
+               editor.selectionEnd = lineStart + newText.length;
+            } else {
+               // Indent: add 2 leading spaces per line
+               const indentedLines = lines.map((line) => '  ' + line);
+               const newText = indentedLines.join('\n');
+               editor.value = val.substring(0, lineStart) + newText + after;
+               editor.selectionStart = lineStart;
+               editor.selectionEnd = lineStart + newText.length;
+            }
+         }
+         updateHighlight();
       } else if (e.key === 'Enter' && !e.shiftKey) {
          const val = editor.value.trim();
          if (val.endsWith(';')) {
@@ -615,7 +661,7 @@ export const bindConsoleEvents = (editor, historyPane) => {
             ?.addEventListener('click', () => {
                editor.value = snippet.sql;
                updateHighlight();
-               editor.focus();
+               editor.focus({ preventScroll: true });
             });
 
          cardEl
@@ -702,6 +748,114 @@ export const bindConsoleEvents = (editor, historyPane) => {
    window.addEventListener('drixio-snippets-updated', () => {
       if (snippetsDrawer && !snippetsDrawer.classList.contains('hidden')) {
          loadAndRenderSnippets();
+      }
+   });
+
+   // ==================== CONSOLE RESIZER LOGIC ====================
+   const resizerHandle = document.querySelector('.console-resizer-handle');
+   const inputPane = document.getElementById('console-input-pane');
+
+   if (resizerHandle && inputPane) {
+      let isDragging = false;
+      let startY = 0;
+      let startHeight = 0;
+
+      const onMouseDown = (e) => {
+         if (e.button !== 0) return;
+         isDragging = true;
+         startY = e.clientY;
+         startHeight = inputPane.getBoundingClientRect().height;
+         resizerHandle.classList.add('is-dragging');
+         document.body.style.userSelect = 'none';
+         document.body.style.cursor = 'row-resize';
+
+         window.addEventListener('mousemove', onMouseMove);
+         window.addEventListener('mouseup', onMouseUp);
+      };
+
+      const onMouseMove = (e) => {
+         if (!isDragging) return;
+         const deltaY = startY - e.clientY;
+         let newHeight = startHeight + deltaY;
+
+         const minH = 140;
+         const maxH = Math.max(minH, window.innerHeight * 0.75);
+         newHeight = Math.max(minH, Math.min(newHeight, maxH));
+
+         inputPane.style.height = `${newHeight}px`;
+      };
+
+      const onMouseUp = () => {
+         if (!isDragging) return;
+         isDragging = false;
+         resizerHandle.classList.remove('is-dragging');
+         document.body.style.userSelect = '';
+         document.body.style.cursor = '';
+
+         window.removeEventListener('mousemove', onMouseMove);
+         window.removeEventListener('mouseup', onMouseUp);
+
+         const finalH = inputPane.getBoundingClientRect().height;
+         localStorage.setItem(
+            'drixio_console_pane_height',
+            Math.round(finalH).toString(),
+         );
+      };
+
+      resizerHandle.addEventListener('mousedown', onMouseDown);
+   }
+
+   // ==================== FULLSCREEN MAXIMIZE LOGIC ====================
+   const expandBtn = document.getElementById('console-expand-editor-btn');
+   const expandBtnIcon = document.getElementById('console-expand-btn-icon');
+
+   const toggleFullscreen = () => {
+      if (!inputPane) return;
+      const isFull = inputPane.classList.toggle('is-fullscreen');
+      const iconName = isFull ? 'close_fullscreen' : 'open_in_full';
+      if (expandBtnIcon) expandBtnIcon.textContent = iconName;
+      if (expandBtn) {
+         expandBtn.title = isFull
+            ? 'Exit Fullscreen (Esc)'
+            : 'Toggle Fullscreen Editor (Esc to exit)';
+      }
+
+      if (isFull) {
+         inputPane.dataset.prevHeight = inputPane.style.height;
+         inputPane.style.height = '';
+      } else {
+         if (inputPane.dataset.prevHeight) {
+            inputPane.style.height = inputPane.dataset.prevHeight;
+         }
+      }
+
+      setTimeout(() => {
+         editor.focus({ preventScroll: true });
+         updateHighlight();
+      }, 50);
+   };
+
+   if (expandBtn) expandBtn.onclick = toggleFullscreen;
+
+   const editorWrapper = document.querySelector('.sql-editor-wrapper');
+   if (editorWrapper) {
+      editorWrapper.addEventListener('click', (e) => {
+         if (
+            !e.target.closest('#console-expand-editor-btn') &&
+            !e.target.closest('#console-autocomplete-popup')
+         ) {
+            editor.focus({ preventScroll: true });
+         }
+      });
+   }
+
+   window.addEventListener('keydown', (e) => {
+      if (
+         e.key === 'Escape' &&
+         inputPane?.classList.contains('is-fullscreen')
+      ) {
+         e.preventDefault();
+         toggleFullscreen();
       }
    });
 };

@@ -34,6 +34,13 @@ export function loadSqlConsole(tableName, btnElement, container) {
         </div>
       </div>
 
+      <!-- Drag Resizer Bar -->
+      <div id="console-resizer" class="console-resizer">
+        <div class="console-resizer-handle" title="Drag to adjust editor height">
+          <div class="console-resizer-pill"></div>
+        </div>
+      </div>
+
       <div id="console-input-pane">
         <div class="console-editor-toolbar">
           <div class="editor-toolbar-left">
@@ -74,7 +81,11 @@ export function loadSqlConsole(tableName, btnElement, container) {
             <!-- Syntax Highlight Layer (Background) -->
             <div id="sql-highlight-layer" class="sql-editor"></div>
             <!-- Real Textarea (Foreground) -->
-            <textarea id="sql-editor" class="sql-editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+            <textarea id="sql-editor" class="sql-editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+            <!-- Right-Bottom Floating Expand Button -->
+            <button type="button" id="console-expand-editor-btn" class="console-editor-expand-btn" title="Toggle Fullscreen Editor (Esc to exit)">
+              <span class="material-symbols-outlined" id="console-expand-btn-icon" style="font-size: 14px;">open_in_full</span>
+            </button>
           </div>
         </div>
       </div>
@@ -114,7 +125,23 @@ export function loadSqlConsole(tableName, btnElement, container) {
    if (window.AppState.lastQuery) {
       editor.value = window.AppState.lastQuery;
    }
-   editor.focus();
+
+   const savedPaneHeight =
+      localStorage.getItem('drixio_console_pane_height') ||
+      localStorage.getItem('drixio_console_editor_height');
+   const inputPane = container.querySelector('#console-input-pane');
+   if (savedPaneHeight && inputPane) {
+      const parsedH = parseInt(savedPaneHeight, 10);
+      if (!isNaN(parsedH) && parsedH >= 140) {
+         inputPane.style.height = `${parsedH}px`;
+      }
+   }
+
+   const mainEl = document.querySelector('main');
+   if (mainEl) mainEl.scrollTop = 0;
+   window.scrollTo(0, 0);
+
+   editor.focus({ preventScroll: true });
 
    bindConsoleEvents(editor, historyPane);
 }

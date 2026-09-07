@@ -97,6 +97,8 @@ export class SqliteAdapter implements DBAdapter {
          from: string;
          table: string;
          to: string;
+         on_update?: string;
+         on_delete?: string;
       }[];
 
       const indexListQuery = db.prepare(`PRAGMA index_list(${quoted})`);
@@ -183,7 +185,22 @@ export class SqliteAdapter implements DBAdapter {
             defaultValue:
                col.dflt_value != null ? String(col.dflt_value) : undefined,
             enumValues: enumMap.get(col.name),
-            fkTarget: fk ? { table: fk.table, column: fk.to } : undefined,
+            fkTarget: fk
+               ? {
+                    table: fk.table,
+                    column: fk.to,
+                    onDelete:
+                       fk.on_delete &&
+                       fk.on_delete.toUpperCase() !== 'NO ACTION'
+                          ? fk.on_delete.toUpperCase()
+                          : undefined,
+                    onUpdate:
+                       fk.on_update &&
+                       fk.on_update.toUpperCase() !== 'NO ACTION'
+                          ? fk.on_update.toUpperCase()
+                          : undefined,
+                 }
+               : undefined,
          };
       });
    }
@@ -407,6 +424,18 @@ export class SqliteAdapter implements DBAdapter {
 
          if (col.fkTarget && col.fkTarget.table && col.fkTarget.column) {
             def += ` REFERENCES ${this.quoteIdentifier(col.fkTarget.table)}(${this.quoteIdentifier(col.fkTarget.column)})`;
+            if (
+               col.fkTarget.onDelete &&
+               col.fkTarget.onDelete.toUpperCase() !== 'NO ACTION'
+            ) {
+               def += ` ON DELETE ${col.fkTarget.onDelete.toUpperCase()}`;
+            }
+            if (
+               col.fkTarget.onUpdate &&
+               col.fkTarget.onUpdate.toUpperCase() !== 'NO ACTION'
+            ) {
+               def += ` ON UPDATE ${col.fkTarget.onUpdate.toUpperCase()}`;
+            }
          }
 
          if (col.isUnique && (!col.isPk || isCompositePk)) {

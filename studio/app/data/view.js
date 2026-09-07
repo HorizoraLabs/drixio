@@ -94,6 +94,8 @@ export async function loadTableData(
          window.loadTableStats?.();
          const rows = res.data.rows;
          const columns = res.data.columns;
+         window.DataGrid.rows = rows;
+         window.DataGrid.columns = columns;
          window.DataGrid.pagination.hasMore =
             rows.length === window.DataGrid.pagination.limit;
 

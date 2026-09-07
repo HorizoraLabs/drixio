@@ -112,14 +112,27 @@ export async function applySchemaChanges(
                let fkTarget = edits.fkTarget || col.fkTarget;
 
                const rawPk = (edits as any).isPk;
-               if (rawPk !== undefined) {
+               if (edits.fkTarget !== undefined) {
+                  fkTarget = edits.fkTarget;
+               } else if (rawPk !== undefined) {
                   if (typeof rawPk === 'string') {
                      isPk = rawPk.includes('PK') || rawPk.includes('PFK');
                      const fkMatch = rawPk.match(
-                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
                      );
                      if (fkMatch) {
-                        fkTarget = { table: fkMatch[1], column: fkMatch[2] };
+                        const act = fkMatch[3]
+                           ? fkMatch[3].toUpperCase()
+                           : undefined;
+                        fkTarget = {
+                           table: fkMatch[1],
+                           column: fkMatch[2],
+                           onDelete:
+                              act && act !== 'NO ACTION'
+                                 ? act
+                                 : col.fkTarget?.onDelete,
+                           onUpdate: col.fkTarget?.onUpdate,
+                        };
                      } else {
                         fkTarget = undefined;
                      }
@@ -163,14 +176,24 @@ export async function applySchemaChanges(
                let isPk = false;
                let fkTarget = ins.fkTarget;
                const rawInsPk = (ins as any).isPk;
-               if (rawInsPk !== undefined) {
+               if (ins.fkTarget !== undefined) {
+                  fkTarget = ins.fkTarget;
+               } else if (rawInsPk !== undefined) {
                   if (typeof rawInsPk === 'string') {
                      isPk = rawInsPk.includes('PK') || rawInsPk.includes('PFK');
                      const fkMatch = rawInsPk.match(
-                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
                      );
                      if (fkMatch) {
-                        fkTarget = { table: fkMatch[1], column: fkMatch[2] };
+                        const act = fkMatch[3]
+                           ? fkMatch[3].toUpperCase()
+                           : undefined;
+                        fkTarget = {
+                           table: fkMatch[1],
+                           column: fkMatch[2],
+                           onDelete:
+                              act && act !== 'NO ACTION' ? act : undefined,
+                        };
                      }
                   } else {
                      isPk = !!rawInsPk;

@@ -74,48 +74,64 @@ export function openSaveSnippetModal({
    const detectedParams = extractVariables(defaultSql);
 
    modal.innerHTML = /* html */ `
-    <div class="orm-modal-container" style="width: 720px; max-width: 95vw; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);">
-      <div class="modal-header" style="padding: 16px 24px;">
+    <div class="modal-container snippet-modal-container">
+      <div class="modal-header">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-size: 22px;">${isEdit ? 'edit_note' : 'bookmark_add'}</span>
-          <h3 class="m-0 text-16 font-semibold">${isEdit ? 'Edit Query Snippet' : 'Save Query as Snippet'}</h3>
+          <span class="material-symbols-outlined text-primary" style="font-size: 20px;">${isEdit ? 'edit_note' : 'bookmark_add'}</span>
+          <h3 class="m-0 text-15 font-semibold">${isEdit ? 'Edit Query Snippet' : 'Save Query as Snippet'}</h3>
         </div>
-        <button id="close-save-snippet-btn" class="modal-close-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
-      </div>
-
-      <div style="padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; background: var(--color-bg-primary);">
-        <div class="flex flex-col gap-1.5">
-          <label style="font-size: 13.5px; font-weight: 600; color: var(--color-text);">Title</label>
-          <input type="text" id="save-snippet-title" class="snippet-form-input" placeholder="e.g. Active Users by Status" value="${defaultTitle}" />
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <label style="font-size: 13.5px; font-weight: 600; color: var(--color-text);">Description <span style="font-weight: 400; color: var(--color-text-soft); font-size: 12.5px;">(Optional)</span></label>
-          <input type="text" id="save-snippet-desc" class="snippet-form-input" placeholder="e.g. Summarizes user counts with role filter" value="${defaultDescription}" />
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <label style="font-size: 13.5px; font-weight: 600; color: var(--color-text);">Tags <span style="font-weight: 400; color: var(--color-text-soft); font-size: 12.5px;">(Comma separated)</span></label>
-          <input type="text" id="save-snippet-tags" class="snippet-form-input" placeholder="e.g. users, metrics, cleanup" value="${defaultTags.join(', ')}" />
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center justify-between">
-            <label style="font-size: 13.5px; font-weight: 600; color: var(--color-text);">SQL Query</label>
-            <span id="save-snippet-param-badges" class="text-12" style="color: var(--color-primary); font-family: var(--font-mono); font-weight: 500;">
-              ${detectedParams.length > 0 ? `Variables detected: ${detectedParams.map((p) => `:${p}`).join(', ')}` : ''}
-            </span>
-          </div>
-          <textarea id="save-snippet-sql" class="snippet-form-textarea" placeholder="SELECT * FROM table...">${defaultSql}</textarea>
-        </div>
-      </div>
-
-      <div class="modal-footer" style="padding: 14px 24px; justify-content: flex-end; gap: 10px;">
-        <button type="button" id="cancel-save-snippet-btn" class="btn-secondary" style="height: 38px; padding: 0 18px; font-size: 13px; border-radius: 6px;">Cancel</button>
-        <button type="button" id="confirm-save-snippet-btn" class="btn-primary" style="height: 38px; padding: 0 20px; font-size: 13px; border-radius: 6px; gap: 6px;">
-          <span class="material-symbols-outlined" style="font-size: 17px;">check</span>
-          <span>${isEdit ? 'Update Snippet' : 'Save Snippet'}</span>
+        <button type="button" id="close-save-snippet-btn" class="modal-close-btn" title="Close">
+          <span class="material-symbols-outlined">close</span>
         </button>
+      </div>
+
+      <div class="snippet-modal-body">
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>Title <span style="color: var(--color-error); font-size: 11px;">*</span></span>
+          </div>
+          <input type="text" id="save-snippet-title" class="snippet-input" placeholder="e.g. Active Users by Status" value="${defaultTitle}" autofocus />
+        </div>
+
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>Description</span>
+            <span class="snippet-field-hint">Optional</span>
+          </div>
+          <input type="text" id="save-snippet-desc" class="snippet-input" placeholder="e.g. Summarizes user counts with role filter" value="${defaultDescription}" />
+        </div>
+
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>Tags</span>
+            <span class="snippet-field-hint">Comma separated</span>
+          </div>
+          <input type="text" id="save-snippet-tags" class="snippet-input" placeholder="e.g. users, metrics, cleanup" value="${defaultTags.join(', ')}" />
+        </div>
+
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>SQL Query <span style="color: var(--color-error); font-size: 11px;">*</span></span>
+            <div id="save-snippet-param-badges" class="snippet-badges-wrap">
+              ${detectedParams.map((p) => `<span class="snippet-param-badge">:${p}</span>`).join('')}
+            </div>
+          </div>
+          <textarea id="save-snippet-sql" class="snippet-textarea" placeholder="SELECT * FROM table...">${defaultSql}</textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="text-11 text-soft flex items-center gap-1" style="user-select: none;">
+          <span class="material-symbols-outlined" style="font-size: 14px;">keyboard</span>
+          <span>Ctrl + Enter to save</span>
+        </div>
+        <div class="snippet-footer-actions">
+          <button type="button" id="cancel-save-snippet-btn" class="btn-secondary">Cancel</button>
+          <button type="button" id="confirm-save-snippet-btn" class="btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+            <span id="confirm-save-snippet-btn-text">${isEdit ? 'Update Snippet' : 'Save Snippet'}</span>
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -129,6 +145,10 @@ export function openSaveSnippetModal({
 
    const handleKeydown = (e) => {
       if (e.key === 'Escape') closeFn();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+         e.preventDefault();
+         confirmBtn.click();
+      }
    };
    document.addEventListener('keydown', handleKeydown);
 
@@ -145,20 +165,27 @@ export function openSaveSnippetModal({
    const sqlTextarea = document.getElementById('save-snippet-sql');
    const paramBadges = document.getElementById('save-snippet-param-badges');
    const confirmBtn = document.getElementById('confirm-save-snippet-btn');
+   const confirmBtnText = document.getElementById(
+      'confirm-save-snippet-btn-text',
+   );
 
    sqlTextarea.oninput = () => {
       const params = extractVariables(sqlTextarea.value);
-      paramBadges.textContent =
-         params.length > 0
-            ? `Variables: ${params.map((p) => `:${p}`).join(', ')}`
-            : '';
+      paramBadges.innerHTML = params
+         .map((p) => `<span class="snippet-param-badge">:${p}</span>`)
+         .join('');
    };
 
    confirmBtn.onclick = async () => {
       const title = titleInput.value.trim();
       const sql = sqlTextarea.value.trim();
       if (!sql) {
-         alert('SQL query cannot be empty.');
+         if (window.showToast) {
+            window.showToast('SQL query cannot be empty.', 'error');
+         } else {
+            alert('SQL query cannot be empty.');
+         }
+         sqlTextarea.focus();
          return;
       }
 
@@ -169,7 +196,7 @@ export function openSaveSnippetModal({
          .filter(Boolean);
 
       confirmBtn.disabled = true;
-      confirmBtn.textContent = 'Saving...';
+      if (confirmBtnText) confirmBtnText.textContent = 'Saving...';
 
       try {
          let res;
@@ -201,13 +228,28 @@ export function openSaveSnippetModal({
             if (onSaved) onSaved(res.data);
             closeFn();
          } else {
-            alert(`Failed to save snippet: ${res.error}`);
+            if (window.showToast) {
+               window.showToast(
+                  `Failed to save snippet: ${res.error}`,
+                  'error',
+               );
+            } else {
+               alert(`Failed to save snippet: ${res.error}`);
+            }
          }
       } catch (err) {
-         alert(`Error saving snippet: ${err.message}`);
+         if (window.showToast) {
+            window.showToast(`Error saving snippet: ${err.message}`, 'error');
+         } else {
+            alert(`Error saving snippet: ${err.message}`);
+         }
       } finally {
          confirmBtn.disabled = false;
-         confirmBtn.textContent = isEdit ? 'Update Snippet' : 'Save Snippet';
+         if (confirmBtnText) {
+            confirmBtnText.textContent = isEdit
+               ? 'Update Snippet'
+               : 'Save Snippet';
+         }
       }
    };
 
@@ -232,45 +274,62 @@ export function openParametricQueryModal({ snippet, onExecute }) {
    modal.className = 'modal-overlay';
 
    modal.innerHTML = /* html */ `
-    <div class="orm-modal-container" style="width: 660px; max-width: 95vw; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);">
-      <div class="modal-header" style="padding: 16px 24px;">
+    <div class="modal-container snippet-modal-container" style="width: 600px;">
+      <div class="modal-header">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-size: 22px;">tune</span>
-          <h3 class="m-0 text-16 font-semibold">Run Query with Parameters</h3>
+          <span class="material-symbols-outlined text-primary" style="font-size: 20px;">tune</span>
+          <h3 class="m-0 text-15 font-semibold">Run Query with Parameters</h3>
         </div>
-        <button id="close-param-modal-btn" class="modal-close-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
-      </div>
-
-      <div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; background: var(--color-bg-primary);">
-        <div class="text-13 font-medium" style="color: var(--color-text-secondary);">
-          Query: <b style="color: var(--color-text);">${snippet.title}</b>
-        </div>
-
-        <div id="param-fields-container" style="display: flex; flex-direction: column; gap: 12px;">
-          ${params
-             .map(
-                (p) => /* html */ `
-            <div class="flex items-center gap-3">
-              <label style="width: 140px; font-size: 13px; font-family: var(--font-mono); font-weight: 600; color: var(--color-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">:${p}</label>
-              <input type="text" class="snippet-form-input param-input" data-param="${p}" placeholder="Enter value for :${p}" style="height: 42px; font-size: 13.5px; flex: 1;" />
-            </div>
-          `,
-             )
-             .join('')}
-        </div>
-
-        <div class="flex flex-col gap-1" style="margin-top: 6px;">
-          <label style="font-size: 12px; font-weight: 600; color: var(--color-text-soft); text-transform: uppercase;">Preview SQL</label>
-          <pre id="param-preview-sql" class="diff-sql-pre" style="min-height: 120px; height: 140px; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.55; font-family: var(--font-mono); overflow-y: auto;"></pre>
-        </div>
-      </div>
-
-      <div class="modal-footer" style="padding: 14px 24px; justify-content: flex-end; gap: 10px;">
-        <button type="button" id="cancel-param-btn" class="btn-secondary" style="height: 38px; padding: 0 18px; font-size: 13px; border-radius: 6px;">Cancel</button>
-        <button type="button" id="confirm-run-param-btn" class="btn-primary" style="height: 38px; padding: 0 20px; font-size: 13px; border-radius: 6px; gap: 6px;">
-          <span class="material-symbols-outlined" style="font-size: 17px;">play_arrow</span>
-          <span>Execute Query</span>
+        <button type="button" id="close-param-modal-btn" class="modal-close-btn" title="Close">
+          <span class="material-symbols-outlined">close</span>
         </button>
+      </div>
+
+      <div class="snippet-modal-body" style="gap: 14px;">
+        <div class="flex items-center gap-2 text-12" style="color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--color-border);">
+          <span class="material-symbols-outlined text-primary" style="font-size: 16px;">bookmark</span>
+          <span>Query: <b style="color: var(--color-text);">${snippet.title}</b></span>
+        </div>
+
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>Parameters (${params.length})</span>
+            <span class="snippet-field-hint">Fill values for placeholders</span>
+          </div>
+          <div id="param-fields-container" style="display: flex; flex-direction: column; gap: 8px;">
+            ${params
+               .map(
+                  (p) => /* html */ `
+              <div class="flex items-center gap-2">
+                <span class="snippet-param-badge" style="width: 100px; justify-content: center; height: 32px; box-sizing: border-box; font-size: 12px;">:${p}</span>
+                <input type="text" class="snippet-input param-input" data-param="${p}" placeholder="Enter value for :${p}" style="flex: 1; height: 32px; font-size: 12.5px;" />
+              </div>
+            `,
+               )
+               .join('')}
+          </div>
+        </div>
+
+        <div class="snippet-field-group">
+          <div class="snippet-field-label">
+            <span>Preview SQL</span>
+          </div>
+          <pre id="param-preview-sql" class="diff-sql-pre" style="min-height: 100px; height: 120px; border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.5; font-family: var(--font-mono); overflow-y: auto; background: var(--color-bg-secondary-dark);"></pre>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="text-11 text-soft flex items-center gap-1" style="user-select: none;">
+          <span class="material-symbols-outlined" style="font-size: 14px;">keyboard</span>
+          <span>Enter to execute</span>
+        </div>
+        <div class="snippet-footer-actions">
+          <button type="button" id="cancel-param-btn" class="btn-secondary">Cancel</button>
+          <button type="button" id="confirm-run-param-btn" class="btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">play_arrow</span>
+            <span>Execute Query</span>
+          </button>
+        </div>
       </div>
     </div>
   `;

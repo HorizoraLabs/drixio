@@ -288,13 +288,41 @@ export async function openPkFkModal(td, currentText) {
    let isFk = false;
    let fkTable = '';
    let fkCol = '';
+   let fkOnDelete = 'NO ACTION';
+   let fkOnUpdate = 'NO ACTION';
+
+   const origCol = (window.SchemaGrid?.schema || []).find(
+      (c) => c.name === colName,
+   );
+   if (origCol?.fkTarget) {
+      fkTable = origCol.fkTarget.table || '';
+      fkCol = origCol.fkTarget.column || '';
+      if (origCol.fkTarget.onDelete) fkOnDelete = origCol.fkTarget.onDelete;
+      if (origCol.fkTarget.onUpdate) fkOnUpdate = origCol.fkTarget.onUpdate;
+      isFk = true;
+   }
+
+   const pendingFk =
+      isNewRow && insertIdx !== null
+         ? window.SchemaGrid?.pendingInserts?.[insertIdx]?.fkTarget
+         : colName
+           ? window.SchemaGrid?.pendingEdits?.[colName]?.fkTarget
+           : undefined;
+   if (pendingFk) {
+      if (pendingFk.table) fkTable = pendingFk.table;
+      if (pendingFk.column) fkCol = pendingFk.column;
+      if (pendingFk.onDelete) fkOnDelete = pendingFk.onDelete;
+      if (pendingFk.onUpdate) fkOnUpdate = pendingFk.onUpdate;
+      isFk = true;
+   }
 
    const fkMatch = effectiveVal.match(
-      /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i,
+      /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
    );
    if (fkMatch) {
       fkTable = fkMatch[1];
       fkCol = fkMatch[2];
+      if (fkMatch[3]) fkOnDelete = fkMatch[3].toUpperCase();
       isFk = true;
    } else if (effectiveVal.includes('FK') || effectiveVal.includes('PFK')) {
       isFk = true;
@@ -368,6 +396,33 @@ export async function openPkFkModal(td, currentText) {
                   <option value="">Select a table first</option>
                 </select>
                 <span class="material-symbols-outlined key-select-arrow">expand_more</span>
+              </div>
+            </div>
+
+            <div class="key-field-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <label class="key-field-label">On Delete</label>
+                <div class="key-select-wrapper">
+                  <select id="modal-fk-ondelete" class="key-select">
+                    <option value="NO ACTION" ${fkOnDelete === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
+                    <option value="CASCADE" ${fkOnDelete === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
+                    <option value="RESTRICT" ${fkOnDelete === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
+                    <option value="SET NULL" ${fkOnDelete === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
+                  </select>
+                  <span class="material-symbols-outlined key-select-arrow">expand_more</span>
+                </div>
+              </div>
+              <div>
+                <label class="key-field-label">On Update</label>
+                <div class="key-select-wrapper">
+                  <select id="modal-fk-onupdate" class="key-select">
+                    <option value="NO ACTION" ${fkOnUpdate === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
+                    <option value="CASCADE" ${fkOnUpdate === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
+                    <option value="RESTRICT" ${fkOnUpdate === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
+                    <option value="SET NULL" ${fkOnUpdate === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
+                  </select>
+                  <span class="material-symbols-outlined key-select-arrow">expand_more</span>
+                </div>
               </div>
             </div>
           </div>
@@ -546,14 +601,28 @@ export async function openPkFkModal(td, currentText) {
       const t = tableSelect.value;
       const c = colSelect.value;
 
+      const onDeleteSelect = document.getElementById('modal-fk-ondelete');
+      const onUpdateSelect = document.getElementById('modal-fk-onupdate');
+      const chosenOnDelete = onDeleteSelect?.value || 'NO ACTION';
+      const chosenOnUpdate = onUpdateSelect?.value || 'NO ACTION';
+
       if (
          pkChecked === isPk &&
          fkChecked === isFk &&
-         (!fkChecked || (t === fkTable && c === fkCol))
+         (!fkChecked ||
+            (t === fkTable &&
+               c === fkCol &&
+               chosenOnDelete === fkOnDelete &&
+               chosenOnUpdate === fkOnUpdate))
       ) {
          closeFn();
          return;
       }
+
+      const actionTag =
+         chosenOnDelete && chosenOnDelete !== 'NO ACTION'
+            ? ` (${chosenOnDelete})`
+            : '';
 
       let newVal = '';
       if (pkChecked && fkChecked) {
@@ -570,7 +639,7 @@ export async function openPkFkModal(td, currentText) {
             }
             return;
          }
-         newVal = `PFK: ${t}.${c}`;
+         newVal = `PFK: ${t}.${c}${actionTag}`;
       } else if (pkChecked) {
          newVal = 'PK';
       } else if (fkChecked) {
@@ -587,7 +656,29 @@ export async function openPkFkModal(td, currentText) {
             }
             return;
          }
-         newVal = `FK: ${t}.${c}`;
+         newVal = `FK: ${t}.${c}${actionTag}`;
+      }
+
+      const fkObj =
+         fkChecked && t && c
+            ? {
+                 table: t,
+                 column: c,
+                 onDelete:
+                    chosenOnDelete !== 'NO ACTION' ? chosenOnDelete : undefined,
+                 onUpdate:
+                    chosenOnUpdate !== 'NO ACTION' ? chosenOnUpdate : undefined,
+              }
+            : null;
+
+      if (isNewRow && insertIdx !== null) {
+         if (!window.SchemaGrid.pendingInserts[insertIdx])
+            window.SchemaGrid.pendingInserts[insertIdx] = {};
+         window.SchemaGrid.pendingInserts[insertIdx].fkTarget = fkObj;
+      } else if (colName) {
+         if (!window.SchemaGrid.pendingEdits[colName])
+            window.SchemaGrid.pendingEdits[colName] = {};
+         window.SchemaGrid.pendingEdits[colName].fkTarget = fkObj;
       }
 
       window.SchemaGrid.currentTransaction = [];

@@ -12,7 +12,12 @@ export interface ColumnSchema {
    isUnique?: boolean;
    defaultValue?: string;
    enumValues?: string[];
-   fkTarget?: { table: string; column: string };
+   fkTarget?: {
+      table: string;
+      column: string;
+      onDelete?: string;
+      onUpdate?: string;
+   };
 }
 
 export interface TableSchemaInfo {

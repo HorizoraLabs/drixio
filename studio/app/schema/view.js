@@ -210,14 +210,46 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                         const isPk = !!col.isPk;
                         const isFk = !!col.fkTarget;
                         if (isPk && isFk) {
-                           safeValForAttr = `PFK: ${col.fkTarget.table}.${col.fkTarget.column}`;
-                           safeValForHtml = `<span class="col-badge badge-pfk" title="Primary Foreign Key (Composite Key referencing ${col.fkTarget.table}.${col.fkTarget.column})">PFK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}</span>`;
+                           const actionTag =
+                              col.fkTarget.onDelete &&
+                              col.fkTarget.onDelete !== 'NO ACTION'
+                                 ? ` (${col.fkTarget.onDelete})`
+                                 : '';
+                           const tooltipRules = [
+                              col.fkTarget.onDelete
+                                 ? `ON DELETE ${col.fkTarget.onDelete}`
+                                 : '',
+                              col.fkTarget.onUpdate
+                                 ? `ON UPDATE ${col.fkTarget.onUpdate}`
+                                 : '',
+                           ]
+                              .filter(Boolean)
+                              .join(', ');
+                           const titleStr = `Primary Foreign Key (Composite Key referencing ${col.fkTarget.table}.${col.fkTarget.column}${tooltipRules ? ` [${tooltipRules}]` : ''})`;
+                           safeValForAttr = `PFK: ${col.fkTarget.table}.${col.fkTarget.column}${actionTag}`;
+                           safeValForHtml = `<span class="col-badge badge-pfk" title="${titleStr}">PFK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}${actionTag}</span>`;
                         } else if (isPk) {
                            safeValForAttr = 'PK';
                            safeValForHtml = `<span class="col-badge badge-pk">PK</span>`;
                         } else if (isFk) {
-                           safeValForAttr = `FK: ${col.fkTarget.table}.${col.fkTarget.column}`;
-                           safeValForHtml = `<span class="col-badge badge-fk" title="References ${col.fkTarget.table}.${col.fkTarget.column}">FK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}</span>`;
+                           const actionTag =
+                              col.fkTarget.onDelete &&
+                              col.fkTarget.onDelete !== 'NO ACTION'
+                                 ? ` (${col.fkTarget.onDelete})`
+                                 : '';
+                           const tooltipRules = [
+                              col.fkTarget.onDelete
+                                 ? `ON DELETE ${col.fkTarget.onDelete}`
+                                 : '',
+                              col.fkTarget.onUpdate
+                                 ? `ON UPDATE ${col.fkTarget.onUpdate}`
+                                 : '',
+                           ]
+                              .filter(Boolean)
+                              .join(', ');
+                           const titleStr = `References ${col.fkTarget.table}.${col.fkTarget.column}${tooltipRules ? ` [${tooltipRules}]` : ''}`;
+                           safeValForAttr = `FK: ${col.fkTarget.table}.${col.fkTarget.column}${actionTag}`;
+                           safeValForHtml = `<span class="col-badge badge-fk" title="${titleStr}">FK &rarr; ${col.fkTarget.table}.${col.fkTarget.column}${actionTag}</span>`;
                         } else {
                            safeValForAttr = '-';
                            safeValForHtml = `<span class="text-soft">-</span>`;

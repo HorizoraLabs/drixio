@@ -122,17 +122,45 @@ export class PostgresAdapter implements DBAdapter {
                 AND tc2.table_name = c.table_name
                 AND tc2.table_schema = c.table_schema
                 AND ccu2.column_name = c.column_name) as is_unique,
-             (SELECT ccu.table_name || '.' || ccu.column_name
-              FROM information_schema.table_constraints tc 
-              JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-              JOIN information_schema.constraint_column_usage ccu
-                ON ccu.constraint_name = tc.constraint_name
-              WHERE tc.constraint_type = 'FOREIGN KEY' 
-                AND tc.table_name = c.table_name
-                AND tc.table_schema = c.table_schema
-                AND kcu.column_name = c.column_name
-              LIMIT 1) as fk_target
+              (SELECT ccu.table_name || '.' || ccu.column_name
+               FROM information_schema.table_constraints tc 
+               JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+               JOIN information_schema.constraint_column_usage ccu
+                 ON ccu.constraint_name = tc.constraint_name
+                 AND ccu.table_schema = tc.table_schema
+               WHERE tc.constraint_type = 'FOREIGN KEY' 
+                 AND tc.table_name = c.table_name
+                 AND tc.table_schema = c.table_schema
+                 AND kcu.column_name = c.column_name
+               LIMIT 1) as fk_target,
+              (SELECT rc.delete_rule
+               FROM information_schema.table_constraints tc 
+               JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+               JOIN information_schema.referential_constraints rc
+                 ON rc.constraint_name = tc.constraint_name
+                 AND rc.constraint_schema = tc.constraint_schema
+               WHERE tc.constraint_type = 'FOREIGN KEY' 
+                 AND tc.table_name = c.table_name
+                 AND tc.table_schema = c.table_schema
+                 AND kcu.column_name = c.column_name
+               LIMIT 1) as fk_on_delete,
+              (SELECT rc.update_rule
+               FROM information_schema.table_constraints tc 
+               JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+               JOIN information_schema.referential_constraints rc
+                 ON rc.constraint_name = tc.constraint_name
+                 AND rc.constraint_schema = tc.constraint_schema
+               WHERE tc.constraint_type = 'FOREIGN KEY' 
+                 AND tc.table_name = c.table_name
+                 AND tc.table_schema = c.table_schema
+                 AND kcu.column_name = c.column_name
+               LIMIT 1) as fk_on_update
       FROM information_schema.columns c
       WHERE c.table_name = $1 AND c.table_schema = 'public'
       ORDER BY c.ordinal_position;
@@ -173,7 +201,20 @@ export class PostgresAdapter implements DBAdapter {
          let fkTarget;
          if (col.fk_target) {
             const parts = col.fk_target.split('.');
-            fkTarget = { table: parts[0], column: parts[1] };
+            fkTarget = {
+               table: parts[0],
+               column: parts[1],
+               onDelete:
+                  col.fk_on_delete &&
+                  col.fk_on_delete.toUpperCase() !== 'NO ACTION'
+                     ? col.fk_on_delete.toUpperCase()
+                     : undefined,
+               onUpdate:
+                  col.fk_on_update &&
+                  col.fk_on_update.toUpperCase() !== 'NO ACTION'
+                     ? col.fk_on_update.toUpperCase()
+                     : undefined,
+            };
          }
          return {
             name: col.column_name,

@@ -106,11 +106,15 @@ export class MysqlAdapter implements DBAdapter {
 
       const [fkRows] = await pool.query(
          `
-      SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-      WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = ? 
-        AND REFERENCED_TABLE_NAME IS NOT NULL
+      SELECT kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME,
+             rc.DELETE_RULE, rc.UPDATE_RULE
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      LEFT JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+        ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+        AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+      WHERE kcu.TABLE_SCHEMA = DATABASE() 
+        AND kcu.TABLE_NAME = ? 
+        AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
     `,
          [tableName],
       );
@@ -179,6 +183,16 @@ export class MysqlAdapter implements DBAdapter {
                ? {
                     table: fk.REFERENCED_TABLE_NAME,
                     column: fk.REFERENCED_COLUMN_NAME,
+                    onDelete:
+                       fk.DELETE_RULE &&
+                       fk.DELETE_RULE.toUpperCase() !== 'NO ACTION'
+                          ? fk.DELETE_RULE.toUpperCase()
+                          : undefined,
+                    onUpdate:
+                       fk.UPDATE_RULE &&
+                       fk.UPDATE_RULE.toUpperCase() !== 'NO ACTION'
+                          ? fk.UPDATE_RULE.toUpperCase()
+                          : undefined,
                  }
                : undefined,
          };

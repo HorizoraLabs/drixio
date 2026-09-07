@@ -11,9 +11,107 @@ export const bindConsoleEvents = (editor, historyPane) => {
    // History Navigation State
    let historyIndex = -1;
    let draftQuery = '';
+   let cachedSelectedSql = '';
+
+   // Intelligently parse SQL statements separated by semicolons (ignoring semicolons inside quotes)
+   const getStatementAtCursor = (text, cursorIndex) => {
+      if (!text || !text.includes(';')) return text.trim();
+      const statements = [];
+      let start = 0;
+      let inSingle = false;
+      let inDouble = false;
+
+      for (let i = 0; i < text.length; i++) {
+         const ch = text[i];
+         const prev = i > 0 ? text[i - 1] : '';
+         if (ch === "'" && !inDouble && prev !== '\\') {
+            inSingle = !inSingle;
+         } else if (ch === '"' && !inSingle && prev !== '\\') {
+            inDouble = !inDouble;
+         } else if (ch === ';' && !inSingle && !inDouble) {
+            statements.push({
+               start,
+               end: i + 1,
+               sql: text.slice(start, i + 1).trim(),
+            });
+            start = i + 1;
+         }
+      }
+
+      if (start < text.length) {
+         const remaining = text.slice(start).trim();
+         if (remaining) {
+            statements.push({ start, end: text.length, sql: remaining });
+         }
+      }
+
+      const activeStmt = statements.find(
+         (s) => cursorIndex >= s.start && cursorIndex <= s.end,
+      );
+      return (
+         activeStmt?.sql ||
+         statements[statements.length - 1]?.sql ||
+         text.trim()
+      );
+   };
+
+   const updateSelectionState = () => {
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const runBtnText = document.getElementById('run-sql-btn-text');
+      const runBtn = document.getElementById('run-sql-btn');
+
+      if (
+         typeof start === 'number' &&
+         typeof end === 'number' &&
+         start !== end
+      ) {
+         const selected = editor.value.substring(start, end).trim();
+         if (selected) {
+            cachedSelectedSql = selected;
+            if (runBtnText) runBtnText.textContent = 'Run Selection';
+            if (runBtn) {
+               runBtn.title = 'Run Selected SQL (Ctrl+Enter)';
+               runBtn.classList.add('has-selection');
+            }
+            return;
+         }
+      }
+
+      cachedSelectedSql = '';
+      if (runBtnText) runBtnText.textContent = 'Run';
+      if (runBtn) {
+         runBtn.title = 'Run SQL Query (Ctrl+Enter)';
+         runBtn.classList.remove('has-selection');
+      }
+   };
 
    const executeAndReset = () => {
-      runConsoleQuery(null, editor, historyPane);
+      let targetSql = cachedSelectedSql;
+      if (!targetSql) {
+         const start = editor.selectionStart;
+         const end = editor.selectionEnd;
+         if (
+            typeof start === 'number' &&
+            typeof end === 'number' &&
+            start !== end
+         ) {
+            targetSql = editor.value.substring(start, end).trim();
+         }
+      }
+
+      if (!targetSql) {
+         const fullText = editor.value.trim();
+         if (fullText) {
+            targetSql =
+               getStatementAtCursor(editor.value, editor.selectionStart) ||
+               fullText;
+         }
+      }
+
+      if (targetSql) {
+         runConsoleQuery(targetSql, editor, historyPane);
+      }
       historyIndex = -1;
       draftQuery = '';
       updateHighlight();
@@ -379,6 +477,25 @@ export const bindConsoleEvents = (editor, historyPane) => {
    editor.addEventListener('input', () => {
       updateHighlight();
       checkAutocomplete();
+      updateSelectionState();
+   });
+
+   editor.addEventListener('select', updateSelectionState);
+   editor.addEventListener('mouseup', updateSelectionState);
+   editor.addEventListener('keyup', (e) => {
+      if (
+         e.key.startsWith('Arrow') ||
+         e.key === 'Home' ||
+         e.key === 'End' ||
+         e.shiftKey
+      ) {
+         updateSelectionState();
+      }
+   });
+   document.addEventListener('selectionchange', () => {
+      if (document.activeElement === editor) {
+         updateSelectionState();
+      }
    });
 
    editor.addEventListener('blur', () => {
@@ -581,7 +698,11 @@ export const bindConsoleEvents = (editor, historyPane) => {
       }
 
       if (list.length === 0) {
-         snippetsList.innerHTML = `<div class="p-3 text-12 text-center" style="color: var(--color-text-soft);">No snippets found.</div>`;
+         snippetsList.innerHTML = `
+          <div class="snippets-empty-state">
+            <span class="material-symbols-outlined">bookmark_border</span>
+            <span>No snippets found</span>
+          </div>`;
          return;
       }
 
@@ -599,31 +720,31 @@ export const bindConsoleEvents = (editor, historyPane) => {
             <div class="snippet-card" data-id="${s.id}">
               <div class="snippet-card-title-row">
                 <span class="snippet-card-title" title="${s.title}">${s.title}</span>
-                ${s.isBuiltin ? `<span class="snippet-tag-pill" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">Built-in</span>` : ''}
+                ${s.isBuiltin ? `<span class="snippet-badge-builtin">Built-in</span>` : ''}
               </div>
               ${s.description ? `<div class="snippet-card-desc">${s.description}</div>` : ''}
               ${tagsHtml ? `<div class="snippet-card-tags">${tagsHtml}</div>` : ''}
               <pre class="snippet-sql-preview">${escapedSql}</pre>
               <div class="snippet-card-actions">
                 <div class="snippet-card-actions-left">
-                  <button type="button" class="header-btn primary snip-run-btn" style="height: 24px; padding: 0 8px; font-size: 11px; gap: 3px;" title="${hasParams ? 'Run with Parameters' : 'Run Query'}">
+                  <button type="button" class="snippet-btn primary snip-run-btn" title="${hasParams ? 'Run with Parameters' : 'Run Query'}">
                     <span class="material-symbols-outlined" style="font-size: 14px;">play_arrow</span>
                     <span>Run</span>
                   </button>
-                  <button type="button" class="header-btn secondary snip-insert-btn" style="height: 24px; padding: 0 8px; font-size: 11px; gap: 3px;" title="Insert into Editor">
+                  <button type="button" class="snippet-btn secondary snip-insert-btn" title="Insert into Editor">
                     <span class="material-symbols-outlined" style="font-size: 14px;">input</span>
                     <span>Insert</span>
                   </button>
                 </div>
                 <div class="snippet-card-actions-right">
-                  <button type="button" class="icon-btn snip-edit-btn" title="Edit Snippet">
-                    <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
+                  <button type="button" class="snippet-action-btn snip-edit-btn" title="Edit Snippet">
+                    <span class="material-symbols-outlined">edit</span>
                   </button>
                   ${
                      !s.isBuiltin
                         ? `
-                  <button type="button" class="icon-btn snip-delete-btn" title="Delete Snippet">
-                    <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-error);">delete</span>
+                  <button type="button" class="snippet-action-btn delete snip-delete-btn" title="Delete Snippet">
+                    <span class="material-symbols-outlined">delete</span>
                   </button>`
                         : ''
                   }

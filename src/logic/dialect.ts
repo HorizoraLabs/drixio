@@ -17,6 +17,7 @@ export class SqliteDialect implements Dialect {
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
       const lines = columns.map((col) => {
+         const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
          let typeStr = col.type;
          if (tLower === 'integer' || tLower === 'int') typeStr = 'INTEGER';
@@ -36,12 +37,13 @@ export class SqliteDialect implements Dialect {
             typeStr = `TEXT CHECK(${this.quoteIdentifier(col.name)} IN (${col.enumValues.map((v) => `'${this.escapeString(v)}'`).join(', ')}))`;
          }
 
-         if (col.isPk && (tLower.includes('int') || typeStr === 'INTEGER')) {
+         if (isPk && (tLower.includes('int') || typeStr === 'INTEGER')) {
             typeStr = 'INTEGER PRIMARY KEY AUTOINCREMENT';
-         } else if (col.isPk) {
+         } else if (isPk) {
             typeStr += ' PRIMARY KEY';
          } else {
             if (!col.nullable) typeStr += ' NOT NULL';
+            if (col.isUnique) typeStr += ' UNIQUE';
          }
 
          if (
@@ -60,11 +62,25 @@ export class SqliteDialect implements Dialect {
       });
 
       const fks = columns
-         .filter((col) => col.fkTarget)
-         .map(
-            (col) =>
-               `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`,
-         );
+         .filter(
+            (col) => col.fkTarget && col.fkTarget.table && col.fkTarget.column,
+         )
+         .map((col) => {
+            let fkStr = `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`;
+            if (
+               col.fkTarget!.onDelete &&
+               col.fkTarget!.onDelete !== 'NO ACTION'
+            ) {
+               fkStr += ` ON DELETE ${col.fkTarget!.onDelete}`;
+            }
+            if (
+               col.fkTarget!.onUpdate &&
+               col.fkTarget!.onUpdate !== 'NO ACTION'
+            ) {
+               fkStr += ` ON UPDATE ${col.fkTarget!.onUpdate}`;
+            }
+            return fkStr;
+         });
 
       if (fks.length > 0) {
          lines.push(...fks);
@@ -85,9 +101,10 @@ export class PostgresDialect implements Dialect {
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
       const lines = columns.map((col) => {
+         const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
          let typeStr = col.type;
-         if (col.isPk && (tLower === 'integer' || tLower === 'int')) {
+         if (isPk && (tLower === 'integer' || tLower === 'int')) {
             typeStr = 'SERIAL PRIMARY KEY';
          } else {
             if (tLower === 'integer' || tLower === 'int') typeStr = 'INTEGER';
@@ -102,8 +119,9 @@ export class PostgresDialect implements Dialect {
                typeStr = `VARCHAR(255) CHECK(${this.quoteIdentifier(col.name)} IN (${col.enumValues.map((v) => `'${this.escapeString(v)}'`).join(', ')}))`;
             }
 
-            if (col.isPk) typeStr += ' PRIMARY KEY';
-            if (!col.nullable && !col.isPk) typeStr += ' NOT NULL';
+            if (isPk) typeStr += ' PRIMARY KEY';
+            if (!col.nullable && !isPk) typeStr += ' NOT NULL';
+            if (col.isUnique && !isPk) typeStr += ' UNIQUE';
          }
 
          if (
@@ -122,11 +140,25 @@ export class PostgresDialect implements Dialect {
       });
 
       const fks = columns
-         .filter((col) => col.fkTarget)
-         .map(
-            (col) =>
-               `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`,
-         );
+         .filter(
+            (col) => col.fkTarget && col.fkTarget.table && col.fkTarget.column,
+         )
+         .map((col) => {
+            let fkStr = `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`;
+            if (
+               col.fkTarget!.onDelete &&
+               col.fkTarget!.onDelete !== 'NO ACTION'
+            ) {
+               fkStr += ` ON DELETE ${col.fkTarget!.onDelete}`;
+            }
+            if (
+               col.fkTarget!.onUpdate &&
+               col.fkTarget!.onUpdate !== 'NO ACTION'
+            ) {
+               fkStr += ` ON UPDATE ${col.fkTarget!.onUpdate}`;
+            }
+            return fkStr;
+         });
 
       if (fks.length > 0) {
          lines.push(...fks);
@@ -147,6 +179,7 @@ export class MysqlDialect implements Dialect {
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
       const lines = columns.map((col) => {
+         const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
          let typeStr = col.type;
          if (tLower === 'integer' || tLower === 'int') typeStr = 'INT';
@@ -162,13 +195,14 @@ export class MysqlDialect implements Dialect {
             typeStr = `VARCHAR(255) CHECK(${this.quoteIdentifier(col.name)} IN (${col.enumValues.map((v) => `'${this.escapeString(v)}'`).join(', ')}))`;
          }
 
-         if (col.isPk && (tLower.includes('int') || typeStr === 'INT')) {
+         if (isPk && (tLower.includes('int') || typeStr === 'INT')) {
             typeStr += ' AUTO_INCREMENT PRIMARY KEY';
-         } else if (col.isPk) {
+         } else if (isPk) {
             typeStr += ' PRIMARY KEY';
          }
 
-         if (!col.nullable && !col.isPk) typeStr += ' NOT NULL';
+         if (!col.nullable && !isPk) typeStr += ' NOT NULL';
+         if (col.isUnique && !isPk) typeStr += ' UNIQUE';
          if (
             col.defaultValue &&
             col.defaultValue !== 'AutoInc' &&
@@ -185,11 +219,25 @@ export class MysqlDialect implements Dialect {
       });
 
       const fks = columns
-         .filter((col) => col.fkTarget)
-         .map(
-            (col) =>
-               `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`,
-         );
+         .filter(
+            (col) => col.fkTarget && col.fkTarget.table && col.fkTarget.column,
+         )
+         .map((col) => {
+            let fkStr = `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`;
+            if (
+               col.fkTarget!.onDelete &&
+               col.fkTarget!.onDelete !== 'NO ACTION'
+            ) {
+               fkStr += ` ON DELETE ${col.fkTarget!.onDelete}`;
+            }
+            if (
+               col.fkTarget!.onUpdate &&
+               col.fkTarget!.onUpdate !== 'NO ACTION'
+            ) {
+               fkStr += ` ON UPDATE ${col.fkTarget!.onUpdate}`;
+            }
+            return fkStr;
+         });
 
       if (fks.length > 0) {
          lines.push(...fks);

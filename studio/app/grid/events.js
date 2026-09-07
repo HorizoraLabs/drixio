@@ -30,94 +30,249 @@ export const bindGridEvents = () => {
       if (isData && !window.DataGrid) return;
       if (isSchema && !window.SchemaGrid) return;
 
-      const rowHeader = e.target.closest('td.row-header');
-      if (!rowHeader) return;
+      const cell = e.target.closest('td.row-header, td.data-cell');
+      if (!cell) return;
+
+      // Do not override context menu if user is actively in an input/select
+      if (
+         e.target.tagName === 'INPUT' ||
+         e.target.tagName === 'SELECT' ||
+         e.target.tagName === 'TEXTAREA'
+      ) {
+         return;
+      }
 
       e.preventDefault();
-      const rowIdx = parseInt(rowHeader.dataset.rowIdx);
+      const rowIdx = parseInt(cell.dataset.rowIdx);
+      if (isNaN(rowIdx)) return;
 
-      const handleContextMenuAction = (actionType) => {
-         let rowsToProcess = [rowIdx];
-         const grid = isData ? window.DataGrid : window.SchemaGrid;
-         if (grid && grid.selection && grid.selection.startRow !== -1) {
-            const s = grid.selection;
-            const minR = Math.min(s.startRow, s.endRow);
-            const maxR = Math.max(s.startRow, s.endRow);
-            if (rowIdx >= minR && rowIdx <= maxR) {
-               rowsToProcess = [];
-               for (let i = minR; i <= maxR; i++) rowsToProcess.push(i);
+      let rowsToProcess = [rowIdx];
+      const grid = isData ? window.DataGrid : window.SchemaGrid;
+      if (grid && grid.selection && grid.selection.startRow !== -1) {
+         const s = grid.selection;
+         const minR = Math.min(s.startRow, s.endRow);
+         const maxR = Math.max(s.startRow, s.endRow);
+         if (rowIdx >= minR && rowIdx <= maxR) {
+            rowsToProcess = [];
+            for (let i = minR; i <= maxR; i++) rowsToProcess.push(i);
+         }
+      }
+
+      const getRowData = (rIdx) => {
+         if (!isData || !window.DataGrid) return null;
+         const rows = window.DataGrid.rows || [];
+         const pkCol = window.DataGrid.pkColumn;
+
+         let data = null;
+         if (rIdx < rows.length && rows[rIdx]) {
+            data = { ...rows[rIdx] };
+            const pkVal = pkCol ? data[pkCol] : null;
+            if (
+               pkVal !== null &&
+               pkVal !== undefined &&
+               window.DataGrid.pendingEdits?.[pkVal]
+            ) {
+               Object.assign(data, window.DataGrid.pendingEdits[pkVal]);
+            }
+         } else {
+            const insertIdx =
+               cell.dataset?.insertIndex !== undefined
+                  ? parseInt(cell.dataset.insertIndex)
+                  : rIdx - rows.length;
+            if (window.DataGrid.pendingInserts?.[insertIdx]) {
+               data = { ...window.DataGrid.pendingInserts[insertIdx] };
             }
          }
+         return data;
+      };
 
+      const copyRowsAsJson = async (rIndices) => {
+         const collected = rIndices.map((r) => getRowData(r)).filter(Boolean);
+         if (collected.length === 0) return;
+         const result = collected.length === 1 ? collected[0] : collected;
+         const jsonStr = JSON.stringify(result, null, 2);
+         try {
+            await navigator.clipboard.writeText(jsonStr);
+         } catch {
+            const ta = document.createElement('textarea');
+            ta.value = jsonStr;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+         }
+         window.showToast?.(
+            `Copied ${collected.length} row(s) as JSON!`,
+            'success',
+         );
+      };
+
+      const copyRowsAsSql = async (rIndices) => {
+         const collected = rIndices.map((r) => getRowData(r)).filter(Boolean);
+         if (collected.length === 0) return;
+         const tableName = window.AppState?.currentTable || 'table_name';
+         const dbType = window.AppState?.dbType || 'sqlite';
+         const q = (id) => (dbType === 'mysql' ? `\`${id}\`` : `"${id}"`);
+
+         const formatSqlVal = (val) => {
+            if (val === null || val === undefined) return 'NULL';
+            if (typeof val === 'number') return String(val);
+            if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+            if (typeof val === 'object')
+               return `'${JSON.stringify(val).replace(/'/g, "''")}'`;
+            const str = String(val);
+            if (str.toUpperCase() === 'NULL') return 'NULL';
+            return `'${str.replace(/'/g, "''")}'`;
+         };
+
+         const schema = window.DataGrid?.schema || [];
+         const colNames =
+            schema.length > 0
+               ? schema.map((c) => c.name)
+               : Object.keys(collected[0]);
+
+         const sqlLines = collected.map((row) => {
+            const vals = colNames.map((c) => formatSqlVal(row[c]));
+            return `INSERT INTO ${q(tableName)} (${colNames.map(q).join(', ')}) VALUES (${vals.join(', ')});`;
+         });
+
+         const sqlStr = sqlLines.join('\n');
+         try {
+            await navigator.clipboard.writeText(sqlStr);
+         } catch {
+            const ta = document.createElement('textarea');
+            ta.value = sqlStr;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+         }
+         window.showToast?.(
+            `Copied ${collected.length} row(s) as SQL INSERT!`,
+            'success',
+         );
+      };
+
+      const copyCellValue = async () => {
+         const val = cell.textContent || '';
+         try {
+            await navigator.clipboard.writeText(val);
+         } catch {
+            const ta = document.createElement('textarea');
+            ta.value = val;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+         }
+         window.showToast?.('Copied cell value!', 'success');
+      };
+
+      const handleContextMenuAction = (actionType) => {
          if (isData) {
-            {
-               window.DataGrid.currentTransaction = [];
-               if (actionType === 'delete') {
-                  rowsToProcess.forEach((r) => markRowDeleted(r));
-               } else if (actionType === 'duplicate') {
-                  duplicateDataRows(
-                     rowsToProcess,
-                     window.DataGrid.schema.map((c) => c.name),
+            window.DataGrid.currentTransaction = [];
+            if (actionType === 'delete') {
+               rowsToProcess.forEach((r) => markRowDeleted(r));
+            } else if (actionType === 'duplicate') {
+               duplicateDataRows(
+                  rowsToProcess,
+                  window.DataGrid.schema.map((c) => c.name),
+               );
+               setTimeout(() => {
+                  const tableContainer = document.getElementById(
+                     `data-grid-container-${window.AppState.currentTable}`,
                   );
-                  setTimeout(() => {
-                     const tableContainer = document.getElementById(
-                        `data-grid-container-${window.AppState.currentTable}`,
-                     );
-                     if (tableContainer)
-                        tableContainer.scrollTop = tableContainer.scrollHeight;
-                  }, 50);
-               }
-               if (window.DataGrid.currentTransaction.length > 0)
-                  window.DataGrid.history.push(
-                     window.DataGrid.currentTransaction,
-                  );
-               window.DataGrid.currentTransaction = null;
+                  if (tableContainer)
+                     tableContainer.scrollTop = tableContainer.scrollHeight;
+               }, 50);
             }
+            if (window.DataGrid.currentTransaction.length > 0)
+               window.DataGrid.history.push(window.DataGrid.currentTransaction);
+            window.DataGrid.currentTransaction = null;
          } else if (isSchema) {
-            {
-               window.SchemaGrid.currentTransaction = [];
-               if (actionType === 'delete') {
-                  rowsToProcess.forEach((r) => markSchemaRowDeleted(r));
-               } else if (actionType === 'duplicate') {
-                  duplicateSchemaRows(rowsToProcess, [
-                     'name',
-                     'type',
-                     'isPk',
-                     'nullable',
-                     'defaultValue',
-                     'Index',
-                  ]);
-                  setTimeout(() => {
-                     const tableContainer = document.getElementById(
-                        `schema-grid-container-${window.AppState.currentTable}`,
-                     );
-                     if (tableContainer)
-                        tableContainer.scrollTop = tableContainer.scrollHeight;
-                  }, 50);
-               }
-               if (window.SchemaGrid.currentTransaction.length > 0)
-                  window.SchemaGrid.history.push(
-                     window.SchemaGrid.currentTransaction,
+            window.SchemaGrid.currentTransaction = [];
+            if (actionType === 'delete') {
+               rowsToProcess.forEach((r) => markSchemaRowDeleted(r));
+            } else if (actionType === 'duplicate') {
+               duplicateSchemaRows(rowsToProcess, [
+                  'name',
+                  'type',
+                  'isPk',
+                  'nullable',
+                  'defaultValue',
+                  'Index',
+               ]);
+               setTimeout(() => {
+                  const tableContainer = document.getElementById(
+                     `schema-grid-container-${window.AppState.currentTable}`,
                   );
-               window.SchemaGrid.currentTransaction = null;
+                  if (tableContainer)
+                     tableContainer.scrollTop = tableContainer.scrollHeight;
+               }, 50);
             }
+            if (window.SchemaGrid.currentTransaction.length > 0)
+               window.SchemaGrid.history.push(
+                  window.SchemaGrid.currentTransaction,
+               );
+            window.SchemaGrid.currentTransaction = null;
          }
       };
 
-      showContextMenu(e, [
+      const menuItems = [];
+
+      if (cell.classList.contains('data-cell') && cell.textContent?.trim()) {
+         menuItems.push({
+            label: 'Copy Cell Value',
+            icon: 'content_paste',
+            action: () => copyCellValue(),
+         });
+         menuItems.push('divider');
+      }
+
+      if (isData) {
+         menuItems.push(
+            {
+               label:
+                  rowsToProcess.length > 1
+                     ? `Copy ${rowsToProcess.length} Rows as JSON`
+                     : 'Copy Row as JSON',
+               icon: 'data_object',
+               action: () => copyRowsAsJson(rowsToProcess),
+            },
+            {
+               label:
+                  rowsToProcess.length > 1
+                     ? `Copy ${rowsToProcess.length} Rows as SQL`
+                     : 'Copy Row as SQL (INSERT)',
+               icon: 'code',
+               action: () => copyRowsAsSql(rowsToProcess),
+            },
+            'divider',
+         );
+      }
+
+      menuItems.push(
          {
-            label: 'Duplicate Row(s)',
+            label:
+               rowsToProcess.length > 1
+                  ? `Duplicate ${rowsToProcess.length} Rows`
+                  : 'Duplicate Row',
             icon: 'content_copy',
             action: () => handleContextMenuAction('duplicate'),
          },
          'divider',
          {
-            label: 'Delete Row(s)',
+            label:
+               rowsToProcess.length > 1
+                  ? `Delete ${rowsToProcess.length} Rows`
+                  : 'Delete Row',
             icon: 'delete',
             danger: true,
             action: () => handleContextMenuAction('delete'),
          },
-      ]);
+      );
+
+      showContextMenu(e, menuItems);
    });
 
    document.addEventListener('keydown', (e) => {

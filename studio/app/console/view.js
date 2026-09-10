@@ -68,6 +68,10 @@ export function loadSqlConsole(tableName, btnElement, container) {
                 <span class="material-symbols-outlined" style="font-size: 14px;">backspace</span>
                 Clear
               </button>
+              <button type="button" id="explain-sql-btn" class="header-btn secondary" style="height: 28px; padding: 0 10px; font-size: 12px; gap: 5px;" title="Analyze Query Execution Plan (EXPLAIN)">
+                <span class="material-symbols-outlined" style="font-size: 15px; color: #10b981;">psychology</span>
+                <span>Explain</span>
+              </button>
               <button type="button" id="run-sql-btn" class="header-btn primary" style="height: 28px; padding: 0 12px; font-size: 12px;" title="Run SQL Query (Ctrl+Enter)">
                 <span class="material-symbols-outlined" style="font-size: 15px;">play_arrow</span>
                 <span id="run-sql-btn-text">Run</span>

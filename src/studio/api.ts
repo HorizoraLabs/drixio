@@ -151,9 +151,39 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
+   const detectHostEnvironment = (
+      cfg: DBConfig,
+   ): { isRemote: boolean; host: string; badgeLabel: string } => {
+      if (cfg.type === 'sqlite') {
+         return { isRemote: false, host: 'local', badgeLabel: 'LOCAL (SQLite)' };
+      }
+      if (cfg.type === 'mysql' || cfg.type === 'postgres') {
+         let host = 'localhost';
+         const match = cfg.targetUrl.match(/@([^:/@?]+)/);
+         if (match) host = match[1];
+
+         const isLocal =
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '::1' ||
+            host === '0.0.0.0' ||
+            host === 'host.docker.internal';
+
+         return {
+            isRemote: !isLocal,
+            host,
+            badgeLabel: isLocal
+               ? `LOCAL (${cfg.type.toUpperCase()})`
+               : `REMOTE (${host})`,
+         };
+      }
+      return { isRemote: false, host: '', badgeLabel: 'DISCONNECTED' };
+   };
+
    api.get('/config', (c) => {
       const isConnected =
          !!currentAdapter && currentDbConfig.type !== 'unknown';
+      const envInfo = detectHostEnvironment(currentDbConfig);
       return c.json({
          success: true,
          data: {
@@ -161,6 +191,9 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             dbType: isConnected ? currentDbConfig.type : 'none',
             dbName: isConnected ? getDbName() : 'No Database',
             targetUrl: currentDbConfig.targetUrl || '',
+            isRemote: envInfo.isRemote,
+            host: envInfo.host,
+            badgeLabel: isConnected ? envInfo.badgeLabel : 'DISCONNECTED',
          },
       });
    });
@@ -620,6 +653,60 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
          const result = await currentAdapter.query(sql);
          return c.json({ success: true, data: result });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/query/explain', async (c) => {
+      try {
+         const { sql } = await c.req.json().catch(() => ({}));
+         if (!sql || typeof sql !== 'string') {
+            return c.json(
+               { success: false, error: 'SQL query is required for explain' },
+               400,
+            );
+         }
+
+         const adapter = getAdapter();
+         const cleanSql = sql.trim().replace(/;+$/, '');
+         let explainSql = '';
+
+         if (currentDbConfig.type === 'sqlite') {
+            explainSql = `EXPLAIN QUERY PLAN ${cleanSql}`;
+         } else if (currentDbConfig.type === 'postgres') {
+            explainSql = `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS) ${cleanSql}`;
+         } else if (currentDbConfig.type === 'mysql') {
+            explainSql = `EXPLAIN ${cleanSql}`;
+         } else {
+            explainSql = `EXPLAIN ${cleanSql}`;
+         }
+
+         const startTime = performance.now();
+         let res;
+         try {
+            res = await adapter.query(explainSql);
+         } catch (primaryErr: any) {
+            // Postgres fallback if ANALYZE fails (e.g. read-only statements)
+            if (currentDbConfig.type === 'postgres') {
+               explainSql = `EXPLAIN ${cleanSql}`;
+               res = await adapter.query(explainSql);
+            } else {
+               throw primaryErr;
+            }
+         }
+         const durationMs = Math.round(performance.now() - startTime);
+
+         return c.json({
+            success: true,
+            data: {
+               columns: res.columns,
+               rows: res.rows,
+               durationMs,
+               explainSql,
+               dialect: currentDbConfig.type,
+            },
+         });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

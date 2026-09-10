@@ -10,6 +10,9 @@ export const HeaderHTML = /* html */ `
       <span class="material-symbols-outlined" id="table-icon">table_chart</span>
       <span id="table-name">users</span>
     </div>
+    <div id="env-badge-wrap" class="breadcrumb-item">
+      <span id="env-badge" class="env-badge local hidden">LOCAL</span>
+    </div>
   </div>
   
   <div class="header-actions">

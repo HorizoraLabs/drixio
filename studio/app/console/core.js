@@ -1,4 +1,8 @@
-import { executeRawQuery, exportQueryResultApi } from '../../lib/api.js';
+import {
+   executeRawQuery,
+   exportQueryResultApi,
+   explainQueryApi,
+} from '../../lib/api.js';
 import {
    isSafeModeEnabled,
    analyzeDangerousQuery,
@@ -327,6 +331,131 @@ export const runConsoleQuery = async (
       const resContainer = document.getElementById(`${blockId}-results`);
       if (resContainer) {
          resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined" class="icon-16 mt-2px">error</span><span>Error: ${e.message}</span></div>`;
+         historyPane.scrollTop = historyPane.scrollHeight;
+      }
+   }
+};
+
+export const runExplainQuery = async (queryToRun, editor, historyPane) => {
+   let sql =
+      queryToRun ||
+      editor.value.substring(editor.selectionStart, editor.selectionEnd).trim();
+   if (!sql) sql = editor.value.trim();
+   if (!sql) return;
+
+   const welcomeMsg = document.getElementById('console-welcome-msg');
+   if (welcomeMsg) welcomeMsg.remove();
+
+   queryCounter++;
+   const blockId = `console-query-${queryCounter}`;
+
+   const block = document.createElement('div');
+   block.className = 'console-entry';
+   block.id = blockId;
+
+   const sanitizedSql = sql
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+   block.innerHTML = /* html */ `
+     <div class="console-entry-header">
+       <div class="console-entry-query-wrap">
+         <span class="console-entry-prompt" style="color: #10b981; font-weight: 700;">EXPLAIN ›</span>
+         <code class="console-entry-sql">${sanitizedSql}</code>
+       </div>
+       <div class="console-entry-meta">
+         <span class="console-profiling-pill" id="${blockId}-pill">
+           <span class="material-symbols-outlined icon-12 animate-spin">sync</span>
+           <span>Analyzing...</span>
+         </span>
+       </div>
+     </div>
+     <div class="console-entry-body" id="${blockId}-results">
+       <div class="console-msg-loading">
+         <span class="material-symbols-outlined icon-16 animate-spin">sync</span>
+         <span>Computing query execution plan...</span>
+       </div>
+     </div>
+   `;
+
+   historyPane.appendChild(block);
+   setTimeout(() => (historyPane.scrollTop = historyPane.scrollHeight), 10);
+
+   try {
+      const res = await explainQueryApi(sql);
+      if (!res.success) throw new Error(res.error || 'Failed to explain query');
+
+      const pill = document.getElementById(`${blockId}-pill`);
+      if (pill) {
+         pill.innerHTML = /* html */ `
+           <span class="material-symbols-outlined icon-12" style="color: #10b981;">check_circle</span>
+           <span>${res.data.durationMs}ms</span>
+           <span class="text-soft">(${res.data.dialect?.toUpperCase()})</span>
+         `;
+      }
+
+      const resContainer = document.getElementById(`${blockId}-results`);
+      if (!resContainer) return;
+      resContainer.innerHTML = '';
+
+      const cols = res.data.columns || [];
+      const rows = res.data.rows || [];
+
+      if (rows.length === 0) {
+         resContainer.innerHTML = /* html */ `<div class="console-msg-empty">No execution plan returned.</div>`;
+         return;
+      }
+
+      const tableContainer = document.createElement('div');
+      tableContainer.className = 'console-result-table-container';
+
+      const table = document.createElement('table');
+      table.className = 'console-result-table';
+
+      const thead = document.createElement('thead');
+      const trHead = document.createElement('tr');
+      const thNum = document.createElement('th');
+      thNum.className = 'row-header';
+      thNum.textContent = '#';
+      trHead.appendChild(thNum);
+
+      cols.forEach((c) => {
+         const th = document.createElement('th');
+         th.textContent = c;
+         trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      rows.forEach((row, i) => {
+         const tr = document.createElement('tr');
+         const tdNum = document.createElement('td');
+         tdNum.className = 'row-header';
+         tdNum.textContent = i + 1;
+         tr.appendChild(tdNum);
+
+         cols.forEach((c) => {
+            const td = document.createElement('td');
+            td.className = 'data-cell';
+            const val = row[c];
+            td.textContent =
+               val !== null && val !== undefined ? String(val) : 'NULL';
+            tr.appendChild(td);
+         });
+         tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      tableContainer.appendChild(table);
+      resContainer.appendChild(tableContainer);
+
+      setTimeout(() => (historyPane.scrollTop = historyPane.scrollHeight), 10);
+   } catch (e) {
+      const resContainer = document.getElementById(`${blockId}-results`);
+      if (resContainer) {
+         resContainer.innerHTML = /* html */ `<div class="console-msg-error"><span class="material-symbols-outlined icon-16 mt-2px">error</span><span>Error: ${e.message}</span></div>`;
          historyPane.scrollTop = historyPane.scrollHeight;
       }
    }

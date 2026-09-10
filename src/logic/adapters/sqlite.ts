@@ -18,10 +18,14 @@ export class SqliteAdapter implements DBAdapter {
 
    private async getDb(): Promise<DatabaseSync> {
       if (!this.db) {
-         let modFs = 'node:fs';
-         const fs = await import(modFs);
-         if (!fs.existsSync(this.dbPath)) {
-            throw new Error(`Failed to found database file at: ${this.dbPath}`);
+         if (this.dbPath !== ':memory:') {
+            let modFs = 'node:fs';
+            const fs = await import(modFs);
+            if (!fs.existsSync(this.dbPath)) {
+               throw new Error(
+                  `Failed to found database file at: ${this.dbPath}`,
+               );
+            }
          }
          let mod = 'node:sqlite';
          const sqlite = await import(mod);
@@ -42,14 +46,19 @@ export class SqliteAdapter implements DBAdapter {
          const vQuery = db.prepare('SELECT sqlite_version() as v');
          const vRow = vQuery.get() as { v: string };
 
-         let modFs = 'node:fs';
-         const fs = await import(modFs);
-         const stats = fs.statSync(this.dbPath);
+         let sizeBytes = 0;
+         let dbName = ':memory:';
 
-         // Extract filename as dbName
-         let modPath = 'node:path';
-         const path = await import(modPath);
-         const dbName = path.basename(this.dbPath);
+         if (this.dbPath !== ':memory:') {
+            let modFs = 'node:fs';
+            const fs = await import(modFs);
+            const stats = fs.statSync(this.dbPath);
+            sizeBytes = stats.size;
+
+            let modPath = 'node:path';
+            const path = await import(modPath);
+            dbName = path.basename(this.dbPath);
+         }
 
          return {
             status: 'connected',
@@ -57,7 +66,7 @@ export class SqliteAdapter implements DBAdapter {
             dbName,
             version: vRow?.v,
             activeConnections: 1, // SQLite is single file, essentially 1 active connection for the app
-            sizeBytes: stats.size,
+            sizeBytes,
             uptime: process.uptime(),
          };
       } catch (e: any) {

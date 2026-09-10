@@ -38,6 +38,27 @@ export const selectAction = async (dbConfig: DBConfig) =>
             description: 'Create new tables, or modify/drop existing tables.',
             disabled: dbConfig.type === 'unknown',
          },
+         {
+            name: '⚡ ORM & Type Generator',
+            value: 'orm',
+            description:
+               'Generate Prisma Schema, Drizzle models, or TypeScript definitions.',
+            disabled: dbConfig.type === 'unknown',
+         },
+         {
+            name: '📑 SQL Snippets & Templates',
+            value: 'snippets',
+            description:
+               'Run parameterized diagnostic queries and high-frequency templates.',
+            disabled: dbConfig.type === 'unknown',
+         },
+         {
+            name: '🔄 Schema Diff & Migrations',
+            value: 'diff',
+            description:
+               'Compare database schemas with snapshots and generate migration SQL.',
+            disabled: dbConfig.type === 'unknown',
+         },
          new Separator(),
          {
             name:

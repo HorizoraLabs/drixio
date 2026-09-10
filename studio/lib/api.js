@@ -136,6 +136,17 @@ export async function exportQueryResultApi(payload, format = 'csv') {
    URL.revokeObjectURL(url);
 }
 
+export async function explainQueryApi(sql) {
+   const res = await fetch('/api/query/explain', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
+   });
+   return await res.json();
+}
+
 export async function fetchSchemaDiff(payload) {
    const res = await fetch('/api/schema/diff', {
       method: 'POST',

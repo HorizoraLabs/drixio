@@ -1,4 +1,4 @@
-import { runConsoleQuery } from './core.js';
+import { runConsoleQuery, runExplainQuery } from './core.js';
 import { isSafeModeEnabled, setSafeModeEnabled } from './safeModal.js';
 import { fetchSnippetsApi, deleteSnippetApi } from '../../lib/api.js';
 import {
@@ -159,6 +159,35 @@ export const bindConsoleEvents = (editor, historyPane) => {
    const runBtn = document.getElementById('run-sql-btn');
    if (runBtn) {
       runBtn.onclick = () => executeAndReset();
+   }
+
+   const explainBtn = document.getElementById('explain-sql-btn');
+   if (explainBtn) {
+      explainBtn.onclick = () => {
+         let targetSql = cachedSelectedSql;
+         if (!targetSql) {
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            if (
+               typeof start === 'number' &&
+               typeof end === 'number' &&
+               start !== end
+            ) {
+               targetSql = editor.value.substring(start, end).trim();
+            }
+         }
+         if (!targetSql) {
+            const fullText = editor.value.trim();
+            if (fullText) {
+               targetSql =
+                  getStatementAtCursor(editor.value, editor.selectionStart) ||
+                  fullText;
+            }
+         }
+         if (targetSql) {
+            runExplainQuery(targetSql, editor, historyPane);
+         }
+      };
    }
 
    const clearBtn = document.getElementById('console-clear-editor-btn');

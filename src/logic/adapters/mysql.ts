@@ -20,10 +20,8 @@ export class MysqlAdapter implements DBAdapter {
             uri: this.connection,
             multipleStatements: true,
          });
-         this.pool.on('connection', (connection) => {
-            connection
-               .query("SET SESSION sql_mode = 'ANSI_QUOTES'")
-               .catch(() => {});
+         this.pool.on('connection', (connection: any) => {
+            connection.query("SET SESSION sql_mode = 'ANSI_QUOTES'", () => {});
          });
       }
       return this.pool;

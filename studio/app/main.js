@@ -448,6 +448,7 @@ window.setStudioConnectionMode = function (connected) {
    const slash = document.getElementById('slash');
    const currentTableCrumb = document.getElementById('current-table');
    const dbNameEl = document.getElementById('db-name');
+   const envBadge = document.getElementById('env-badge');
 
    if (!connected) {
       dataBtn?.classList.add('hidden');
@@ -460,6 +461,7 @@ window.setStudioConnectionMode = function (connected) {
       if (importWrap) importWrap.classList.add('hidden');
       if (slash) slash.classList.add('hidden');
       if (currentTableCrumb) currentTableCrumb.classList.add('hidden');
+      if (envBadge) envBadge.classList.add('hidden');
       if (dbNameEl) dbNameEl.textContent = 'No Database';
 
       if (
@@ -479,6 +481,7 @@ window.setStudioConnectionMode = function (connected) {
       if (importWrap) importWrap.classList.remove('hidden');
       if (slash) slash.classList.remove('hidden');
       if (currentTableCrumb) currentTableCrumb.classList.remove('hidden');
+      if (envBadge) envBadge.classList.remove('hidden');
 
       if (window.AppState.currentTab === 'connect-btn') {
          window.handleSwitchTab('data-btn');
@@ -489,6 +492,15 @@ window.setStudioConnectionMode = function (connected) {
 fetchConfig().then((res) => {
    if (res && res.success && res.data) {
       window.AppState.dbType = res.data.dbType;
+      window.AppState.isRemote = !!res.data.isRemote;
+      window.AppState.badgeLabel = res.data.badgeLabel;
+
+      const envBadge = document.getElementById('env-badge');
+      if (envBadge) {
+         envBadge.textContent = res.data.badgeLabel || (res.data.isRemote ? 'REMOTE' : 'LOCAL');
+         envBadge.className = `env-badge ${res.data.isRemote ? 'remote' : 'local'}`;
+      }
+
       if (res.data.dbName) {
          const dbNameEl = document.getElementById('db-name');
          if (dbNameEl) dbNameEl.textContent = res.data.dbName;

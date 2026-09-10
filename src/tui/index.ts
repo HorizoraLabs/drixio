@@ -38,6 +38,26 @@ export async function runTui(initialConfig?: DBConfig, customUrl?: string) {
          case 'repl':
             await runRepl(dbConfig);
             break;
+         case 'orm': {
+            const { runOrmWizard } = await import('./wizards/ormWizard.js');
+            await runOrmWizard(dbConfig);
+            await waitForEnter();
+            break;
+         }
+         case 'snippets': {
+            const { runSnippetsWizard } = await import(
+               './wizards/snippetsWizard.js'
+            );
+            await runSnippetsWizard(dbConfig);
+            await waitForEnter();
+            break;
+         }
+         case 'diff': {
+            const { runDiffWizard } = await import('./wizards/diffWizard.js');
+            await runDiffWizard(dbConfig);
+            await waitForEnter();
+            break;
+         }
          case 'setup':
          case 're-configure':
             dbConfig = await runSetup(dbConfig);

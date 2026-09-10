@@ -59,6 +59,33 @@ header {
    transition: all 0.15s ease;
 }
 
+.env-badge {
+   display: inline-flex;
+   align-items: center;
+   gap: 4px;
+   padding: 2px 8px;
+   border-radius: 9999px;
+   font-size: 11px;
+   font-weight: 600;
+   letter-spacing: 0.03em;
+   text-transform: uppercase;
+   font-family: var(--font-mono);
+   line-height: 1.4;
+   transition: all 0.2s ease;
+}
+
+.env-badge.local {
+   background-color: rgba(16, 185, 129, 0.12);
+   color: #10b981;
+   border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.env-badge.remote {
+   background-color: rgba(245, 158, 11, 0.15);
+   color: #f59e0b;
+   border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
 #table-icon {
    font-size: 16px;
    color: var(--color-primary);

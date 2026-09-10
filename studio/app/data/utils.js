@@ -5,25 +5,35 @@ export function getFilterQuery() {
    const filterOp = document.getElementById(`filter-op-${t}`)?.value;
    const filterCol = document.getElementById(`filter-col-${t}`)?.value;
 
-   let query = '';
-   if (filterVal || filterOp === 'IS NULL') {
-      let safeVal = filterVal;
-      if (
-         safeVal &&
-         !safeVal.startsWith("'") &&
-         !safeVal.endsWith("'") &&
-         isNaN(Number(safeVal))
-      ) {
-         const isRawSql =
-            safeVal.toUpperCase().includes(' AND ') ||
-            safeVal.toUpperCase().includes(' OR ');
-         if (!isRawSql) {
-            safeVal = `'${safeVal.replace(/'/g, "''")}'`;
-         }
-      }
-      query = `"${filterCol}" ${filterOp} ${safeVal}`;
+   if (!filterCol || !filterOp) return '';
+
+   if (filterOp === 'IS NULL' || filterOp === 'IS NOT NULL') {
+      return `"${filterCol}" ${filterOp}`;
    }
-   return query;
+
+   if (!filterVal) return '';
+
+   if (filterOp === 'IN') {
+      let formattedVal = filterVal;
+      if (!formattedVal.startsWith('(')) formattedVal = `(${formattedVal})`;
+      return `"${filterCol}" IN ${formattedVal}`;
+   }
+
+   let safeVal = filterVal;
+   if (
+      safeVal &&
+      !safeVal.startsWith("'") &&
+      !safeVal.endsWith("'") &&
+      isNaN(Number(safeVal))
+   ) {
+      const isRawSql =
+         safeVal.toUpperCase().includes(' AND ') ||
+         safeVal.toUpperCase().includes(' OR ');
+      if (!isRawSql) {
+         safeVal = `'${safeVal.replace(/'/g, "''")}'`;
+      }
+   }
+   return `"${filterCol}" ${filterOp} ${safeVal}`;
 }
 
 export function formatDisplayVal(val, colSchema) {

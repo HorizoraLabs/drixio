@@ -124,12 +124,17 @@ export async function loadTableData(
               <select id="filter-col-${tableName}" class="filter-select">${columnOptions}</select>
               <select id="filter-op-${tableName}" class="filter-select">
                 <option value="=">=</option>
+                <option value="!=">!=</option>
                 <option value=">">&gt;</option>
                 <option value="<">&lt;</option>
                 <option value=">=">&gt;=</option>
                 <option value="<=">&lt;=</option>
                 <option value="LIKE">LIKE</option>
                 <option value="!=">!=</option>
+                <option value="NOT LIKE">NOT LIKE</option>
+                <option value="IS NULL">IS NULL</option>
+                <option value="IS NOT NULL">IS NOT NULL</option>
+                <option value="IN">IN</option>
               </select>
               <div class="filter-input-wrapper">
                 <input type="text" id="filter-val-${tableName}" class="filter-input" placeholder="Filter value..." />
@@ -543,6 +548,21 @@ export async function loadTableData(
                filterCol.addEventListener('change', () => executeSearch(true));
             if (filterOp)
                filterOp.addEventListener('change', () => executeSearch(true));
+            if (filterOp) {
+               filterOp.addEventListener('change', () => {
+                  const isNullOp =
+                     filterOp.value === 'IS NULL' ||
+                     filterOp.value === 'IS NOT NULL';
+                  if (inputElSearch) {
+                     inputElSearch.disabled = isNullOp;
+                     inputElSearch.placeholder = isNullOp
+                        ? 'No value needed'
+                        : 'Filter value...';
+                     if (isNullOp) inputElSearch.value = '';
+                  }
+                  executeSearch(true);
+               });
+            }
 
             const refreshData = () => {
                const hasPending =

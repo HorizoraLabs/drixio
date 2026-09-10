@@ -12,3 +12,5 @@ export * from './orm.js';
 export * from './safety.js';
 export * from './diff.js';
 export * from './snippets.js';
+export * from './version.js';
+export * from './serialization.js';

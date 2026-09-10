@@ -58,6 +58,7 @@ export const SideBarHTML = /* html */ `
         <span id="theme-text">Theme</span>
       </button>
       <span class="sidebar-version-tag" title="Drixio Studio Edition">v1.1.9</span>
+      <span class="sidebar-version-tag" id="sidebar-version-tag" title="Drixio Studio Edition">${typeof __DRIXIO_VERSION__ !== 'undefined' ? `v${__DRIXIO_VERSION__}` : ''}</span>
     </div>
   </div>
 </aside>

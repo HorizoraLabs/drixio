@@ -32,6 +32,7 @@ import {
    saveSnippet,
    updateSnippet,
    deleteSnippet,
+   getDrixioVersion,
 } from '../logic/index.js';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
@@ -187,6 +188,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       return c.json({
          success: true,
          data: {
+            appVersion: getDrixioVersion(),
             connected: isConnected,
             dbType: isConnected ? currentDbConfig.type : 'none',
             dbName: isConnected ? getDbName() : 'No Database',

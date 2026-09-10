@@ -1,24 +1,9 @@
 #!/usr/bin/env node
 import pc from 'picocolors';
 import { parseArgs } from 'node:util';
-import { detectDatabase } from '../src/logic/index.js';
+import { detectDatabase, getDrixioVersion } from '../src/logic/index.js';
 import { runQuickCommand } from '../src/commands/index.js';
 import { runTui } from '../src/tui/index.js';
-
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
-function getVersion(): string {
-   try {
-      const __dirname = dirname(fileURLToPath(import.meta.url));
-      const pkgPath = join(__dirname, '../package.json');
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-      return pkg.version || '1.1.9';
-   } catch {
-      return '1.1.9';
-   }
-}
 
 async function main() {
    const args = process.argv.slice(2);
@@ -57,7 +42,7 @@ async function main() {
    });
 
    if (values.version) {
-      console.log(`drixio v${getVersion()}`);
+      console.log(`drixio v${getDrixioVersion()}`);
       process.exit(0);
    }
 

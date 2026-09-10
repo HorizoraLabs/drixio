@@ -1,8 +1,7 @@
 import { beforeAll } from 'vitest';
 import pc from 'picocolors';
 import os from 'node:os';
-import fs from 'node:fs';
-import path from 'node:path';
+import { getDrixioVersion } from '../src/logic/index.js';
 
 function stripAnsi(str: string): string {
    return str.replace(/\u001b\[[0-9;]*m/g, '');
@@ -15,14 +14,7 @@ beforeAll(() => {
    }
    process.env.DRIXIO_DIAG_PRINTED = '1';
 
-   let drixioVersion = '1.1.9';
-   try {
-      const pkgPath = path.resolve(process.cwd(), 'package.json');
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-      if (pkg.version) drixioVersion = pkg.version;
-   } catch {
-      // Fallback
-   }
+   const drixioVersion = getDrixioVersion();
 
    const detectedEnvDb =
       process.env.DATABASE_URL ||

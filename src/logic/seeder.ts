@@ -186,6 +186,14 @@ export function inferColumnStrategy(col: ColumnSchema): MockStrategy {
    }
 
    if (
+      name.includes('username') ||
+      name.includes('user_name') ||
+      name.includes('handle')
+   ) {
+      return { type: 'username', label: 'Username' };
+   }
+
+   if (
       name.includes('name') ||
       name.includes('author') ||
       name.includes('user')
@@ -328,6 +336,11 @@ export function generateFieldValue(
          return getRandomItem(FIRST_NAMES);
       case 'last_name':
          return getRandomItem(LAST_NAMES);
+      case 'username': {
+         const f = getRandomItem(FIRST_NAMES).toLowerCase();
+         const l = getRandomItem(LAST_NAMES).toLowerCase();
+         return `${f}_${l}${getRandomInt(100, 99999)}`;
+      }
       case 'full_name':
          return `${getRandomItem(FIRST_NAMES)} ${getRandomItem(LAST_NAMES)}`;
       case 'avatar':

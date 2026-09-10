@@ -6,6 +6,51 @@ import {
 } from '../types.js';
 import pg from 'pg';
 
+/**
+ * Creates a robust PoolConfig supporting cloud PostgreSQL providers (Supabase, Neon, RDS, etc.)
+ * with auto SSL negotiation and 10s timeout fuse.
+ */
+function buildPgPoolConfig(connectionString: string): pg.PoolConfig {
+   const config: pg.PoolConfig = {
+      connectionString,
+      connectionTimeoutMillis: 10000, // 10s timeout to prevent hanging on unreachable hosts
+   };
+
+   try {
+      const lower = connectionString.toLowerCase();
+      const isExplicitSslDisable = lower.includes('sslmode=disable');
+      const isExplicitSslRequire =
+         lower.includes('sslmode=require') ||
+         lower.includes('sslmode=prefer') ||
+         lower.includes('ssl=true') ||
+         lower.includes('ssl=1');
+
+      let isCloudProvider = false;
+      const match = connectionString.match(/@([^/:?#]+)/);
+      if (match && match[1]) {
+         const host = match[1].toLowerCase();
+         isCloudProvider =
+            host.includes('supabase.') ||
+            host.includes('neon.tech') ||
+            host.includes('railway.') ||
+            host.includes('render.com') ||
+            host.includes('cockroach') ||
+            host.includes('aiven') ||
+            host.includes('rds.amazonaws.com');
+      }
+
+      if (!isExplicitSslDisable && (isExplicitSslRequire || isCloudProvider)) {
+         config.ssl = {
+            rejectUnauthorized: false,
+         };
+      }
+   } catch {
+      // Keep basic config on parse failure
+   }
+
+   return config;
+}
+
 export class PostgresAdapter implements DBAdapter {
    private connectionString: string;
    private pool: pg.Pool | null = null;
@@ -16,9 +61,7 @@ export class PostgresAdapter implements DBAdapter {
 
    private getPool(): pg.Pool {
       if (!this.pool) {
-         this.pool = new pg.Pool({
-            connectionString: this.connectionString,
-         });
+         this.pool = new pg.Pool(buildPgPoolConfig(this.connectionString));
          // Prevent unhandled error events from crashing the process
          this.pool.on('error', () => {});
       }

@@ -15,6 +15,7 @@
       "build:studio": "vite build --config studio/vite.config.ts",
       "build": "pnpm build:cli && pnpm build:studio",
       "test": "node scripts/test-runner.js",
+      "typecheck": "tsc --noEmit",
       "prepublishOnly": "pnpm build"
    },
    "keywords": [

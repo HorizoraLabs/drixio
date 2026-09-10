@@ -19,9 +19,12 @@ export class MysqlAdapter implements DBAdapter {
          this.pool = mysql.createPool({
             uri: this.connection,
             multipleStatements: true,
+            connectTimeout: 10000,
          });
          this.pool.on('connection', (connection: any) => {
-            connection.query("SET SESSION sql_mode = 'ANSI_QUOTES'", () => {});
+            connection
+               .query("SET SESSION sql_mode = 'ANSI_QUOTES'")
+               .catch(() => {});
          });
       }
       return this.pool;

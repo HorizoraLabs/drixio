@@ -1,4 +1,5 @@
 import pc from 'picocolors';
+import { getDrixioVersion } from '../../logic/version.js';
 
 export interface DBConfigProps {
    type: 'sqlite' | 'postgres' | 'mysql' | 'unknown';
@@ -69,13 +70,8 @@ export function printCustomDashboard(
    );
 }
 
-declare const __DRIXIO_VERSION__: string | undefined;
-
 export function printDashboard(dbConfig: DBConfigProps) {
-   const version =
-      typeof __DRIXIO_VERSION__ !== 'undefined'
-         ? __DRIXIO_VERSION__
-         : process.env.npm_package_version || 'unknown';
+   const version = getDrixioVersion();
    const headerTitle = ` Lightweight Interactive TUI Database Client  •  v${version} `;
 
    let dbTypeVal = 'None';

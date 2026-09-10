@@ -505,6 +505,10 @@ fetchConfig().then((res) => {
          const dbNameEl = document.getElementById('db-name');
          if (dbNameEl) dbNameEl.textContent = res.data.dbName;
       }
+      if (res.data.appVersion) {
+         const versionEl = document.getElementById('sidebar-version-tag');
+         if (versionEl) versionEl.textContent = `v${res.data.appVersion}`;
+      }
       if (res.data.connected && res.data.dbType && res.data.dbType !== 'none') {
          window.setStudioConnectionMode(true);
       } else {

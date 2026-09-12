@@ -206,3 +206,24 @@ export async function deleteSnippetApi(id) {
    });
    return await res.json();
 }
+
+export async function fetchSchemas() {
+   const res = await fetch('/api/schemas');
+   return await res.json();
+}
+
+export async function switchSchemaApi(schema) {
+   const res = await fetch('/api/schemas/switch', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ schema }),
+   });
+   return await res.json();
+}
+
+export async function fetchDatabaseEnums() {
+   const res = await fetch('/api/database/enums');
+   return await res.json();
+}

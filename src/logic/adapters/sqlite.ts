@@ -5,6 +5,7 @@ import {
    DatabaseStatus,
    IndexSchema,
 } from '../types.js';
+import { formatSqlDefaultValue } from '../dialect.js';
 
 export class SqliteAdapter implements DBAdapter {
    private dbPath: string;
@@ -413,7 +414,14 @@ export class SqliteAdapter implements DBAdapter {
 
       const colDefs: string[] = [];
       for (const col of newColumns) {
-         let def = `${this.quoteIdentifier(col.name)} ${col.type || 'TEXT'}`;
+         let colType = col.type || 'TEXT';
+         if (col.enumValues && col.enumValues.length > 0) {
+            const vals = col.enumValues
+               .map((v) => `'${v.replace(/'/g, "''")}'`)
+               .join(', ');
+            colType = `TEXT CHECK(${this.quoteIdentifier(col.name)} IN (${vals}))`;
+         }
+         let def = `${this.quoteIdentifier(col.name)} ${colType}`;
 
          if (col.isPk && !isCompositePk) {
             def += ' PRIMARY KEY';
@@ -423,12 +431,9 @@ export class SqliteAdapter implements DBAdapter {
             def += ' NOT NULL';
          }
 
-         if (
-            col.defaultValue !== undefined &&
-            col.defaultValue !== null &&
-            col.defaultValue !== ''
-         ) {
-            def += ` DEFAULT '${String(col.defaultValue).replace(/'/g, "''")}'`;
+         const formattedDef = formatSqlDefaultValue(col.defaultValue);
+         if (formattedDef !== null) {
+            def += ` DEFAULT ${formattedDef}`;
          }
 
          if (col.fkTarget && col.fkTarget.table && col.fkTarget.column) {

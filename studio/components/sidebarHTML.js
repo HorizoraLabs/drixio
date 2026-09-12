@@ -19,6 +19,19 @@ export const SideBarHTML = /* html */ `
   </div>
 
   <div id="sidebar-content">
+    <div id="schema-selector-wrap" class="hidden">
+      <label class="schema-selector-label" for="schema-select">
+        <span class="material-symbols-outlined icon-14">schema</span>
+        <span>SCHEMA</span>
+      </label>
+      <div class="schema-select-wrapper">
+        <select id="schema-select" aria-label="Switch database schema">
+          <option value="public">public</option>
+        </select>
+        <span class="material-symbols-outlined schema-chevron icon-14">expand_more</span>
+      </div>
+    </div>
+
     <div id="search-bar" role="search">
       <span class="material-symbols-outlined" id="search-icon">search</span>
       <input type="text" placeholder="Filter tables..." id="search-input" aria-label="Search tables" autocomplete="off" spellcheck="false" />

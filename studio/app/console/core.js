@@ -407,16 +407,40 @@ export const runExplainQuery = async (queryToRun, editor, historyPane) => {
          return;
       }
 
+      // 1. Stats and Copy Plan header
+      const statsHeader = document.createElement('div');
+      statsHeader.className = 'console-stats-header console-stats-divider';
+      statsHeader.innerHTML = /* html */ `
+        <div class="console-stats-info">
+          <span class="material-symbols-outlined icon">analytics</span>
+          <span>Execution Plan &middot; <b>${rows.length}</b> line${rows.length === 1 ? '' : 's'} &middot; ${res.data.durationMs}ms</span>
+        </div>
+        <button class="console-export-btn copy-plan-btn" title="Copy execution plan text">
+          <span class="material-symbols-outlined" style="font-size: 15px;">content_copy</span> Copy Plan
+        </button>
+      `;
+      resContainer.appendChild(statsHeader);
+
+      statsHeader.querySelector('.copy-plan-btn').onclick = () => {
+         const planText = rows
+            .map((r) => cols.map((c) => r[c]).join('\t'))
+            .join('\n');
+         navigator.clipboard.writeText(planText);
+         window.showToast?.('Execution plan copied to clipboard', 'success');
+      };
+
+      // 2. Table Container
       const tableContainer = document.createElement('div');
-      tableContainer.className = 'console-result-table-container';
+      tableContainer.className = 'console-explain-container';
 
       const table = document.createElement('table');
-      table.className = 'console-result-table';
+      table.className = 'console-explain-table';
 
       const thead = document.createElement('thead');
       const trHead = document.createElement('tr');
       const thNum = document.createElement('th');
       thNum.className = 'row-header';
+      thNum.style.width = '40px';
       thNum.textContent = '#';
       trHead.appendChild(thNum);
 
@@ -428,6 +452,10 @@ export const runExplainQuery = async (queryToRun, editor, historyPane) => {
       thead.appendChild(trHead);
       table.appendChild(thead);
 
+      const isSinglePlanCol =
+         cols.length === 1 ||
+         cols.some((c) => c.toLowerCase().includes('plan'));
+
       const tbody = document.createElement('tbody');
       rows.forEach((row, i) => {
          const tr = document.createElement('tr');
@@ -438,7 +466,9 @@ export const runExplainQuery = async (queryToRun, editor, historyPane) => {
 
          cols.forEach((c) => {
             const td = document.createElement('td');
-            td.className = 'data-cell';
+            td.className = isSinglePlanCol
+               ? 'data-cell explain-plan-cell'
+               : 'data-cell';
             const val = row[c];
             td.textContent =
                val !== null && val !== undefined ? String(val) : 'NULL';

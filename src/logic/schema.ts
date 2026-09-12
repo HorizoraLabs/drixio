@@ -8,7 +8,7 @@ import {
    okVoid,
    err,
 } from './types.js';
-import { getDialect } from './dialect.js';
+import { getDialect, formatSqlDefaultValue } from './dialect.js';
 
 export async function createTable(
    adapter: DBAdapter,
@@ -17,6 +17,42 @@ export async function createTable(
    columns: ColumnSchema[],
 ): Promise<Result<void>> {
    try {
+      if (dbType === 'postgres') {
+         const processedEnums = new Set<string>();
+         for (const col of columns) {
+            if (
+               col.enumValues &&
+               col.enumValues.length > 0 &&
+               col.type &&
+               !['enum', 'varchar', 'varchar(255)', 'text', 'string'].includes(
+                  col.type.toLowerCase(),
+               ) &&
+               !processedEnums.has(col.type.toLowerCase())
+            ) {
+               processedEnums.add(col.type.toLowerCase());
+               const vals = col.enumValues
+                  .map((v) => `'${v.replace(/'/g, "''")}'`)
+                  .join(', ');
+               const enumTypeQuoted = adapter.quoteIdentifier(col.type);
+               const escapedName = col.type.replace(/'/g, "''");
+               const createTypeSql = `
+                  DO $$
+                  BEGIN
+                     IF NOT EXISTS (
+                        SELECT 1 FROM pg_type t
+                        JOIN pg_namespace n ON n.oid = t.typnamespace
+                        WHERE t.typname = '${escapedName}'
+                          AND (n.nspname = current_schema() OR n.nspname = 'public')
+                     ) THEN
+                        CREATE TYPE ${enumTypeQuoted} AS ENUM (${vals});
+                     END IF;
+                  END$$;
+               `;
+               await adapter.executeSql(createTypeSql);
+            }
+         }
+      }
+
       const dialect = getDialect(dbType as any);
       const sql = dialect.buildCreateTable(tableName, columns);
       await adapter.executeSql(sql);
@@ -155,6 +191,10 @@ export async function applySchemaChanges(
                      : col.isPk && !isPk
                        ? false
                        : !!col.isUnique;
+               let enumValues =
+                  edits.enumValues !== undefined
+                     ? edits.enumValues
+                     : col.enumValues;
 
                if (edits.name && edits.name !== col.name) {
                   renames[col.name] = edits.name;
@@ -168,6 +208,7 @@ export async function applySchemaChanges(
                   defaultValue,
                   isUnique,
                   fkTarget,
+                  enumValues,
                });
             }
 
@@ -207,6 +248,7 @@ export async function applySchemaChanges(
                   defaultValue: ins.defaultValue,
                   isUnique: !!ins.isUnique,
                   fkTarget,
+                  enumValues: ins.enumValues,
                });
             }
 
@@ -281,8 +323,34 @@ export async function applySchemaChanges(
          const type = edits.type || 'TEXT';
 
          if (dbType === 'postgres') {
+            let pgType = type;
+            if (edits.enumValues && edits.enumValues.length > 0) {
+               if (edits.isNewEnum && edits.type) {
+                  const escapedName = edits.type.replace(/'/g, "''");
+                  const vals = edits.enumValues
+                     .map((v: string) => `'${dialect.escapeString(v)}'`)
+                     .join(', ');
+                  const quotedType = dialect.quoteIdentifier(edits.type);
+                  sqls.push(`
+                     DO $$
+                     BEGIN
+                        IF NOT EXISTS (
+                           SELECT 1 FROM pg_type t
+                           JOIN pg_namespace n ON n.oid = t.typnamespace
+                           WHERE t.typname = '${escapedName}'
+                             AND (n.nspname = current_schema() OR n.nspname = 'public')
+                        ) THEN
+                           CREATE TYPE ${quotedType} AS ENUM (${vals});
+                        END IF;
+                     END$$;
+                  `);
+                  pgType = quotedType;
+               } else if (edits.type) {
+                  pgType = dialect.quoteIdentifier(edits.type);
+               }
+            }
             sqls.push(
-               `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} TYPE ${type};`,
+               `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} TYPE ${pgType} USING ${quotedCol}::text::${pgType};`,
             );
             if (edits.nullable === false) {
                sqls.push(
@@ -293,19 +361,31 @@ export async function applySchemaChanges(
                   `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP NOT NULL;`,
                );
             }
-            if (edits.defaultValue) {
-               const escapedDef = dialect.escapeString(edits.defaultValue);
-               sqls.push(
-                  `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT '${escapedDef}';`,
-               );
+            if (edits.defaultValue !== undefined) {
+               const formatted = formatSqlDefaultValue(edits.defaultValue);
+               if (formatted !== null) {
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${formatted};`,
+                  );
+               } else {
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT;`,
+                  );
+               }
             }
          } else if (dbType === 'mysql') {
+            let mysqlType = type;
+            if (edits.enumValues && edits.enumValues.length > 0) {
+               const vals = edits.enumValues
+                  .map((v: string) => `'${dialect.escapeString(v)}'`)
+                  .join(', ');
+               mysqlType = `ENUM(${vals})`;
+            }
             const nullStr = edits.nullable === false ? 'NOT NULL' : 'NULL';
-            const defStr = edits.defaultValue
-               ? `DEFAULT '${dialect.escapeString(edits.defaultValue)}'`
-               : '';
+            const formatted = formatSqlDefaultValue(edits.defaultValue);
+            const defStr = formatted !== null ? `DEFAULT ${formatted}` : '';
             sqls.push(
-               `ALTER TABLE ${quotedTable} MODIFY COLUMN ${quotedCol} ${type} ${nullStr} ${defStr};`,
+               `ALTER TABLE ${quotedTable} MODIFY COLUMN ${quotedCol} ${mysqlType} ${nullStr} ${defStr};`,
             );
          }
       }
@@ -315,11 +395,50 @@ export async function applySchemaChanges(
    for (const ins of pendingInserts) {
       if (!ins.name || ins.name.trim() === '') continue;
       const quotedCol = dialect.quoteIdentifier(ins.name.trim());
-      const type = ins.type || 'TEXT';
+      let type = ins.type || 'TEXT';
+
+      if (
+         dbType === 'postgres' &&
+         ins.enumValues &&
+         ins.enumValues.length > 0
+      ) {
+         if (ins.isNewEnum && ins.type) {
+            const escapedName = ins.type.replace(/'/g, "''");
+            const vals = ins.enumValues
+               .map((v: string) => `'${dialect.escapeString(v)}'`)
+               .join(', ');
+            const quotedType = dialect.quoteIdentifier(ins.type);
+            sqls.push(`
+               DO $$
+               BEGIN
+                  IF NOT EXISTS (
+                     SELECT 1 FROM pg_type t
+                     JOIN pg_namespace n ON n.oid = t.typnamespace
+                     WHERE t.typname = '${escapedName}'
+                       AND (n.nspname = current_schema() OR n.nspname = 'public')
+                  ) THEN
+                     CREATE TYPE ${quotedType} AS ENUM (${vals});
+                  END IF;
+               END$$;
+            `);
+            type = quotedType;
+         } else if (ins.type) {
+            type = dialect.quoteIdentifier(ins.type);
+         }
+      } else if (
+         dbType === 'mysql' &&
+         ins.enumValues &&
+         ins.enumValues.length > 0
+      ) {
+         const vals = ins.enumValues
+            .map((v: string) => `'${dialect.escapeString(v)}'`)
+            .join(', ');
+         type = `ENUM(${vals})`;
+      }
+
       const nullStr = ins.nullable === false ? 'NOT NULL' : '';
-      const defStr = ins.defaultValue
-         ? `DEFAULT '${dialect.escapeString(ins.defaultValue)}'`
-         : '';
+      const formattedDef = formatSqlDefaultValue(ins.defaultValue);
+      const defStr = formattedDef !== null ? `DEFAULT ${formattedDef}` : '';
       sqls.push(
          `ALTER TABLE ${quotedTable} ADD COLUMN ${quotedCol} ${type} ${nullStr} ${defStr};`,
       );
@@ -373,7 +492,9 @@ export async function getTableRowCount(
    tableName: string,
 ): Promise<Result<number>> {
    try {
-      const quoted = adapter.quoteIdentifier(tableName);
+      const quoted = adapter.quoteTable
+         ? adapter.quoteTable(tableName)
+         : adapter.quoteIdentifier(tableName);
       const countRes = await adapter.query(
          `SELECT COUNT(*) as cnt FROM ${quoted}`,
       );

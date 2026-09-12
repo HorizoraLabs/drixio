@@ -1,4 +1,5 @@
 import { updateSchemaCell } from './core.js';
+import { fetchDatabaseEnums } from '../../lib/api.js';
 
 export function openIndexModal() {
    const sg = window.SchemaGrid;
@@ -696,5 +697,302 @@ export async function openPkFkModal(td, currentText) {
       window.SchemaGrid.currentTransaction = null;
 
       closeFn();
+   };
+}
+
+export async function openEnumModal(td, origCol) {
+   const sg = window.SchemaGrid;
+   if (!sg) return;
+
+   let modal = document.getElementById('enum-modal');
+   if (modal) modal.remove();
+
+   const isNewRow = td.dataset.insertIndex !== undefined;
+   const insertIdx = isNewRow ? parseInt(td.dataset.insertIndex, 10) : null;
+   const colName =
+      td.dataset.pk ||
+      td.parentElement
+         ?.querySelector('[data-col-key="name"]')
+         ?.textContent?.trim() ||
+      'column';
+
+   const dbType = (window.AppState?.dbType || 'sqlite').toLowerCase();
+
+   // Retrieve existing values
+   let currentValues = [];
+   let currentTypeName = '';
+   let isNewEnum = true;
+
+   const pendingObj = isNewRow
+      ? sg.pendingInserts?.[insertIdx]
+      : sg.pendingEdits?.[colName];
+
+   if (pendingObj?.enumValues && pendingObj.enumValues.length > 0) {
+      currentValues = [...pendingObj.enumValues];
+      currentTypeName = pendingObj.type || '';
+      isNewEnum = pendingObj.isNewEnum !== false;
+   } else if (origCol?.enumValues && origCol.enumValues.length > 0) {
+      currentValues = [...origCol.enumValues];
+      currentTypeName = origCol.type || '';
+      isNewEnum = !origCol.isExistingEnum;
+   }
+
+   if (!currentTypeName) {
+      currentTypeName =
+         colName && colName !== 'column'
+            ? colName.charAt(0).toUpperCase() + colName.slice(1) + 'Enum'
+            : 'CustomEnum';
+   }
+
+   let cachedEnums = [];
+   try {
+      const res = await fetchDatabaseEnums();
+      if (res?.success && Array.isArray(res.data)) {
+         cachedEnums = res.data;
+      }
+   } catch (e) {
+      console.warn('Failed to load database enums:', e);
+   }
+
+   modal = document.createElement('div');
+   modal.id = 'enum-modal';
+   modal.className = 'modal-overlay';
+
+   const dialectInfo =
+      dbType === 'sqlite'
+         ? 'SQLite enforces enums using a <code>CHECK(col IN (...))</code> table constraint.'
+         : dbType === 'postgres'
+           ? 'PostgreSQL creates custom ENUM types using <code>CREATE TYPE ... AS ENUM (...)</code>.'
+           : 'MySQL stores enums as native <code>ENUM(...)</code> column types.';
+
+   const hasExistingEnums = cachedEnums.length > 0;
+   let selectedExistingEnum = cachedEnums.find(
+      (e) => e.name.toLowerCase() === currentTypeName.toLowerCase(),
+   );
+
+   modal.innerHTML = /* html */ `
+    <div class="keys-modal-container" style="width: 520px;">
+      <div class="modal-header">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary" style="font-size:20px;">list_alt</span>
+          <h3 class="m-0 text-15 font-semibold">Configure ENUM Column</h3>
+          <span class="keys-col-badge">${colName}</span>
+          <span class="snippet-param-badge">${dbType}</span>
+        </div>
+        <button id="close-enum-modal" class="modal-close-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
+      </div>
+
+      <div class="key-cards-list" style="gap: 14px;">
+        <div style="font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.5; background: var(--color-bg-secondary-dark); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--color-border);">
+          ${dialectInfo}
+        </div>
+
+        ${
+           hasExistingEnums
+              ? `
+        <div class="table-fk-popover-field">
+          <label style="font-size: 11px; font-weight: 500; color: var(--color-text-secondary);">Enum Source</label>
+          <div class="table-col-select-wrap">
+            <select id="modal-enum-source" class="table-col-select">
+              <option value="__NEW__" ${!selectedExistingEnum ? 'selected' : ''}>+ Define New Enum...</option>
+              <optgroup label="Existing Database Enums">
+                ${cachedEnums
+                   .map(
+                      (ce) =>
+                         `<option value="${ce.name}" ${selectedExistingEnum?.name === ce.name ? 'selected' : ''}>${ce.name} (${ce.values.slice(0, 3).join(', ')}${ce.values.length > 3 ? '...' : ''})</option>`,
+                   )
+                   .join('')}
+              </optgroup>
+            </select>
+            <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
+          </div>
+        </div>
+        `
+              : ''
+        }
+
+        <div id="modal-enum-custom-fields" class="flex flex-col gap-3">
+          <div>
+            <label style="font-size: 11px; font-weight: 500; color: var(--color-text-secondary); display: block; margin-bottom: 5px;">
+              Enum Name ${dbType === 'postgres' ? '<span style="color: var(--color-error);">*</span>' : '(Optional)'}
+            </label>
+            <input type="text" id="modal-enum-name" class="modal-input w-full" style="padding: 7px 10px; font-size: 12px; font-family: var(--font-mono);" placeholder="e.g. OrderStatus" value="${currentTypeName}" />
+          </div>
+
+          <div>
+            <label style="font-size: 11px; font-weight: 500; color: var(--color-text-secondary); display: block; margin-bottom: 5px;">
+              Allowed Values (comma separated) <span style="color: var(--color-error);">*</span>
+            </label>
+            <input type="text" id="modal-enum-values" class="modal-input w-full" style="padding: 7px 10px; font-size: 12px; font-family: var(--font-mono);" placeholder="e.g. PENDING, PAID, CANCELLED, REFUNDED" value="${currentValues.join(', ')}" />
+            <span style="font-size: 10.5px; color: var(--color-text-soft); margin-top: 4px; display: block;">Separate values with commas. Quotes are optional.</span>
+          </div>
+        </div>
+
+        <!-- SQL DDL Preview -->
+        <div>
+          <label style="font-size: 11px; font-weight: 500; color: var(--color-text-secondary); display: block; margin-bottom: 5px;">
+            Preview
+          </label>
+          <div style="background: var(--color-bg-secondary-dark); border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text); word-break: break-all; min-height: 38px; display: flex; align-items: center;" id="modal-enum-preview">
+            -
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="cancel-enum-btn" class="btn-secondary">Cancel</button>
+        <button id="save-enum-btn" class="btn-primary flex items-center gap-1.5">
+          <span class="material-symbols-outlined" style="font-size:16px;">check</span>
+          <span>Apply Enum</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+   document.body.appendChild(modal);
+
+   const closeFn = () => {
+      document.removeEventListener('keydown', handleKeydown);
+      modal.remove();
+   };
+
+   const handleKeydown = (e) => {
+      if (e.key === 'Escape') closeFn();
+   };
+   document.addEventListener('keydown', handleKeydown);
+
+   document.getElementById('close-enum-modal').onclick = closeFn;
+   document.getElementById('cancel-enum-btn').onclick = closeFn;
+   modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeFn();
+   });
+
+   const sourceSel = document.getElementById('modal-enum-source');
+   const customFields = document.getElementById('modal-enum-custom-fields');
+   const nameInp = document.getElementById('modal-enum-name');
+   const valuesInp = document.getElementById('modal-enum-values');
+   const previewEl = document.getElementById('modal-enum-preview');
+
+   function getParsedValues() {
+      if (sourceSel && sourceSel.value !== '__NEW__') {
+         const found = cachedEnums.find((e) => e.name === sourceSel.value);
+         return found ? [...found.values] : [];
+      }
+      return valuesInp.value
+         .split(',')
+         .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+         .filter(Boolean);
+   }
+
+   function updatePreview() {
+      const vals = getParsedValues();
+      const rawName = (
+         nameInp.value.trim() ||
+         currentTypeName ||
+         'CustomEnum'
+      ).trim();
+      const valsJoined = vals
+         .map((v) => `'${v.replace(/'/g, "''")}'`)
+         .join(', ');
+
+      if (vals.length === 0) {
+         previewEl.textContent = 'Enter enum values above to see SQL preview';
+         return;
+      }
+
+      if (dbType === 'sqlite') {
+         previewEl.textContent = `TEXT CHECK("${colName}" IN (${valsJoined}))`;
+      } else if (dbType === 'postgres') {
+         if (sourceSel && sourceSel.value !== '__NEW__') {
+            previewEl.textContent = `Type: "${sourceSel.value}" (Values: ${valsJoined})`;
+         } else {
+            previewEl.textContent = `CREATE TYPE "${rawName}" AS ENUM (${valsJoined});`;
+         }
+      } else {
+         previewEl.textContent = `ENUM(${valsJoined})`;
+      }
+   }
+
+   if (sourceSel) {
+      sourceSel.onchange = () => {
+         if (sourceSel.value === '__NEW__') {
+            customFields.style.display = 'flex';
+         } else {
+            customFields.style.display = 'none';
+         }
+         updatePreview();
+      };
+      if (sourceSel.value !== '__NEW__') {
+         customFields.style.display = 'none';
+      }
+   }
+
+   nameInp.oninput = updatePreview;
+   valuesInp.oninput = updatePreview;
+   updatePreview();
+
+   document.getElementById('save-enum-btn').onclick = () => {
+      const vals = getParsedValues();
+      if (vals.length === 0) {
+         if (window.showToast) {
+            window.showToast(
+               'Please specify at least one enum value.',
+               'error',
+            );
+         } else {
+            alert('Please specify at least one enum value.');
+         }
+         valuesInp.focus();
+         return;
+      }
+
+      let chosenName = '';
+      let isNew = true;
+
+      if (sourceSel && sourceSel.value !== '__NEW__') {
+         chosenName = sourceSel.value;
+         isNew = false;
+      } else {
+         chosenName = (
+            nameInp.value.trim() ||
+            currentTypeName ||
+            'CustomEnum'
+         ).trim();
+         isNew = true;
+      }
+
+      const effectiveType =
+         dbType === 'postgres' ? chosenName : chosenName || 'ENUM';
+
+      if (isNewRow && insertIdx !== null) {
+         if (!sg.pendingInserts[insertIdx]) sg.pendingInserts[insertIdx] = {};
+         sg.pendingInserts[insertIdx].type = effectiveType;
+         sg.pendingInserts[insertIdx].enumValues = vals;
+         sg.pendingInserts[insertIdx].isNewEnum = isNew;
+      } else if (colName) {
+         if (!sg.pendingEdits[colName]) sg.pendingEdits[colName] = {};
+         sg.pendingEdits[colName].type = effectiveType;
+         sg.pendingEdits[colName].enumValues = vals;
+         sg.pendingEdits[colName].isNewEnum = isNew;
+      }
+
+      window.SchemaGrid.currentTransaction = [];
+      const columns = [
+         'name',
+         'type',
+         'isPk',
+         'nullable',
+         'isUnique',
+         'defaultValue',
+         'indexing',
+      ];
+      updateSchemaCell(td, effectiveType, columns);
+      if (window.SchemaGrid.currentTransaction.length > 0)
+         window.SchemaGrid.history.push(window.SchemaGrid.currentTransaction);
+      window.SchemaGrid.currentTransaction = null;
+
+      closeFn();
+      window.updateSidebarDirtyState?.();
+      window.showToast?.('Enum column configured!', 'success');
    };
 }

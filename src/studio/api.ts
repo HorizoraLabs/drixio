@@ -156,7 +156,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       cfg: DBConfig,
    ): { isRemote: boolean; host: string; badgeLabel: string } => {
       if (cfg.type === 'sqlite') {
-         return { isRemote: false, host: 'local', badgeLabel: 'LOCAL (SQLite)' };
+         return {
+            isRemote: false,
+            host: 'local',
+            badgeLabel: 'LOCAL (SQLite)',
+         };
       }
       if (cfg.type === 'mysql' || cfg.type === 'postgres') {
          let host = 'localhost';
@@ -671,17 +675,65 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
 
          const adapter = getAdapter();
-         const cleanSql = sql.trim().replace(/;+$/, '');
+         // 1. Strip comments and trailing semicolons
+         let cleanSql = sql
+            .replace(/--.*$/gm, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .trim()
+            .replace(/;+$/, '')
+            .trim();
+
+         if (!cleanSql) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'SQL query is empty after stripping comments',
+               },
+               400,
+            );
+         }
+
+         // 2. Reject DDL statements that cannot be explained
+         if (/^(CREATE|DROP|ALTER|TRUNCATE)\s+/i.test(cleanSql)) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'DDL statements (CREATE, DROP, ALTER, TRUNCATE) do not have query execution plans to explain.',
+               },
+               400,
+            );
+         }
+
+         // 3. Strip redundant user-provided EXPLAIN prefixes if present
+         const hasUserExplain = /^EXPLAIN\b/i.test(cleanSql);
+         let targetSql = cleanSql;
+         if (hasUserExplain) {
+            targetSql = cleanSql
+               .replace(/^EXPLAIN\s+(QUERY\s+PLAN\s+)?/i, '')
+               .replace(
+                  /^\((ANALYZE|COSTS|VERBOSE|BUFFERS|FORMAT\s+\w+|,|\s)+\)\s*/i,
+                  '',
+               )
+               .trim();
+         }
+
          let explainSql = '';
+         const isDmlWrite = /^(INSERT|UPDATE|DELETE)\s+/i.test(targetSql);
 
          if (currentDbConfig.type === 'sqlite') {
-            explainSql = `EXPLAIN QUERY PLAN ${cleanSql}`;
+            explainSql = `EXPLAIN QUERY PLAN ${targetSql}`;
          } else if (currentDbConfig.type === 'postgres') {
-            explainSql = `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS) ${cleanSql}`;
+            // For write statements (INSERT/UPDATE/DELETE), DO NOT use ANALYZE to prevent accidental data changes!
+            // Use COSTS and VERBOSE instead, which only plans without executing.
+            if (isDmlWrite) {
+               explainSql = `EXPLAIN (COSTS, VERBOSE) ${targetSql}`;
+            } else {
+               explainSql = `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS) ${targetSql}`;
+            }
          } else if (currentDbConfig.type === 'mysql') {
-            explainSql = `EXPLAIN ${cleanSql}`;
+            explainSql = `EXPLAIN ${targetSql}`;
          } else {
-            explainSql = `EXPLAIN ${cleanSql}`;
+            explainSql = `EXPLAIN ${targetSql}`;
          }
 
          const startTime = performance.now();
@@ -689,9 +741,9 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          try {
             res = await adapter.query(explainSql);
          } catch (primaryErr: any) {
-            // Postgres fallback if ANALYZE fails (e.g. read-only statements)
+            // Postgres fallback if ANALYZE or BUFFERS fails
             if (currentDbConfig.type === 'postgres') {
-               explainSql = `EXPLAIN ${cleanSql}`;
+               explainSql = `EXPLAIN ${targetSql}`;
                res = await adapter.query(explainSql);
             } else {
                throw primaryErr;
@@ -1540,6 +1592,131 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                dbName: 'No Database',
             },
          });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // ====================== SCHEMA SWITCHING (PostgreSQL) ======================
+
+   api.get('/schemas', async (c) => {
+      try {
+         const adapter = currentAdapter;
+         const supported =
+            !!adapter &&
+            typeof adapter.getSchemas === 'function' &&
+            currentDbConfig.type === 'postgres';
+
+         if (!supported || !adapter) {
+            return c.json({
+               success: true,
+               data: { supported: false, schemas: [], currentSchema: 'public' },
+            });
+         }
+
+         const schemas = await adapter.getSchemas!();
+         const currentSchema = adapter.getCurrentSchema
+            ? adapter.getCurrentSchema()
+            : 'public';
+
+         return c.json({
+            success: true,
+            data: { supported: true, schemas, currentSchema },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/schemas/switch', async (c) => {
+      try {
+         const { schema } = await c.req.json().catch(() => ({}));
+         if (!schema || typeof schema !== 'string') {
+            return c.json(
+               { success: false, error: 'Schema name is required' },
+               400,
+            );
+         }
+
+         const adapter = currentAdapter;
+         if (
+            !adapter ||
+            typeof adapter.setSchema !== 'function' ||
+            currentDbConfig.type !== 'postgres'
+         ) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'Schema switching is only supported for PostgreSQL',
+               },
+               400,
+            );
+         }
+
+         await adapter.setSchema(schema);
+         // Verify the schema is usable by fetching tables
+         const tables = await adapter.getTables();
+
+         return c.json({
+            success: true,
+            data: {
+               schema,
+               tableCount: tables.length,
+            },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // ====================== DATABASE ENUMS ======================
+
+   api.get('/database/enums', async (c) => {
+      try {
+         const adapter = currentAdapter;
+         if (!adapter) {
+            return c.json({ success: true, data: [] });
+         }
+
+         // 1. If PostgreSQL, use native catalog getCustomEnums()
+         if (adapter.getCustomEnums) {
+            const enums = await adapter.getCustomEnums();
+            return c.json({ success: true, data: enums });
+         }
+
+         // 2. Cross-dialect fallback: scan enums from existing tables
+         const enumsMap = new Map<string, string[]>();
+         try {
+            const tables = await adapter.getTables();
+            for (const t of tables.slice(0, 30)) {
+               const cols = await adapter.getSchema(t);
+               for (const col of cols) {
+                  if (col.enumValues && col.enumValues.length > 0) {
+                     const key =
+                        col.type &&
+                        ![
+                           'enum',
+                           'varchar',
+                           'varchar(255)',
+                           'text',
+                           'string',
+                        ].includes(col.type.toLowerCase())
+                           ? col.type
+                           : col.name;
+                     if (!enumsMap.has(key)) {
+                        enumsMap.set(key, col.enumValues);
+                     }
+                  }
+               }
+            }
+         } catch {}
+
+         const data = Array.from(enumsMap.entries()).map(([name, values]) => ({
+            name,
+            values,
+         }));
+
+         return c.json({ success: true, data });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

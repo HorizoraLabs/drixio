@@ -12,6 +12,7 @@ export interface ColumnSchema {
    isUnique?: boolean;
    defaultValue?: string;
    enumValues?: string[];
+   isNewEnum?: boolean;
    fkTarget?: {
       table: string;
       column: string;
@@ -121,6 +122,16 @@ export interface DBAdapter {
       newColumns: ColumnSchema[],
       renames?: Record<string, string>,
    ): Promise<void>;
+   /** List all available schemas in the database (e.g. PostgreSQL schemas). */
+   getSchemas?(): Promise<string[]>;
+   /** Get the currently active schema name. */
+   getCurrentSchema?(): string;
+   /** Switch the adapter to operate on a different schema. */
+   setSchema?(schema: string): Promise<void>;
+   /** Quote a table name with schema prefix (e.g. "zen_stream"."users"). */
+   quoteTable?(tableName: string): string;
+   /** List user-defined enum types in the database. */
+   getCustomEnums?(): Promise<{ name: string; values: string[] }[]>;
 }
 
 export interface DBConfig {

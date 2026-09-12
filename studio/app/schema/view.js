@@ -205,7 +205,12 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                            /"/g,
                            '&quot;',
                         );
-                        safeValForHtml = `<span class="schema-type-mono">${String(val || '').replace(/</g, '&lt;')}</span>`;
+                        const hasEnum =
+                           col.enumValues && col.enumValues.length > 0;
+                        const enumBadgeHtml = hasEnum
+                           ? ` <span class="badge-enum" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: var(--color-primary); border: 1px solid rgba(59, 130, 246, 0.3); margin-left: 4px; cursor: pointer;" title="Configured Enum values: ${col.enumValues.join(', ')}">ENUM</span>`
+                           : '';
+                        safeValForHtml = `<span class="schema-type-mono">${String(val || '').replace(/</g, '&lt;')}</span>${enumBadgeHtml}`;
                      } else if (cKey === 'isPk') {
                         const isPk = !!col.isPk;
                         const isFk = !!col.fkTarget;

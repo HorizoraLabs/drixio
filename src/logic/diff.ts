@@ -12,7 +12,7 @@ import {
    ok,
    err,
 } from './types.js';
-import { getDialect } from './dialect.js';
+import { getDialect, formatSqlDefaultValue } from './dialect.js';
 import { getTableSchemas } from './schema.js';
 
 /**
@@ -455,7 +455,10 @@ export function generateMigrationSql(
             let typeStr = col.type || 'TEXT';
             if (col.nullable === false) typeStr += ' NOT NULL';
             if (col.defaultValue !== undefined && col.defaultValue !== null) {
-               typeStr += ` DEFAULT '${dialect.escapeString(col.defaultValue)}'`;
+               const formatted = formatSqlDefaultValue(col.defaultValue);
+               if (formatted !== null) {
+                  typeStr += ` DEFAULT ${formatted}`;
+               }
             }
             lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
          }
@@ -619,7 +622,10 @@ export function generateRollbackSql(
             let typeStr = col.type || 'TEXT';
             if (col.nullable === false) typeStr += ' NOT NULL';
             if (col.defaultValue !== undefined && col.defaultValue !== null) {
-               typeStr += ` DEFAULT '${dialect.escapeString(col.defaultValue)}'`;
+               const formatted = formatSqlDefaultValue(col.defaultValue);
+               if (formatted !== null) {
+                  typeStr += ` DEFAULT ${formatted}`;
+               }
             }
             lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
          }

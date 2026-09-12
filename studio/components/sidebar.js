@@ -4,6 +4,8 @@ import {
    fetchConfig,
    fetchTableSchema,
    truncateTableApi,
+   fetchSchemas,
+   switchSchemaApi,
 } from '../lib/api.js';
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
@@ -34,6 +36,9 @@ export async function initSidebar(isRefresh = false) {
 
       // Update database status & type display
       await updateDatabaseStatus();
+
+      // Update schema selector (PostgreSQL only)
+      await updateSchemaSelector();
 
       if (res.success && res.data && res.data.length > 0) {
          const tables = res.data;
@@ -326,6 +331,85 @@ async function updateDatabaseStatus() {
       }
       if (dbTypeEl) dbTypeEl.textContent = 'DISCONNECTED';
       window.setStudioConnectionMode?.(false);
+   }
+}
+
+let schemaSelectorBound = false;
+
+async function updateSchemaSelector() {
+   const wrap = document.getElementById('schema-selector-wrap');
+   const select = document.getElementById('schema-select');
+   if (!wrap || !select) return;
+
+   try {
+      const res = await fetchSchemas();
+      if (!res?.success || !res.data?.supported) {
+         wrap.classList.add('hidden');
+         return;
+      }
+
+      const { schemas, currentSchema } = res.data;
+
+      // Populate options
+      select.innerHTML = '';
+      for (const s of schemas) {
+         const opt = document.createElement('option');
+         opt.value = s;
+         opt.textContent = s;
+         if (s === currentSchema) opt.selected = true;
+         select.appendChild(opt);
+      }
+
+      wrap.classList.remove('hidden');
+
+      // Bind change event once
+      if (!schemaSelectorBound) {
+         schemaSelectorBound = true;
+         select.addEventListener('change', async () => {
+            const chosen = select.value;
+            select.disabled = true;
+
+            try {
+               const switchRes = await switchSchemaApi(chosen);
+               if (switchRes.success) {
+                  // Reset current table selection
+                  window.AppState.currentTable = null;
+                  window.AppState.currentTableBtnElement = null;
+
+                  // Refresh sidebar tables
+                  await initSidebar(true);
+
+                  if (window.showToast) {
+                     window.showToast(
+                        `Switched to schema "${chosen}" (${switchRes.data?.tableCount ?? 0} tables)`,
+                        'success',
+                     );
+                  }
+               } else {
+                  if (window.showToast) {
+                     window.showToast(
+                        `Failed to switch schema: ${switchRes.error}`,
+                        'error',
+                     );
+                  }
+                  // Revert dropdown
+                  await updateSchemaSelector();
+               }
+            } catch (err) {
+               if (window.showToast) {
+                  window.showToast(
+                     `Schema switch error: ${err.message}`,
+                     'error',
+                  );
+               }
+               await updateSchemaSelector();
+            } finally {
+               select.disabled = false;
+            }
+         });
+      }
+   } catch {
+      wrap.classList.add('hidden');
    }
 }
 

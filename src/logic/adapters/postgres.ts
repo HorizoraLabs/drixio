@@ -54,9 +54,35 @@ function buildPgPoolConfig(connectionString: string): pg.PoolConfig {
 export class PostgresAdapter implements DBAdapter {
    private connectionString: string;
    private pool: pg.Pool | null = null;
+   private currentSchema: string;
 
    constructor(connection: string) {
       this.connectionString = connection;
+      this.currentSchema = PostgresAdapter.extractSchema(connection);
+   }
+
+   /**
+    * Extract the schema parameter from a PostgreSQL connection URL.
+    * Supports both `?schema=xxx` (Prisma-style) and `?options=-c search_path%3Dxxx`.
+    * Defaults to 'public' if not found.
+    */
+   private static extractSchema(url: string): string {
+      try {
+         const qIdx = url.indexOf('?');
+         if (qIdx === -1) return 'public';
+         const params = new URLSearchParams(url.slice(qIdx + 1));
+         const schema = params.get('schema');
+         if (schema) return schema;
+         // Fallback: check for options=-c search_path=xxx
+         const opts = params.get('options');
+         if (opts) {
+            const m = opts.match(/search_path[=](\w+)/);
+            if (m) return m[1];
+         }
+      } catch {
+         // ignore parse errors
+      }
+      return 'public';
    }
 
    private getPool(): pg.Pool {
@@ -64,6 +90,13 @@ export class PostgresAdapter implements DBAdapter {
          this.pool = new pg.Pool(buildPgPoolConfig(this.connectionString));
          // Prevent unhandled error events from crashing the process
          this.pool.on('error', () => {});
+         // Set search_path for all new connections in the pool
+         this.pool.on('connect', (client: pg.PoolClient) => {
+            const quoted = this.currentSchema.replace(/"/g, '""');
+            client
+               .query(`SET search_path TO "${quoted}", public`)
+               .catch(() => {});
+         });
       }
       return this.pool;
    }
@@ -138,16 +171,16 @@ export class PostgresAdapter implements DBAdapter {
       const query = `
       SELECT tablename 
       FROM pg_catalog.pg_tables 
-      WHERE schemaname = 'public'
+      WHERE schemaname = $1
       ORDER BY tablename;
     `;
-      const res = await this.getPool().query(query);
+      const res = await this.getPool().query(query, [this.currentSchema]);
       return res.rows.map((row) => row.tablename);
    }
 
    async getSchema(tableName: string): Promise<ColumnSchema[]> {
       const query = `
-      SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+      SELECT c.column_name, c.data_type, c.udt_name, c.is_nullable, c.column_default,
              (SELECT count(*) 
               FROM information_schema.key_column_usage kcu 
               JOIN information_schema.table_constraints tc 
@@ -205,12 +238,50 @@ export class PostgresAdapter implements DBAdapter {
                  AND kcu.column_name = c.column_name
                LIMIT 1) as fk_on_update
       FROM information_schema.columns c
-      WHERE c.table_name = $1 AND c.table_schema = 'public'
+      WHERE c.table_name = $1 AND c.table_schema = $2
       ORDER BY c.ordinal_position;
     `;
-      const res = await this.getPool().query(query, [tableName]);
+      const res = await this.getPool().query(query, [
+         tableName,
+         this.currentSchema,
+      ]);
 
       const enumMap = new Map<string, string[]>();
+
+      // 1. Fetch native PostgreSQL ENUM types from system catalogs (pg_enum, pg_type)
+      try {
+         const nativeEnumQuery = `
+            SELECT 
+                a.attname AS column_name,
+                t.typname AS enum_name,
+                e.enumlabel AS enum_value
+            FROM pg_attribute a
+            JOIN pg_class c ON a.attrelid = c.oid
+            JOIN pg_namespace nc ON nc.oid = c.relnamespace
+            JOIN pg_type t ON a.atttypid = t.oid
+            JOIN pg_enum e ON t.oid = e.enumtypid
+            WHERE c.relname = $1
+              AND nc.nspname = $2
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+            ORDER BY a.attnum, e.enumsortorder;
+         `;
+         const nativeEnumRes = await this.getPool().query(nativeEnumQuery, [
+            tableName,
+            this.currentSchema,
+         ]);
+         for (const r of nativeEnumRes.rows) {
+            const colName = r.column_name;
+            if (!enumMap.has(colName)) {
+               enumMap.set(colName, []);
+            }
+            enumMap.get(colName)!.push(r.enum_value);
+         }
+      } catch {
+         // Ignore if catalog access is restricted
+      }
+
+      // 2. Fetch CHECK constraint-based enums (e.g. CHECK (col IN ('A', 'B')))
       try {
          const checkQuery = `
             SELECT cc.check_clause
@@ -218,9 +289,12 @@ export class PostgresAdapter implements DBAdapter {
             JOIN information_schema.table_constraints tc 
               ON cc.constraint_name = tc.constraint_name 
              AND cc.constraint_schema = tc.constraint_schema
-            WHERE tc.table_name = $1 AND tc.table_schema = 'public';
+            WHERE tc.table_name = $1 AND tc.table_schema = $2;
          `;
-         const checkRes = await this.getPool().query(checkQuery, [tableName]);
+         const checkRes = await this.getPool().query(checkQuery, [
+            tableName,
+            this.currentSchema,
+         ]);
          for (const r of checkRes.rows) {
             const inRegex =
                /["'`]?(\w+)["'`]?\s+(?:COLLATE\s+\w+\s+)?IN\s*\(([^)]+)\)/gi;
@@ -231,7 +305,7 @@ export class PostgresAdapter implements DBAdapter {
                   .split(',')
                   .map((s) => s.trim().replace(/^['"`]|['"`]$/g, ''))
                   .filter((s) => s.length > 0);
-               if (values.length > 0) {
+               if (values.length > 0 && !enumMap.has(colName)) {
                   enumMap.set(colName, values);
                }
             }
@@ -259,17 +333,25 @@ export class PostgresAdapter implements DBAdapter {
                      : undefined,
             };
          }
+
+         let colType = col.data_type;
+         if (col.data_type === 'USER-DEFINED' && col.udt_name) {
+            colType = col.udt_name;
+         }
+
          return {
             name: col.column_name,
-            type: col.data_type,
+            type: colType,
             isPk: parseInt(col.is_pk) > 0,
             nullable:
                parseInt(col.is_pk) > 0 ? false : col.is_nullable === 'YES',
             isUnique: parseInt(col.is_pk) > 0 || parseInt(col.is_unique) > 0,
-            defaultValue:
-               col.column_default != null
-                  ? String(col.column_default)
-                  : undefined,
+            defaultValue: (() => {
+               if (col.column_default == null) return undefined;
+               const raw = String(col.column_default).trim();
+               const castMatch = raw.match(/^('[\s\S]*')(?:::[\w\s()]+)$/);
+               return castMatch ? castMatch[1] : raw;
+            })(),
             enumValues: enumMap.get(col.column_name),
             fkTarget,
          };
@@ -284,23 +366,23 @@ export class PostgresAdapter implements DBAdapter {
           ix.indisunique as is_unique,
           ix.indisprimary as is_primary
       FROM
-          pg_class t,
-          pg_class i,
-          pg_index ix,
-          pg_attribute a
+          pg_class t
+          JOIN pg_namespace n ON n.oid = t.relnamespace
+          JOIN pg_index ix ON t.oid = ix.indrelid
+          JOIN pg_class i ON i.oid = ix.indexrelid
+          JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
       WHERE
-          t.oid = ix.indrelid
-          AND i.oid = ix.indexrelid
-          AND a.attrelid = t.oid
-          AND a.attnum = ANY(ix.indkey)
-          AND t.relkind = 'r'
+          t.relkind = 'r'
           AND t.relname = $1
-          AND t.relnamespace = 'public'::regnamespace
+          AND n.nspname = $2
       ORDER BY
           i.relname, array_position(ix.indkey, a.attnum);
     `;
 
-      const res = await this.getPool().query(query, [tableName]);
+      const res = await this.getPool().query(query, [
+         tableName,
+         this.currentSchema,
+      ]);
       const rows = res.rows;
 
       const indexMap = new Map<string, IndexSchema>();
@@ -333,7 +415,7 @@ export class PostgresAdapter implements DBAdapter {
       const schema = await this.getSchema(tableName);
       const columns = schema.map((col) => col.name);
 
-      let sql = `SELECT * FROM ${this.quoteIdentifier(tableName)}`;
+      let sql = `SELECT * FROM ${this.quoteTable(tableName)}`;
       if (whereClause) {
          sql += ` WHERE ${whereClause}`;
       }
@@ -385,7 +467,7 @@ export class PostgresAdapter implements DBAdapter {
          await client.query('BEGIN');
          for (const row of rows) {
             const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-            const sql = `INSERT INTO ${this.quoteIdentifier(tableName)} (${colsQuoted}) VALUES (${placeholders})`;
+            const sql = `INSERT INTO ${this.quoteTable(tableName)} (${colsQuoted}) VALUES (${placeholders})`;
             const values = cols.map((c) => row[c]);
             await client.query(sql, values);
          }
@@ -399,9 +481,86 @@ export class PostgresAdapter implements DBAdapter {
    }
 
    async truncateTable(tableName: string): Promise<void> {
-      const quoted = this.quoteIdentifier(tableName);
+      const quoted = this.quoteTable(tableName);
       await this.getPool().query(
          `TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE;`,
       );
+   }
+
+   /**
+    * Quote a table name with schema prefix, e.g. "zen_stream"."users".
+    * When the schema is 'public', only the table name is quoted for simplicity.
+    */
+   quoteTable(tableName: string): string {
+      if (this.currentSchema === 'public') {
+         return this.quoteIdentifier(tableName);
+      }
+      return `${this.quoteIdentifier(this.currentSchema)}.${this.quoteIdentifier(tableName)}`;
+   }
+
+   /**
+    * List all user-accessible schemas (excluding internal PostgreSQL schemas).
+    */
+   async getSchemas(): Promise<string[]> {
+      const query = `
+         SELECT schema_name
+         FROM information_schema.schemata
+         WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+           AND schema_name NOT LIKE 'pg_temp_%'
+           AND schema_name NOT LIKE 'pg_toast_temp_%'
+         ORDER BY schema_name;
+      `;
+      const res = await this.getPool().query(query);
+      return res.rows.map((row) => row.schema_name);
+   }
+
+   getCurrentSchema(): string {
+      return this.currentSchema;
+   }
+
+   async setSchema(schema: string): Promise<void> {
+      this.currentSchema = schema;
+      // Destroy the existing pool so a fresh one picks up the new search_path
+      if (this.pool) {
+         await this.pool.end();
+         this.pool = null;
+      }
+   }
+
+   /**
+    * List all user-defined enum types in the current schema or public.
+    * Prioritizes enums in the current active schema over public.
+    */
+   async getCustomEnums(): Promise<{ name: string; values: string[] }[]> {
+      const query = `
+         SELECT 
+             t.typname AS name,
+             n.nspname AS schema_name,
+             array_agg(e.enumlabel ORDER BY e.enumsortorder) AS values
+         FROM pg_type t
+         JOIN pg_enum e ON t.oid = e.enumtypid
+         JOIN pg_namespace n ON n.oid = t.typnamespace
+         WHERE n.nspname = $1 OR n.nspname = 'public'
+         GROUP BY t.oid, t.typname, n.nspname
+         ORDER BY (CASE WHEN n.nspname = $1 THEN 0 ELSE 1 END), t.typname;
+      `;
+      try {
+         const res = await this.getPool().query(query, [this.currentSchema]);
+         const seen = new Set<string>();
+         const result: { name: string; values: string[] }[] = [];
+         for (const row of res.rows) {
+            const lower = row.name.toLowerCase();
+            if (!seen.has(lower)) {
+               seen.add(lower);
+               result.push({
+                  name: row.name,
+                  values: Array.isArray(row.values) ? row.values : [],
+               });
+            }
+         }
+         return result;
+      } catch {
+         return [];
+      }
    }
 }

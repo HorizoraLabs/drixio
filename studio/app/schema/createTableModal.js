@@ -2,7 +2,12 @@ import {
    createTableApi,
    fetchTables,
    fetchTableSchema,
+   fetchDatabaseEnums,
 } from '../../lib/api.js';
+import {
+   STANDARD_DATA_TYPES,
+   formatSqlDefaultValue,
+} from '../../lib/dataTypes.js';
 
 /**
  * Visual Table Creation Wizard Modal with Foreign Key, Unique, Presets & Live SQL Preview
@@ -14,16 +19,7 @@ export function openCreateTableModal(onSuccess) {
    const dbType = (window.AppState?.dbType || 'sqlite').toLowerCase();
 
    // Default column type options based on dialect
-   const defaultTypes = [
-      'INTEGER',
-      'VARCHAR(255)',
-      'TEXT',
-      'BOOLEAN',
-      'TIMESTAMP',
-      'NUMERIC',
-      'JSON',
-      'BLOB',
-   ];
+   const defaultTypes = STANDARD_DATA_TYPES;
 
    let columns = [
       {
@@ -47,6 +43,7 @@ export function openCreateTableModal(onSuccess) {
    ];
 
    let cachedTables = [];
+   let cachedEnums = [];
    let tableColumnsCache = {};
    let activeFkIndex = null;
 
@@ -58,6 +55,17 @@ export function openCreateTableModal(onSuccess) {
          }
       })
       .catch((e) => console.warn('Failed to preload tables for FK:', e));
+
+   // Preload existing user-defined enums for reuse
+   fetchDatabaseEnums()
+      .then((res) => {
+         if (res?.success && Array.isArray(res.data)) {
+            cachedEnums = res.data;
+            renderRows();
+            updateSqlPreview();
+         }
+      })
+      .catch((e) => console.warn('Failed to preload enums:', e));
 
    modal = document.createElement('div');
    modal.id = 'create-table-modal';
@@ -199,21 +207,59 @@ export function openCreateTableModal(onSuccess) {
    function updateSqlPreview() {
       const tableName = (nameInput.value.trim() || 'table_name').trim();
       const lines = [];
+      const createTypeLines = [];
+
+      // Pre-create any new PostgreSQL ENUM types
+      if (dbType === 'postgres') {
+         columns.forEach((col) => {
+            if (col.isNewEnum && col.enumValues && col.enumValues.length > 0) {
+               const eName = (
+                  col.newEnumName ||
+                  col.type ||
+                  'CustomEnum'
+               ).trim();
+               const vals = col.enumValues
+                  .map((v) => `'${v.replace(/'/g, "''")}'`)
+                  .join(', ');
+               createTypeLines.push(
+                  `CREATE TYPE ${quoteIdent(eName)} AS ENUM (${vals});`,
+               );
+            }
+         });
+      }
 
       columns.forEach((col) => {
          const colName = col.name ? quoteIdent(col.name) : '"column"';
          const tLower = (col.type || 'VARCHAR(255)').toLowerCase();
          let typeStr = col.type || 'VARCHAR(255)';
+         const hasEnumValues = col.enumValues && col.enumValues.length > 0;
 
          if (dbType === 'sqlite') {
-            if (tLower === 'integer' || tLower === 'int') typeStr = 'INTEGER';
+            if (hasEnumValues) {
+               const vals = col.enumValues
+                  .map((v) => `'${v.replace(/'/g, "''")}'`)
+                  .join(', ');
+               typeStr = `TEXT CHECK(${colName} IN (${vals}))`;
+            } else if (tLower === 'integer' || tLower === 'int')
+               typeStr = 'INTEGER';
             else if (tLower === 'text' || tLower === 'string') typeStr = 'TEXT';
+            else if (tLower.startsWith('varchar'))
+               typeStr = col.type.toUpperCase();
             else if (tLower === 'boolean' || tLower === 'bool')
                typeStr = 'BOOLEAN';
-            else if (['decimal', 'numeric', 'float', 'double'].includes(tLower))
+            else if (
+               ['decimal', 'numeric', 'float', 'double', 'real'].includes(
+                  tLower,
+               ) ||
+               tLower.startsWith('decimal')
+            )
                typeStr = 'REAL';
+            else if (tLower === 'date') typeStr = 'DATE';
             else if (tLower === 'datetime' || tLower === 'timestamp')
                typeStr = 'DATETIME';
+            else if (tLower === 'blob') typeStr = 'BLOB';
+            else if (tLower === 'json') typeStr = 'TEXT';
+            else if (tLower === 'uuid') typeStr = 'TEXT';
 
             if (
                col.primaryKey &&
@@ -230,16 +276,34 @@ export function openCreateTableModal(onSuccess) {
             if (col.primaryKey && (tLower === 'integer' || tLower === 'int')) {
                typeStr = 'SERIAL PRIMARY KEY';
             } else {
-               if (tLower === 'integer' || tLower === 'int')
+               if (hasEnumValues || col.isExistingEnum || col.isNewEnum) {
+                  const eName = col.isNewEnum
+                     ? col.newEnumName || col.type || 'CustomEnum'
+                     : col.type;
+                  typeStr = quoteIdent(eName);
+               } else if (tLower === 'integer' || tLower === 'int')
                   typeStr = 'INTEGER';
                else if (tLower === 'text' || tLower === 'string')
                   typeStr = 'TEXT';
+               else if (tLower.startsWith('varchar'))
+                  typeStr = col.type.toUpperCase();
                else if (tLower === 'boolean' || tLower === 'bool')
                   typeStr = 'BOOLEAN';
-               else if (tLower === 'decimal' || tLower === 'numeric')
-                  typeStr = 'NUMERIC';
+               else if (
+                  tLower === 'decimal' ||
+                  tLower === 'numeric' ||
+                  tLower.startsWith('decimal')
+               )
+                  typeStr = col.type.toUpperCase().includes('(')
+                     ? col.type.toUpperCase()
+                     : 'NUMERIC';
                else if (tLower === 'datetime' || tLower === 'timestamp')
                   typeStr = 'TIMESTAMP';
+               else if (tLower === 'date') typeStr = 'DATE';
+               else if (tLower === 'real') typeStr = 'REAL';
+               else if (tLower === 'json') typeStr = 'JSONB';
+               else if (tLower === 'blob') typeStr = 'BYTEA';
+               else if (tLower === 'uuid') typeStr = 'UUID';
 
                if (col.primaryKey) typeStr += ' PRIMARY KEY';
                if (!col.nullable && !col.primaryKey) typeStr += ' NOT NULL';
@@ -247,15 +311,33 @@ export function openCreateTableModal(onSuccess) {
             }
          } else {
             // MySQL
-            if (tLower === 'integer' || tLower === 'int') typeStr = 'INT';
-            else if (tLower === 'text' || tLower === 'string')
-               typeStr = 'VARCHAR(255)';
+            if (hasEnumValues) {
+               const vals = col.enumValues
+                  .map((v) => `'${v.replace(/'/g, "''")}'`)
+                  .join(', ');
+               typeStr = `ENUM(${vals})`;
+            } else if (tLower === 'integer' || tLower === 'int')
+               typeStr = 'INT';
+            else if (tLower === 'text' || tLower === 'string') typeStr = 'TEXT';
+            else if (tLower.startsWith('varchar'))
+               typeStr = col.type.toUpperCase();
             else if (tLower === 'boolean' || tLower === 'bool')
                typeStr = 'BOOLEAN';
-            else if (tLower === 'decimal' || tLower === 'numeric')
-               typeStr = 'DOUBLE';
+            else if (
+               tLower === 'decimal' ||
+               tLower === 'numeric' ||
+               tLower.startsWith('decimal')
+            )
+               typeStr = col.type.toUpperCase().includes('(')
+                  ? col.type.toUpperCase()
+                  : 'DECIMAL(10,2)';
             else if (tLower === 'datetime' || tLower === 'timestamp')
                typeStr = 'DATETIME';
+            else if (tLower === 'date') typeStr = 'DATE';
+            else if (tLower === 'real') typeStr = 'FLOAT';
+            else if (tLower === 'json') typeStr = 'JSON';
+            else if (tLower === 'blob') typeStr = 'BLOB';
+            else if (tLower === 'uuid') typeStr = 'VARCHAR(36)';
 
             if (
                col.primaryKey &&
@@ -271,13 +353,9 @@ export function openCreateTableModal(onSuccess) {
          }
 
          if (col.defaultValue && !col.defaultValue.startsWith('FK ->')) {
-            if (
-               col.defaultValue.toUpperCase() === 'CURRENT_TIMESTAMP' ||
-               col.defaultValue === 'Timestamp'
-            ) {
-               typeStr += ' DEFAULT CURRENT_TIMESTAMP';
-            } else {
-               typeStr += ` DEFAULT ${col.defaultValue}`;
+            const formattedDef = formatSqlDefaultValue(col.defaultValue);
+            if (formattedDef !== null) {
+               typeStr += ` DEFAULT ${formattedDef}`;
             }
          }
 
@@ -304,7 +382,12 @@ export function openCreateTableModal(onSuccess) {
          }
       });
 
-      sqlCodeBlock.textContent = `CREATE TABLE ${quoteIdent(tableName)} (\n${lines.join(',\n')}\n);`;
+      let ddl = '';
+      if (createTypeLines.length > 0) {
+         ddl += createTypeLines.join('\n') + '\n\n';
+      }
+      ddl += `CREATE TABLE ${quoteIdent(tableName)} (\n${lines.join(',\n')}\n);`;
+      sqlCodeBlock.textContent = ddl;
    }
 
    function renderRows() {
@@ -330,6 +413,65 @@ export function openCreateTableModal(onSuccess) {
             ? `${col.fkTarget.table}.${col.fkTarget.column}${actionTag}`
             : '+ FK';
 
+         let existingEnumsHtml = '';
+         if (cachedEnums && cachedEnums.length > 0) {
+            existingEnumsHtml = `
+              <optgroup label="Existing Enums">
+                ${cachedEnums
+                   .map((ce) => {
+                      const isSel = !col.isNewEnum && col.type === ce.name;
+                      const preview =
+                         ce.values.slice(0, 3).join(', ') +
+                         (ce.values.length > 3 ? '...' : '');
+                      return `<option value="__ENUM_EXISTING__:${ce.name}" ${isSel ? 'selected' : ''}>${ce.name} (${preview})</option>`;
+                   })
+                   .join('')}
+              </optgroup>`;
+         }
+
+         const standardOptionsHtml = `
+              <optgroup label="Standard Types">
+                ${defaultTypes
+                   .map((t) => {
+                      if (t === 'ENUM') {
+                         return `<option value="__NEW_ENUM__" ${col.isNewEnum ? 'selected' : ''}>ENUM (Custom...)</option>`;
+                      }
+                      const isSel =
+                         !col.isNewEnum &&
+                         !col.isExistingEnum &&
+                         t === (col.type || '').toUpperCase();
+                      return `<option value="${t}" ${isSel ? 'selected' : ''}>${t}</option>`;
+                   })
+                   .join('')}
+              </optgroup>`;
+
+         const customEnumOptionHtml = '';
+
+         let newEnumPanelHtml = '';
+         if (col.isNewEnum) {
+            const eName = col.newEnumName || col.type || '';
+            const eValues =
+               col.newEnumValuesStr ||
+               (col.enumValues ? col.enumValues.join(', ') : '');
+            newEnumPanelHtml = `
+            <div class="col-new-enum-panel" data-index="${index}">
+              <div class="col-new-enum-field">
+                <span class="col-new-enum-label">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">label</span>
+                  <span>Enum Name:</span>
+                </span>
+                <input type="text" class="table-col-input new-enum-name-input" data-index="${index}" placeholder="e.g. OrderStatus" value="${eName}" />
+              </div>
+              <div class="col-new-enum-field" style="flex: 1;">
+                <span class="col-new-enum-label">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">list</span>
+                  <span>Values:</span>
+                </span>
+                <input type="text" class="table-col-input new-enum-values-input" data-index="${index}" placeholder="e.g. PENDING, PAID, CANCELLED" value="${eValues}" />
+              </div>
+            </div>`;
+         }
+
          row.innerHTML = /* html */ `
         <div>
           <input type="text" class="table-col-input col-name-input" data-index="${index}" value="${col.name}" placeholder="column_name" />
@@ -337,12 +479,9 @@ export function openCreateTableModal(onSuccess) {
         <div>
           <div class="table-col-select-wrap">
             <select class="table-col-select col-type-select" data-index="${index}">
-              ${defaultTypes
-                 .map(
-                    (t) =>
-                       `<option value="${t}" ${t === col.type.toUpperCase() ? 'selected' : ''}>${t}</option>`,
-                 )
-                 .join('')}
+              ${standardOptionsHtml}
+              ${existingEnumsHtml}
+              ${customEnumOptionHtml}
             </select>
             <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
           </div>
@@ -441,6 +580,7 @@ export function openCreateTableModal(onSuccess) {
             <span class="material-symbols-outlined">delete</span>
           </button>
         </div>
+        ${newEnumPanelHtml}
       `;
 
          // Bind row inputs
@@ -452,9 +592,59 @@ export function openCreateTableModal(onSuccess) {
 
          const typeSel = row.querySelector('.col-type-select');
          typeSel.onchange = (e) => {
-            columns[index].type = e.target.value;
+            const val = e.target.value;
+            if (val === '__NEW_ENUM__') {
+               columns[index].isNewEnum = true;
+               columns[index].isExistingEnum = false;
+               if (!columns[index].newEnumName) {
+                  const guessed = columns[index].name
+                     ? columns[index].name.charAt(0).toUpperCase() +
+                       columns[index].name.slice(1) +
+                       'Enum'
+                     : 'CustomEnum';
+                  columns[index].newEnumName = guessed;
+                  columns[index].type = guessed;
+               }
+               if (!columns[index].enumValues) columns[index].enumValues = [];
+            } else if (val.startsWith('__ENUM_EXISTING__:')) {
+               const eName = val.slice('__ENUM_EXISTING__:'.length);
+               columns[index].isNewEnum = false;
+               columns[index].isExistingEnum = true;
+               columns[index].type = eName;
+               const found = cachedEnums.find((ce) => ce.name === eName);
+               columns[index].enumValues = found ? [...found.values] : [];
+            } else {
+               columns[index].isNewEnum = false;
+               columns[index].isExistingEnum = false;
+               columns[index].type = val;
+               columns[index].enumValues = undefined;
+            }
+            renderRows();
             updateSqlPreview();
          };
+
+         const enumNameInp = row.querySelector('.new-enum-name-input');
+         if (enumNameInp) {
+            enumNameInp.oninput = (e) => {
+               const nameVal = e.target.value.trim();
+               columns[index].newEnumName = nameVal;
+               columns[index].type = nameVal || 'CustomEnum';
+               updateSqlPreview();
+            };
+         }
+
+         const enumValuesInp = row.querySelector('.new-enum-values-input');
+         if (enumValuesInp) {
+            enumValuesInp.oninput = (e) => {
+               const raw = e.target.value;
+               columns[index].newEnumValuesStr = raw;
+               columns[index].enumValues = raw
+                  .split(',')
+                  .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+                  .filter(Boolean);
+               updateSqlPreview();
+            };
+         }
 
          const pkChk = row.querySelector('.col-pk-check');
          pkChk.onchange = (e) => {
@@ -828,18 +1018,37 @@ export function openCreateTableModal(onSuccess) {
          colNames.add(lower);
       }
 
+      // Check new enum values
+      for (const col of columns) {
+         if (col.isNewEnum) {
+            if (!col.enumValues || col.enumValues.length === 0) {
+               alert(
+                  `Please specify at least one enum value for column "${col.name || 'column'}".`,
+               );
+               return;
+            }
+         }
+      }
+
       submitBtn.disabled = true;
       submitText.textContent = 'Creating...';
 
       try {
          const payloadColumns = columns.map((c) => ({
             name: c.name,
-            type: c.type,
+            type: c.isNewEnum
+               ? (c.newEnumName || c.type || 'CustomEnum').trim()
+               : c.type,
             isPk: !!c.primaryKey,
             primaryKey: !!c.primaryKey,
             nullable: c.primaryKey ? false : c.nullable !== false,
             isUnique: !c.primaryKey && !!c.isUnique,
             defaultValue: c.defaultValue || undefined,
+            enumValues:
+               c.enumValues && c.enumValues.length > 0
+                  ? c.enumValues
+                  : undefined,
+            isNewEnum: !!c.isNewEnum,
             fkTarget:
                c.fkTarget && c.fkTarget.table && c.fkTarget.column
                   ? {

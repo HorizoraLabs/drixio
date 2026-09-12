@@ -1219,3 +1219,56 @@ textarea#sql-editor {
       0 0 0 2px rgba(59, 130, 246, 0.35),
       0 2px 6px rgba(37, 99, 235, 0.3);
 }
+
+/* ==================== EXPLAIN QUERY PLAN STYLES ==================== */
+.console-explain-container,
+.console-result-table-container {
+   border: 1px solid var(--color-border);
+   border-radius: 6px;
+   overflow: auto;
+   max-height: 380px;
+   background: var(--color-bg-primary);
+}
+
+.console-explain-table,
+.console-result-table {
+   width: 100%;
+   border-collapse: collapse;
+   font-size: 12px;
+   font-family: var(--font-mono);
+}
+
+.console-explain-table th,
+.console-result-table th {
+   position: sticky;
+   top: 0;
+   background: var(--color-bg-secondary);
+   color: var(--color-text-secondary);
+   font-weight: 600;
+   text-align: left;
+   padding: 8px 12px;
+   border-bottom: 1px solid var(--color-border);
+   z-index: 2;
+   font-size: 11px;
+   text-transform: uppercase;
+   letter-spacing: 0.04em;
+}
+
+.console-explain-table td,
+.console-result-table td {
+   padding: 6px 12px;
+   border-bottom: 1px solid var(--color-border);
+   color: var(--color-text);
+   line-height: 1.5;
+}
+
+.console-explain-table td.explain-plan-cell {
+   white-space: pre !important;
+   font-family: var(--font-mono) !important;
+   color: var(--color-text);
+}
+
+.console-explain-table tr:hover,
+.console-result-table tr:hover {
+   background-color: var(--color-bg-secondary);
+}

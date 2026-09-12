@@ -1,11 +1,25 @@
 import { updateSchemaCell } from './core.js';
-import { openIndexModal, openPkFkModal } from './modals.js';
+import { openIndexModal, openPkFkModal, openEnumModal } from './modals.js';
+import { STANDARD_DATA_TYPES } from '../../lib/dataTypes.js';
 
 export function bindSchemaCellEditor(tableContainer, columns) {
    tableContainer.addEventListener('click', (e) => {
       const manageCell = e.target.closest('.manage-indexes-cell');
       if (manageCell) {
          openIndexModal();
+         return;
+      }
+      const enumBadge = e.target.closest('.badge-enum');
+      if (enumBadge) {
+         const td = enumBadge.closest('td.data-cell');
+         if (td) {
+            const origColName = td.dataset.pk;
+            const colSchema = window.SchemaGrid?.schema?.find(
+               (c) => c.name === origColName,
+            );
+            openEnumModal(td, colSchema);
+            return;
+         }
       }
    });
 
@@ -130,21 +144,12 @@ export function bindSchemaCellEditor(tableContainer, columns) {
             inputEl.appendChild(op);
          });
       } else if (colKey === 'type') {
+         const origColName = td.dataset.pk;
+         const colSchema = window.SchemaGrid?.schema?.find(
+            (c) => c.name === origColName,
+         );
          inputEl = document.createElement('select');
-         const opts = [
-            'INTEGER',
-            'TEXT',
-            'REAL',
-            'BLOB',
-            'NUMERIC',
-            'BOOLEAN',
-            'DATE',
-            'DATETIME',
-            'JSON',
-            'VARCHAR(255)',
-            'DECIMAL(10,2)',
-            'UUID',
-         ];
+         const opts = [...STANDARD_DATA_TYPES];
          if (
             rawText &&
             !opts.some((o) => o.toUpperCase() === rawText.toUpperCase())
@@ -154,9 +159,16 @@ export function bindSchemaCellEditor(tableContainer, columns) {
          opts.forEach((opt) => {
             const op = document.createElement('option');
             op.value = opt;
-            op.textContent = opt;
+            op.textContent = opt === 'ENUM' ? 'ENUM (Configure...)' : opt;
             if (opt.toUpperCase() === rawText.toUpperCase()) op.selected = true;
             inputEl.appendChild(op);
+         });
+
+         inputEl.addEventListener('change', (ev) => {
+            if (ev.target.value === 'ENUM') {
+               inputEl.blur();
+               setTimeout(() => openEnumModal(td, colSchema), 10);
+            }
          });
       } else {
          inputEl = document.createElement('input');
@@ -187,6 +199,9 @@ export function bindSchemaCellEditor(tableContainer, columns) {
 
       const commitEdit = () => {
          let newVal = inputEl.value;
+         if (colKey === 'type' && newVal === 'ENUM') {
+            return;
+         }
 
          window.SchemaGrid.currentTransaction = [];
          updateSchemaCell(td, newVal, columns);

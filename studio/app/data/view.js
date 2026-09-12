@@ -9,6 +9,7 @@ import { getFilterQuery, generateRowHtml } from './utils.js';
 import { bindFkPreview } from './fkPreview.js';
 import { openMockDataModal } from './modal.js';
 import { showContextMenu } from '../../components/contextMenu.js';
+import { renderFilterBar, clearTableFilters } from './filterBar.js';
 
 export { saveDataGridEdits } from './core.js';
 
@@ -99,10 +100,6 @@ export async function loadTableData(
          window.DataGrid.pagination.hasMore =
             rows.length === window.DataGrid.pagination.limit;
 
-         let columnOptions = columns
-            .map((c) => `<option value="${c}">${c}</option>`)
-            .join('');
-
          if (!preserveState) {
             const hasFkNav =
                window.fkNavHistory && window.fkNavHistory.toTable === tableName;
@@ -116,33 +113,7 @@ export async function loadTableData(
             let html = `
           <div class="toolbar">
             ${backBtnHtml}
-            <div class="filter-group">
-              <div class="filter-icon-container">
-                <span class="material-symbols-outlined" id="filter-icon">filter_list</span>
-                <span>Filter</span>
-              </div>
-              <select id="filter-col-${tableName}" class="filter-select">${columnOptions}</select>
-              <select id="filter-op-${tableName}" class="filter-select">
-                <option value="=">=</option>
-                <option value="!=">!=</option>
-                <option value=">">&gt;</option>
-                <option value="<">&lt;</option>
-                <option value=">=">&gt;=</option>
-                <option value="<=">&lt;=</option>
-                <option value="LIKE">LIKE</option>
-                <option value="!=">!=</option>
-                <option value="NOT LIKE">NOT LIKE</option>
-                <option value="IS NULL">IS NULL</option>
-                <option value="IS NOT NULL">IS NOT NULL</option>
-                <option value="IN">IN</option>
-              </select>
-              <div class="filter-input-wrapper">
-                <input type="text" id="filter-val-${tableName}" class="filter-input" placeholder="Filter value..." />
-                <button type="button" id="btn-clear-filter-${tableName}" class="filter-clear-btn hidden" title="Clear filter">
-                  <span class="material-symbols-outlined">close</span>
-                </button>
-              </div>
-            </div>
+            <div id="filter-bar-mount-${tableName}" class="flex-1" style="height: 100%; display: flex; align-items: center; min-width: 0;"></div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
               <span class="material-symbols-outlined">refresh</span>
             </button>
@@ -150,6 +121,26 @@ export async function loadTableData(
           <div class="table-container" id="data-grid-container-${tableName}"></div>
         `;
             renderTarget.innerHTML = html;
+
+            const filterBarMount = document.getElementById(
+               `filter-bar-mount-${tableName}`,
+            );
+            if (filterBarMount) {
+               renderFilterBar({
+                  container: filterBarMount,
+                  tableName,
+                  schema,
+                  onFilterChange: () => {
+                     if (window.DataGrid) window.DataGrid.pagination.offset = 0;
+                     loadTableData(
+                        tableName,
+                        btnElement,
+                        getFilterQuery(tableName),
+                        true,
+                     );
+                  },
+               });
+            }
          }
 
          const tableContainer = document.getElementById(
@@ -187,11 +178,8 @@ export async function loadTableData(
                );
                if (clearBtn) {
                   clearBtn.onclick = () => {
-                     const searchInput = document.getElementById(
-                        `filter-val-${tableName}`,
-                     );
-                     if (searchInput) searchInput.value = '';
-                     loadTableData(tableName, btnElement, '', true);
+                     clearTableFilters(tableName);
+                     loadTableData(tableName, btnElement, '', false);
                   };
                }
             } else {
@@ -337,7 +325,7 @@ export async function loadTableData(
                   loadTableData(
                      currentTable,
                      btnElement,
-                     getFilterQuery(),
+                     getFilterQuery(currentTable),
                      true,
                   );
                };
@@ -363,7 +351,7 @@ export async function loadTableData(
                   if (e.preventDefault) e.preventDefault();
                   if (e.stopPropagation) e.stopPropagation();
 
-                  const filterQuery = getFilterQuery();
+                  const filterQuery = getFilterQuery(tableName);
                   const sortState = window.DataGrid?.sortState;
                   const isFiltered = !!filterQuery;
 
@@ -387,7 +375,7 @@ export async function loadTableData(
                               loadTableData(
                                  tableName,
                                  btnElement,
-                                 getFilterQuery(),
+                                 getFilterQuery(tableName),
                                  true,
                               );
                            });
@@ -498,72 +486,6 @@ export async function loadTableData(
          }
 
          if (!preserveState) {
-            const inputElSearch = document.getElementById(
-               `filter-val-${tableName}`,
-            );
-
-            const executeSearch = (resetOffset = true) => {
-               if (resetOffset && window.DataGrid)
-                  window.DataGrid.pagination.offset = 0;
-
-               loadTableData(tableName, btnElement, getFilterQuery(), true);
-            };
-
-            const clearFilterBtn = document.getElementById(
-               `btn-clear-filter-${tableName}`,
-            );
-            const updateClearBtn = () => {
-               if (clearFilterBtn) {
-                  if (inputElSearch?.value.trim())
-                     clearFilterBtn.classList.remove('hidden');
-                  else clearFilterBtn.classList.add('hidden');
-               }
-            };
-
-            if (clearFilterBtn && inputElSearch) {
-               clearFilterBtn.addEventListener('click', () => {
-                  inputElSearch.value = '';
-                  clearFilterBtn.classList.add('hidden');
-                  executeSearch(true);
-                  inputElSearch.focus();
-               });
-            }
-
-            let searchTimeout;
-            const debounceSearch = () => {
-               updateClearBtn();
-               clearTimeout(searchTimeout);
-               searchTimeout = setTimeout(() => executeSearch(true), 400);
-            };
-
-            if (inputElSearch) {
-               inputElSearch.addEventListener('input', debounceSearch);
-            }
-
-            const filterCol = document.getElementById(
-               `filter-col-${tableName}`,
-            );
-            const filterOp = document.getElementById(`filter-op-${tableName}`);
-            if (filterCol)
-               filterCol.addEventListener('change', () => executeSearch(true));
-            if (filterOp)
-               filterOp.addEventListener('change', () => executeSearch(true));
-            if (filterOp) {
-               filterOp.addEventListener('change', () => {
-                  const isNullOp =
-                     filterOp.value === 'IS NULL' ||
-                     filterOp.value === 'IS NOT NULL';
-                  if (inputElSearch) {
-                     inputElSearch.disabled = isNullOp;
-                     inputElSearch.placeholder = isNullOp
-                        ? 'No value needed'
-                        : 'Filter value...';
-                     if (isNullOp) inputElSearch.value = '';
-                  }
-                  executeSearch(true);
-               });
-            }
-
             const refreshData = () => {
                const hasPending =
                   Object.keys(window.DataGrid.pendingEdits).length > 0 ||
@@ -583,7 +505,13 @@ export async function loadTableData(
                window.DataGrid.currentTransaction = null;
                window.updateSidebarDirtyState?.();
 
-               executeSearch(false);
+               if (window.DataGrid) window.DataGrid.pagination.offset = 0;
+               loadTableData(
+                  tableName,
+                  btnElement,
+                  getFilterQuery(tableName),
+                  true,
+               );
             };
 
             const refreshBtn = document.getElementById(
@@ -604,7 +532,7 @@ export async function loadTableData(
                   window.DataGrid.pagination.limit;
 
                const opts = {
-                  where: getFilterQuery(),
+                  where: getFilterQuery(tableName),
                   limit: window.DataGrid.pagination.limit,
                   offset: window.DataGrid.pagination.offset,
                   orderCol: window.DataGrid.sortState.col,

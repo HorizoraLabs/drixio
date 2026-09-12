@@ -1,3 +1,5 @@
+import { saveConnection } from '../../lib/connections.js';
+
 export function loadConnectView(container) {
    let selectedType = 'sqlite'; // 'sqlite' | 'postgres' | 'mysql'
    const modes = {
@@ -1052,6 +1054,32 @@ export function loadConnectView(container) {
 
                if (!data.success) {
                   throw new Error(data.error || 'Failed to connect');
+               }
+
+               const isRemote = selectedType !== 'sqlite';
+               const badgeLabel = isRemote ? 'REMOTE' : 'LOCAL';
+               const connectedName = data.data?.dbName || getTargetDbName();
+               const connectedUrl = data.data?.targetUrl || payload.url;
+
+               // Persist to saved connections list
+               saveConnection({
+                  name: connectedName,
+                  dialect: data.data?.dbType || selectedType,
+                  url: connectedUrl,
+                  isRemote,
+                  badgeLabel,
+               });
+
+               // Update Header Breadcrumbs
+               const dbNameEl = document.getElementById('db-name');
+               if (dbNameEl) {
+                  dbNameEl.textContent = connectedName;
+               }
+               const envBadge = document.getElementById('env-badge');
+               if (envBadge) {
+                  envBadge.textContent = badgeLabel;
+                  envBadge.className = `env-badge ${isRemote ? 'remote' : 'local'}`;
+                  envBadge.classList.remove('hidden');
                }
 
                if (window.showToast) {

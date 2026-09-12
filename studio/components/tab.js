@@ -1,78 +1,94 @@
 export const TabHTML = /* html */ `
-<nav id="tab-nav" role="tablist" aria-label="Views and tools">
-  <!-- Table Scoped Underline Tabs -->
-  <div class="table-tabs" role="tablist">
+<nav id="tab-nav" role="navigation" aria-label="Views and tools">
+  <!-- Top Navigation Items -->
+  <div class="rail-top">
     <button
       type="button"
-      class="tab-btn isCurrentTab"
+      class="tab-btn rail-item isCurrentTab"
       onclick="handleSwitchTab('data-btn')"
       id="data-btn"
-      role="tab"
-      title="View table data records"
+      title="Table Editor"
+      aria-label="Table Editor"
     >
-      <span class="material-symbols-outlined tab-icon" id="data-icon">table_chart</span>
-      <span>Data</span>
+      <span class="material-symbols-outlined rail-icon" id="data-icon">table_chart</span>
+      <span class="rail-label">Table Editor</span>
     </button>
+
     <button
       type="button"
-      class="tab-btn"
+      class="tab-btn rail-item"
       onclick="handleSwitchTab('schema-btn')"
       id="schema-btn"
-      role="tab"
-      title="View and edit table schema"
+      title="Schema"
+      aria-label="Schema"
     >
-      <span class="material-symbols-outlined tab-icon" id="schema-icon">schema</span>
-      <span>Schema</span>
+      <span class="material-symbols-outlined rail-icon" id="schema-icon">schema</span>
+      <span class="rail-label">Schema</span>
     </button>
+
     <button
       type="button"
-      class="tab-btn hidden"
+      class="tab-btn rail-item"
+      onclick="handleSwitchTab('sql-btn')"
+      id="sql-btn"
+      title="SQL Editor"
+      aria-label="SQL Editor"
+    >
+      <span class="material-symbols-outlined rail-icon" id="sql-icon">terminal</span>
+      <span class="rail-label">SQL Editor</span>
+    </button>
+
+    <div class="rail-divider"></div>
+
+    <button
+      type="button"
+      class="tab-btn rail-item"
+      onclick="handleSwitchTab('erd-btn')"
+      id="erd-btn"
+      title="ERD Diagram"
+      aria-label="ERD Diagram"
+    >
+      <span class="material-symbols-outlined rail-icon" id="erd-icon">account_tree</span>
+      <span class="rail-label">ERD Diagram</span>
+    </button>
+
+    <button
+      type="button"
+      class="tab-btn rail-item"
+      onclick="handleSwitchTab('status-btn')"
+      id="status-btn"
+      title="Database Status"
+      aria-label="Database Status"
+    >
+      <span class="material-symbols-outlined rail-icon" id="status-icon">monitoring</span>
+      <span class="rail-label">Status & Metrics</span>
+    </button>
+
+    <button
+      type="button"
+      class="tab-btn rail-item hidden"
       onclick="handleSwitchTab('connect-btn')"
       id="connect-btn"
-      role="tab"
-      title="Connect or create database"
+      title="Connection"
+      aria-label="Connection"
     >
-      <span class="material-symbols-outlined tab-icon" id="connect-icon">cable</span>
-      <span>Connect</span>
+      <span class="material-symbols-outlined rail-icon" id="connect-icon">cable</span>
+      <span class="rail-label">Connection</span>
     </button>
   </div>
 
-  <div class="flex-1"></div>
-
-  <!-- Global Database Tools (Clean flat buttons) -->
-  <div class="global-tools" role="toolbar" aria-label="Global tools">
+  <!-- Bottom: Theme Mode Toggle Button -->
+  <div class="rail-bottom">
+    <div class="rail-divider"></div>
     <button
       type="button"
-      class="tab-btn tool-btn"
-      onclick="handleSwitchTab('status-btn')"
-      id="status-btn"
-      role="tab"
-      title="Database metrics and health"
+      class="rail-item rail-theme-toggle"
+      id="theme-toggle"
+      title="Toggle Theme (Light / Dark)"
+      aria-label="Toggle Theme"
     >
-      <span class="material-symbols-outlined tab-icon" id="status-icon">monitoring</span>
-      <span>Status</span>
-    </button>
-    <button
-      type="button"
-      class="tab-btn tool-btn"
-      onclick="handleSwitchTab('erd-btn')"
-      id="erd-btn"
-      role="tab"
-      title="Entity relationship diagram"
-    >
-      <span class="material-symbols-outlined tab-icon" id="erd-icon">account_tree</span>
-      <span>ERD</span>
-    </button>
-    <button
-      type="button"
-      class="tab-btn tool-btn"
-      onclick="handleSwitchTab('sql-btn')"
-      id="sql-btn"
-      role="tab"
-      title="Execute SQL queries"
-    >
-      <span class="material-symbols-outlined tab-icon" id="sql-icon">terminal</span>
-      <span>Console</span>
+      <span class="material-symbols-outlined rail-icon" id="theme-icon">dark_mode</span>
+      <span class="rail-label" id="theme-text">Dark Mode</span>
     </button>
   </div>
 </nav>

@@ -1,144 +1,187 @@
-/* ==================== PLAN A: MODERN GITHUB/VERCEL STYLE TAB NAV ==================== */
+/* ==================== SUPABASE STYLE NAVIGATION RAIL (TAB SIDEBAR) ==================== */
+
+#tab-container {
+   width: 52px;
+   height: 100%;
+   flex-shrink: 0;
+   position: relative;
+   z-index: 500;
+}
+
 #tab-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--color-border);
-  height: 42px;
-  padding: 0 24px;
-  background-color: var(--color-bg-primary);
-  box-sizing: border-box;
-  flex-shrink: 0;
-  gap: 16px;
+   position: absolute;
+   top: 0;
+   left: 0;
+   bottom: 0;
+   width: 52px;
+   height: 100%;
+   background-color: var(--color-bg-secondary);
+   border-right: 1px solid var(--color-border);
+   display: flex;
+   flex-direction: column;
+   justify-content: space-between;
+   padding: 10px 0 8px 0;
+   box-sizing: border-box;
+   transition:
+      width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.2s ease;
+   overflow: hidden;
+   white-space: nowrap;
+   user-select: none;
+   z-index: 500;
 }
 
-/* ==================== LEFT: TABLE-SCOPED UNDERLINE TABS ==================== */
-.table-tabs {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  gap: 20px;
+[data-theme='dark'] #tab-nav {
+   background-color: #121212;
+   border-right-color: var(--color-border);
 }
 
-.table-tabs .tab-btn {
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 4px;
-  margin-bottom: -1px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  outline: none;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-  gap: 8px;
-  user-select: none;
-  box-sizing: border-box;
+/* Smooth flyout expand on hover */
+#tab-container:hover #tab-nav,
+#tab-nav:hover {
+   width: 200px;
+   box-shadow: 10px 0 25px rgba(0, 0, 0, 0.1);
 }
 
-.table-tabs .tab-btn:hover {
-  color: var(--color-text);
-  border-bottom-color: var(--color-border);
+/* Sections */
+.rail-top {
+   display: flex;
+   flex-direction: column;
+   gap: 3px;
+   flex: 1;
 }
 
-.table-tabs .tab-btn.isCurrentTab {
-  color: var(--color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--color-primary);
+.rail-bottom {
+   display: flex;
+   flex-direction: column;
+   gap: 3px;
+   margin-top: auto;
 }
 
-[data-theme="dark"] .table-tabs .tab-btn.isCurrentTab {
-  color: #60a5fa;
-  border-bottom-color: #3b82f6;
+/* Rail item button */
+.rail-item {
+   display: flex;
+   align-items: center;
+   height: 36px;
+   width: calc(100% - 15px);
+   margin: 2px 8px;
+   padding: 0 6.5px;
+   border-radius: 6px;
+   border: 1px solid transparent;
+   outline: none;
+   background: transparent;
+   color: var(--color-text-secondary);
+   cursor: pointer;
+   box-sizing: border-box;
+   text-align: left;
+   user-select: none;
+   transition:
+      background-color 0.12s ease,
+      color 0.12s ease,
+      border-color 0.12s ease;
 }
 
-.table-tabs .tab-btn .tab-icon {
-  font-size: 17px;
-  line-height: 1;
-  color: var(--color-text-soft);
-  transition: color 0.15s ease;
+.rail-item:hover {
+   background-color: var(--color-bg-secondary);
+   color: var(--color-text);
 }
 
-.table-tabs .tab-btn:hover .tab-icon {
-  color: var(--color-text);
+[data-theme='dark'] .rail-item:hover {
+   background-color: rgba(255, 255, 255, 0.07);
+   color: #ffffff;
 }
 
-.table-tabs .tab-btn.isCurrentTab .tab-icon {
-  color: var(--color-primary);
+.rail-item:hover .rail-icon {
+   color: var(--color-text);
 }
 
-[data-theme="dark"] .table-tabs .tab-btn.isCurrentTab .tab-icon {
-  color: #60a5fa;
+[data-theme='dark'] .rail-item:hover .rail-icon {
+   color: #ffffff;
 }
 
-/* ==================== RIGHT: GLOBAL WORKSPACE TOOLS ==================== */
-.global-tools {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* Active tab state */
+.rail-item.isCurrentTab {
+   background-color: #ffffff;
+   border-color: var(--color-border);
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+   color: var(--color-primary);
+   font-weight: 600;
 }
 
-.global-tools .tool-btn {
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  outline: none;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  gap: 6px;
-  box-sizing: border-box;
-  user-select: none;
+[data-theme='dark'] .rail-item.isCurrentTab {
+   background-color: #222222;
+   border-color: rgba(255, 255, 255, 0.14);
+   color: #ffffff;
 }
 
-.global-tools .tool-btn:hover {
-  color: var(--color-text);
-  background-color: var(--color-bg-secondary);
+.rail-item.isCurrentTab .rail-icon {
+   color: var(--color-primary);
 }
 
-.global-tools .tool-btn:active {
-  transform: scale(0.96);
+[data-theme='dark'] .rail-item.isCurrentTab .rail-icon {
+   color: #ffffff;
 }
 
-.global-tools .tool-btn.isCurrentTab {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-primary);
-  border-color: var(--color-border);
-  font-weight: 600;
+/* Icons */
+.rail-icon {
+   font-size: 20px;
+   width: 22px;
+   height: 22px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   flex-shrink: 0;
+   color: var(--color-text-soft);
+   transition: color 0.12s ease;
 }
 
-[data-theme="dark"] .global-tools .tool-btn.isCurrentTab {
-  background-color: #1e293b;
-  color: #60a5fa;
-  border-color: rgba(255, 255, 255, 0.12);
+/* Text labels (fade in and slide on expand) */
+.rail-label {
+   margin-left: 12px;
+   font-size: 13px;
+   font-weight: 500;
+   color: inherit;
+   opacity: 0;
+   transform: translateX(-6px);
+   transition:
+      opacity 0.18s ease,
+      transform 0.18s ease;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
 }
 
-.global-tools .tool-btn .tab-icon {
-  font-size: 16px;
-  line-height: 1;
-  color: var(--color-text-soft);
-  transition: color 0.15s ease;
+#tab-container:hover .rail-label,
+#tab-nav:hover .rail-label {
+   opacity: 1;
+   transform: translateX(0);
 }
 
-.global-tools .tool-btn:hover .tab-icon {
-  color: var(--color-text);
+/* Dividers */
+.rail-divider {
+   height: 1px;
+   margin: 8px 10px;
+   background-color: var(--color-border);
+   flex-shrink: 0;
 }
 
-.global-tools .tool-btn.isCurrentTab .tab-icon {
-  color: var(--color-primary);
+[data-theme='dark'] .rail-divider {
+   background-color: rgba(255, 255, 255, 0.08);
 }
 
-[data-theme="dark"] .global-tools .tool-btn.isCurrentTab .tab-icon {
-  color: #60a5fa;
+/* Bottom theme toggle button */
+.rail-theme-toggle {
+   color: var(--color-text-secondary);
+}
+
+.rail-theme-toggle:hover {
+   color: var(--color-text);
+}
+
+[data-theme='dark'] .rail-theme-toggle:hover #theme-icon {
+   color: #fbbf24;
+}
+
+.rail-item.hidden {
+   display: none !important;
 }

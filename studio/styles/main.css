@@ -16,127 +16,51 @@
    border-bottom: 1px solid var(--color-border);
    height: 42px;
    flex-shrink: 0;
-   background-color: var(--color-bg-primary);
-   padding: 0;
-   box-sizing: border-box;
-}
-
-.filter-group {
-   display: flex;
-   align-items: center;
-   height: 100%;
-   flex: 1;
-   background: transparent;
-   border: none;
-   border-radius: 0;
-   box-sizing: border-box;
-}
-
-.filter-icon-container {
-   display: flex;
-   align-items: center;
-   padding: 0 16px;
-   background-color: transparent;
-   border-right: 1px solid var(--color-border);
-   height: 100%;
-   font-size: 13px;
-   gap: 6px;
-   user-select: none;
-   flex-shrink: 0;
-}
-
-.filter-icon-container .material-symbols-outlined {
-   font-size: 15px;
-   color: var(--color-text-secondary);
-}
-
-.filter-icon-container span:not(.material-symbols-outlined) {
-   font-size: 11px;
-   font-weight: 700;
-   text-transform: uppercase;
-   letter-spacing: 0.6px;
-   color: var(--color-text-secondary);
-}
-
-.filter-select {
-   border: none;
-   outline: none;
-   height: 100%;
-   padding: 0 12px;
-   font-size: 12px;
-   font-weight: 500;
-   color: var(--color-text);
-   background-color: transparent;
-   border-right: 1px solid var(--color-border);
-   cursor: pointer;
-   flex-shrink: 0;
-   transition: background-color 0.15s ease;
-}
-
-.filter-select:hover {
    background-color: var(--color-bg-secondary);
-}
-
-.filter-select option {
-   background-color: var(--color-bg-primary);
-   color: var(--color-text);
-}
-
-.filter-input-wrapper {
-   position: relative;
-   display: flex;
-   align-items: center;
-   height: 100%;
-   flex: 1;
-   transition: background-color 0.15s ease;
-   margin-right: 8px;
-}
-
-.filter-input {
-   border: none;
-   outline: none;
-   height: 100%;
-   width: 100%;
-   min-width: 0;
-   padding: 0 32px 0 16px;
-   font-size: 12px;
-   background: transparent;
-   font-weight: 400;
-   color: var(--color-text);
+   padding: 0 12px 0 6px;
    box-sizing: border-box;
 }
 
-.filter-input::placeholder {
-   color: var(--color-text-soft);
+[data-theme='dark'] .toolbar {
+   background-color: #171717;
+   border-bottom-color: var(--color-border);
 }
 
-.filter-clear-btn {
-   position: absolute;
-   right: 8px;
-   top: 50%;
-   transform: translateY(-50%);
-   background: transparent;
-   border: none;
-   outline: none;
-   cursor: pointer;
-   display: flex;
+/* Header & Toolbar Buttons */
+.header-btn {
+   display: inline-flex;
    align-items: center;
    justify-content: center;
-   color: var(--color-text-soft);
-   padding: 0;
-   width: 18px;
-   height: 18px;
-   border-radius: 4px;
-   transition: all 0.15s ease;
-}
-
-.filter-clear-btn:hover {
+   border-radius: 6px;
+   font-weight: 500;
+   cursor: pointer;
+   transition: all 0.12s ease;
+   user-select: none;
+   border: 1px solid var(--color-border);
+   background-color: var(--color-bg-primary);
    color: var(--color-text);
-   background-color: var(--color-bg-secondary);
+   box-sizing: border-box;
 }
 
-.filter-clear-btn .material-symbols-outlined {
-   font-size: 13px;
+[data-theme='dark'] .header-btn.secondary {
+   background-color: #121212;
+   border-color: var(--color-border);
+   color: var(--color-text);
+}
+
+.header-btn.secondary:hover {
+   background-color: var(--color-bg-secondary-dark);
+   border-color: var(--color-text-soft);
+}
+
+.header-btn.primary {
+   background-color: var(--color-primary);
+   border-color: var(--color-primary);
+   color: #ffffff;
+}
+
+.header-btn.primary:hover {
+   background-color: var(--color-primary-dark);
 }
 
 #btn-run-query:active,
@@ -152,12 +76,11 @@
 }
 
 .refresh-btn {
-   background-color: var(--color-bg-secondary);
+   background-color: var(--color-bg-primary);
    border-radius: 6px;
    width: 28px;
    height: 28px;
    padding: 0;
-   margin-right: 16px;
    display: flex;
    justify-content: center;
    align-items: center;
@@ -167,6 +90,11 @@
    transition: all 0.15s ease;
    box-sizing: border-box;
    flex-shrink: 0;
+}
+
+[data-theme='dark'] .refresh-btn {
+   background-color: #121212;
+   border-color: var(--color-border);
 }
 
 .refresh-btn:hover {

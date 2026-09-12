@@ -1,6 +1,18 @@
-export function getFilterQuery() {
-   const t = window.AppState?.currentTable;
+import { buildTableWhereClause } from './filterBar.js';
+
+export function getFilterQuery(tableName) {
+   const t = tableName || window.AppState?.currentTable;
    if (!t) return '';
+
+   const schema =
+      window.TableStates?.[t]?.dataGrid?.schema ||
+      window.DataGrid?.schema ||
+      [];
+   const filterBarWhere = buildTableWhereClause(t, schema);
+   if (filterBarWhere) {
+      return filterBarWhere;
+   }
+
    const filterVal = document.getElementById(`filter-val-${t}`)?.value.trim();
    const filterOp = document.getElementById(`filter-op-${t}`)?.value;
    const filterCol = document.getElementById(`filter-col-${t}`)?.value;

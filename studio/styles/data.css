@@ -92,10 +92,10 @@
 }
 
 [data-theme='dark'] .data-table th {
-   background-color: #0d1526;
-   border-bottom-color: rgba(255, 255, 255, 0.1);
-   border-right-color: rgba(255, 255, 255, 0.08);
-   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+   background-color: #161616;
+   border-bottom-color: var(--color-border);
+   border-right-color: var(--color-border);
+   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .data-table th.sortable {

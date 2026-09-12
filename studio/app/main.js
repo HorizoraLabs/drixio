@@ -13,6 +13,10 @@ import { initTheme } from '../components/theme.js';
 import { initToast } from '../components/toast.js';
 import { bindGridEvents } from './grid/events.js';
 import { getFilterQuery } from './data/utils.js';
+import { openImportModal } from '../components/importModal.js';
+import { openHelpModal } from '../components/helpModal.js';
+import { initDbSwitcher } from '../components/dbSwitcher.js';
+import { saveConnection } from '../lib/connections.js';
 const header = document.getElementById('header-container');
 const sidebar = document.getElementById('sidebar-container');
 const tab = document.getElementById('tab-container');
@@ -25,220 +29,77 @@ tab.innerHTML = TabHTML;
 const exportBtn = document.getElementById('export-btn');
 const exportDropdown = document.getElementById('export-dropdown');
 const importBtn = document.getElementById('import-btn');
-const importDropdown = document.getElementById('import-dropdown');
 
-if (importBtn && importDropdown) {
+// Import Pure Icon Button -> Opens Import Modal
+if (importBtn) {
    importBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isOpening = importDropdown.classList.contains('hidden');
-      importDropdown.classList.toggle('hidden');
-      importBtn.classList.toggle('is-open', isOpening);
       if (exportDropdown) {
          exportDropdown.classList.add('hidden');
          exportBtn?.classList.remove('is-open');
       }
+      openImportModal('records');
    });
-
-   // Helper for table data imports (CSV / JSON)
-   const handleTableDataImport = (format) => {
-      importDropdown.classList.add('hidden');
-      importBtn.classList.remove('is-open');
-      const tableName = window.AppState.currentTable;
-      if (!tableName) {
-         window.showToast(
-            'Please select a table from the sidebar first.',
-            'error',
-         );
-         return;
-      }
-
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = format === 'json' ? '.json' : '.csv';
-      input.onchange = async (e) => {
-         const file = e.target.files[0];
-         if (!file) return;
-
-         const confirmed = confirm(
-            `⚠️ IMPORT DATA CONFIRMATION\n\n` +
-               `Target Table: ${tableName}\n` +
-               `File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)\n` +
-               `Format: ${format.toUpperCase()}\n\n` +
-               `Are you sure you want to insert records from this file into '${tableName}'?`,
-         );
-         if (!confirmed) return;
-
-         const formData = new FormData();
-         formData.append('file', file);
-         formData.append('format', format);
-
-         window.showToast(
-            `Importing ${file.name} into '${tableName}'...`,
-            'success',
-         );
-
-         try {
-            const res = await fetch(
-               `/api/tables/${encodeURIComponent(tableName)}/import`,
-               {
-                  method: 'POST',
-                  body: formData,
-               },
-            );
-            const result = await res.json();
-
-            if (result.success) {
-               window.showToast(
-                  result.message || 'Import completed successfully',
-                  'success',
-               );
-               // Refresh table data if currently looking at this table
-               if (window.AppState.currentTab === 'data-btn') {
-                  const viewId = `view-data-btn-${tableName}`;
-                  const container = document.getElementById(viewId);
-                  if (container) container.innerHTML = '';
-                  window.renderCurrentView('', true);
-               }
-            } else {
-               window.showToast(result.error || 'Import failed', 'error');
-            }
-         } catch (err) {
-            window.showToast('Network error during data import', 'error');
-         }
-      };
-      input.click();
-   };
-
-   document
-      .getElementById('import-data-csv-btn')
-      ?.addEventListener('click', () => {
-         handleTableDataImport('csv');
-      });
-
-   document
-      .getElementById('import-data-json-btn')
-      ?.addEventListener('click', () => {
-         handleTableDataImport('json');
-      });
-
-   // ERD Layout Import (.json)
-   document
-      .getElementById('import-erd-json-btn')
-      ?.addEventListener('click', () => {
-         importDropdown.classList.add('hidden');
-         importBtn.classList.remove('is-open');
-         const input = document.createElement('input');
-         input.type = 'file';
-         input.accept = '.json';
-         input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const confirmed = confirm(
-               `⚠️ IMPORT ERD LAYOUT CONFIRMATION\n\n` +
-                  `File: ${file.name}\n\n` +
-                  `Are you sure you want to import this ERD layout? This will update table coordinates on your diagram canvas.`,
-            );
-            if (!confirmed) return;
-
-            try {
-               const text = await file.text();
-               const parsed = JSON.parse(text);
-               if (typeof parsed !== 'object' || parsed === null) {
-                  throw new Error('Invalid ERD layout JSON structure.');
-               }
-
-               const positions = parsed.positions || parsed;
-               localStorage.setItem(
-                  'drixio-erd-positions',
-                  JSON.stringify(positions),
-               );
-               window.showToast('ERD layout imported successfully!', 'success');
-
-               // Reload ERD view if open
-               const erdContainer = document.getElementById('view-erd-btn');
-               if (erdContainer) {
-                  erdContainer.innerHTML = '';
-                  if (window.AppState.currentTab === 'erd-btn') {
-                     window.renderCurrentView();
-                  }
-               }
-            } catch (err) {
-               window.showToast(
-                  `Failed to parse ERD layout: ${err.message}`,
-                  'error',
-               );
-            }
-         };
-         input.click();
-      });
-
-   // Database (.sql) Restore
-   document
-      .getElementById('import-db-sql-btn')
-      ?.addEventListener('click', () => {
-         importDropdown.classList.add('hidden');
-         importBtn.classList.remove('is-open');
-         const input = document.createElement('input');
-         input.type = 'file';
-         input.accept = '.sql,.json';
-         input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const confirmed = confirm(
-               `🚨 HIGH RISK ACTION: DATABASE RESTORE\n\n` +
-                  `File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)\n\n` +
-                  `Executing this SQL script directly against the database may modify, truncate, or drop existing tables and records.\n\n` +
-                  `Are you sure you want to proceed?`,
-            );
-            if (!confirmed) return;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            window.showToast(
-               `Executing ${file.name} on database...`,
-               'success',
-            );
-
-            try {
-               const res = await fetch('/api/database/import', {
-                  method: 'POST',
-                  body: formData,
-               });
-               const result = await res.json();
-
-               if (result.success) {
-                  window.showToast(
-                     result.message || 'Database restored successfully',
-                     'success',
-                  );
-                  setTimeout(() => location.reload(), 1500);
-               } else {
-                  window.showToast(result.error || 'Import failed', 'error');
-               }
-            } catch (err) {
-               window.showToast(
-                  'Network error during database import',
-                  'error',
-               );
-            }
-         };
-         input.click();
-      });
 }
 
+// Connect Pill & Database Breadcrumb -> Switches to Connect view
+const headerConnectBtn = document.getElementById('header-connect-btn');
+if (headerConnectBtn) {
+   headerConnectBtn.addEventListener('click', () => {
+      window.handleSwitchTab('connect-btn');
+   });
+}
+
+// Supabase-style Project/Database Switcher Dropdown
+initDbSwitcher();
+
+// Quick Search Pill & Global Ctrl+K / Cmd+K Shortcut
+const triggerQuickSearch = () => {
+   if (
+      window.AppState.currentTab !== 'data-btn' &&
+      window.AppState.currentTab !== 'schema-btn'
+   ) {
+      window.handleSwitchTab('data-btn');
+   }
+   const aside = document.getElementById('sidebar-panel');
+   if (aside && aside.classList.contains('collapsed')) {
+      aside.classList.remove('collapsed');
+      localStorage.setItem('drixio_sidebar_collapsed', 'false');
+      const collapseIcon = document.getElementById('sidebar-collapse-icon');
+      if (collapseIcon) collapseIcon.textContent = 'menu_open';
+   }
+   const searchInput = document.getElementById('search-input');
+   searchInput?.focus();
+   searchInput?.select();
+};
+
+const headerSearchPill = document.getElementById('header-search-pill');
+if (headerSearchPill) {
+   headerSearchPill.addEventListener('click', triggerQuickSearch);
+}
+
+document.addEventListener('keydown', (e) => {
+   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      triggerQuickSearch();
+   }
+});
+
+// Help & Shortcuts Icon Button
+const headerHelpBtn = document.getElementById('header-help-btn');
+if (headerHelpBtn) {
+   headerHelpBtn.addEventListener('click', () => {
+      openHelpModal();
+   });
+}
+
+// Export Dropdown Popover
 if (exportBtn && exportDropdown) {
    exportBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpening = exportDropdown.classList.contains('hidden');
       exportDropdown.classList.toggle('hidden');
       exportBtn.classList.toggle('is-open', isOpening);
-      if (importDropdown) {
-         importDropdown.classList.add('hidden');
-         importBtn?.classList.remove('is-open');
-      }
 
       // Dynamic visibility based on current tab
       const isDataTab = window.AppState.currentTab === 'data-btn';
@@ -253,18 +114,9 @@ if (exportBtn && exportDropdown) {
    });
 
    document.addEventListener('click', (e) => {
-      if (
-         !exportBtn.contains(e.target) &&
-         !exportDropdown.contains(e.target) &&
-         (!importBtn || !importBtn.contains(e.target)) &&
-         (!importDropdown || !importDropdown.contains(e.target))
-      ) {
+      if (!exportBtn.contains(e.target) && !exportDropdown.contains(e.target)) {
          exportDropdown.classList.add('hidden');
          exportBtn.classList.remove('is-open');
-         if (importDropdown) {
-            importDropdown.classList.add('hidden');
-            importBtn?.classList.remove('is-open');
-         }
       }
    });
 
@@ -442,9 +294,7 @@ window.setStudioConnectionMode = function (connected) {
    const exportWrap = document
       .getElementById('export-btn')
       ?.closest('.header-dropdown-wrap');
-   const importWrap = document
-      .getElementById('import-btn')
-      ?.closest('.header-dropdown-wrap');
+   const importBtnEl = document.getElementById('import-btn');
    const slash = document.getElementById('slash');
    const currentTableCrumb = document.getElementById('current-table');
    const dbNameEl = document.getElementById('db-name');
@@ -458,7 +308,7 @@ window.setStudioConnectionMode = function (connected) {
       connectBtn?.classList.remove('hidden');
 
       if (exportWrap) exportWrap.classList.add('hidden');
-      if (importWrap) importWrap.classList.add('hidden');
+      if (importBtnEl) importBtnEl.classList.add('hidden');
       if (slash) slash.classList.add('hidden');
       if (currentTableCrumb) currentTableCrumb.classList.add('hidden');
       if (envBadge) envBadge.classList.add('hidden');
@@ -478,7 +328,7 @@ window.setStudioConnectionMode = function (connected) {
       connectBtn?.classList.add('hidden');
 
       if (exportWrap) exportWrap.classList.remove('hidden');
-      if (importWrap) importWrap.classList.remove('hidden');
+      if (importBtnEl) importBtnEl.classList.remove('hidden');
       if (slash) slash.classList.remove('hidden');
       if (currentTableCrumb) currentTableCrumb.classList.remove('hidden');
       if (envBadge) envBadge.classList.remove('hidden');
@@ -497,7 +347,8 @@ fetchConfig().then((res) => {
 
       const envBadge = document.getElementById('env-badge');
       if (envBadge) {
-         envBadge.textContent = res.data.badgeLabel || (res.data.isRemote ? 'REMOTE' : 'LOCAL');
+         envBadge.textContent =
+            res.data.badgeLabel || (res.data.isRemote ? 'REMOTE' : 'LOCAL');
          envBadge.className = `env-badge ${res.data.isRemote ? 'remote' : 'local'}`;
       }
 
@@ -511,6 +362,15 @@ fetchConfig().then((res) => {
       }
       if (res.data.connected && res.data.dbType && res.data.dbType !== 'none') {
          window.setStudioConnectionMode(true);
+         if (res.data.targetUrl) {
+            saveConnection({
+               name: res.data.dbName,
+               dialect: res.data.dbType,
+               url: res.data.targetUrl,
+               isRemote: !!res.data.isRemote,
+               badgeLabel: res.data.badgeLabel,
+            });
+         }
       } else {
          window.setStudioConnectionMode(false);
       }
@@ -587,6 +447,14 @@ window.handleSwitchTab = function (tab) {
    const currentTab = document.getElementById(tab);
    if (currentTab) currentTab.classList.add('isCurrentTab');
    window.AppState.currentTab = tab;
+
+   // Only show Tables Sidebar on Table Editor (data-btn) and Schema (schema-btn)
+   const sidebarContainer = document.getElementById('sidebar-container');
+   if (tab === 'data-btn' || tab === 'schema-btn') {
+      sidebarContainer?.classList.remove('hidden');
+   } else {
+      sidebarContainer?.classList.add('hidden');
+   }
 
    if (
       tab === 'erd-btn' ||

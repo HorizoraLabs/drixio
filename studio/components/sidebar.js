@@ -52,10 +52,12 @@ export async function initSidebar(isRefresh = false) {
             btn.dataset.table = tableName;
             btn.title = tableName;
 
+            const initial = (tableName[0] || 'T').toUpperCase();
             // Use <i> for icon to maintain backward compatibility with btn.querySelector("span")
             btn.innerHTML = /* html */ `
           <div class="table-btn-label">
-            <i class="material-symbols-outlined table-item-icon">table_chart</i>
+            <i class="material-symbols-outlined table-item-icon">table</i>
+            <span class="table-item-initial">${initial}</span>
             <span class="table-name-text">${tableName}</span>
             <span class="dirty-indicator-dot hidden" title="Unsaved changes"></span>
           </div>
@@ -349,6 +351,10 @@ async function updateSchemaSelector() {
       }
 
       const { schemas, currentSchema } = res.data;
+      const display = document.getElementById('schema-current-display');
+      if (display) {
+         display.textContent = currentSchema || 'public';
+      }
 
       // Populate options
       select.innerHTML = '';
@@ -367,6 +373,7 @@ async function updateSchemaSelector() {
          schemaSelectorBound = true;
          select.addEventListener('change', async () => {
             const chosen = select.value;
+            if (display) display.textContent = chosen;
             select.disabled = true;
 
             try {
@@ -414,13 +421,22 @@ async function updateSchemaSelector() {
 }
 
 function filterTableList(query) {
+   const aside = document.getElementById('sidebar-panel');
+   // If sidebar is collapsed, ensure all tables remain visible and clear empty state
+   if (aside?.classList.contains('collapsed')) {
+      const btns = document.querySelectorAll('.table-btn');
+      btns.forEach((btn) => (btn.style.display = 'flex'));
+      document.getElementById('sidebar-no-match')?.remove();
+      return;
+   }
+
    const q = query.toLowerCase().trim();
    const btns = document.querySelectorAll('.table-btn');
    let visibleCount = 0;
 
    btns.forEach((btn) => {
       const tableName = (btn.dataset.table || '').toLowerCase();
-      if (tableName.includes(q)) {
+      if (!q || tableName.includes(q)) {
          btn.style.display = 'flex';
          visibleCount++;
       } else {
@@ -446,7 +462,7 @@ function filterTableList(query) {
       noMatchEl.remove();
    }
 
-   // Update section count badge
+   // Update section count badge if present
    const countBadge = document.getElementById('table-count-badge');
    if (countBadge) {
       countBadge.textContent = visibleCount.toString();
@@ -537,6 +553,12 @@ function bindSidebarEvents() {
                collapsed.toString(),
             );
             updateCollapseIcon(collapsed);
+
+            if (collapsed && searchInput) {
+               searchInput.value = '';
+               clearBtn?.classList.add('hidden');
+               filterTableList('');
+            }
          });
       }
 
@@ -584,9 +606,13 @@ function bindSidebarEvents() {
 
 function updateCollapseIcon(isCollapsed) {
    const icon = document.getElementById('sidebar-collapse-icon');
+   const btn = document.getElementById('sidebar-collapse-btn');
    const header = document.getElementById('sidebar-header');
    if (icon) {
       icon.textContent = isCollapsed ? 'menu' : 'menu_open';
+   }
+   if (btn) {
+      btn.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
    }
    if (header) {
       header.title = isCollapsed ? 'Click to expand sidebar' : '';

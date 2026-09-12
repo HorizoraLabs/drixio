@@ -1,90 +1,62 @@
 export const HeaderHTML = /* html */ `
 <header>
-  <div id="current-path" aria-label="Breadcrumbs">
-    <div class="breadcrumb-item db-crumb">
-      <span class="material-symbols-outlined breadcrumb-icon">database</span>
-      <span id="db-name">database</span>
+  <div class="header-left">
+    <div class="header-brand">
+      <div class="header-brand-icon">
+        <span class="material-symbols-outlined">database</span>
+      </div>
+      <div class="header-brand-info">
+        <div class="header-brand-text">
+          <span class="header-brand-title">DRIXIO</span>
+          <span class="header-brand-badge">STUDIO</span>
+        </div>
+        <span class="header-brand-by">By Horizora</span>
+      </div>
     </div>
-    <span id="slash" class="material-symbols-outlined breadcrumb-separator">chevron_right</span>
-    <div id="current-table" class="breadcrumb-item table-crumb">
-      <span class="material-symbols-outlined" id="table-icon">table_chart</span>
-      <span id="table-name">users</span>
-    </div>
-    <div id="env-badge-wrap" class="breadcrumb-item">
-      <span id="env-badge" class="env-badge local hidden">LOCAL</span>
+    <span class="header-brand-divider">/</span>
+    <div id="current-path" aria-label="Breadcrumbs">
+      <div class="header-dropdown-wrap" style="position: relative;">
+        <div class="breadcrumb-item db-crumb" id="breadcrumb-db-crumb" title="Switch Database" role="button" tabindex="0">
+          <span class="material-symbols-outlined breadcrumb-icon">dns</span>
+          <span id="db-name">database</span>
+          <span class="material-symbols-outlined breadcrumb-caret" id="db-switcher-caret">unfold_more</span>
+        </div>
+        <div id="db-switcher-dropdown" class="db-switcher-dropdown hidden" role="menu"></div>
+      </div>
+      <span id="slash" class="material-symbols-outlined breadcrumb-separator">chevron_right</span>
+      <div id="current-table" class="breadcrumb-item table-crumb" title="Current Table">
+        <span class="material-symbols-outlined" id="table-icon">table_chart</span>
+        <span id="table-name">users</span>
+      </div>
+      <div id="env-badge-wrap" class="breadcrumb-item">
+        <span id="env-badge" class="env-badge local hidden">LOCAL</span>
+      </div>
+      <button id="header-connect-btn" class="header-connect-pill" title="Database Connection Status & Switcher" type="button">
+        <span class="material-symbols-outlined connect-icon">settings_ethernet</span>
+        <span class="connect-label">Connect</span>
+      </button>
     </div>
   </div>
   
-  <div class="header-actions">
-    <!-- Import Dropdown -->
-    <div class="header-dropdown-wrap" style="position: relative;">
-      <button id="import-btn" class="header-btn secondary" title="Import data, ERD layout or database">
-        <span id="import-icon" class="material-symbols-outlined">upload</span>
-        <span>Import</span>
-        <span id="import-arrow-icon" class="material-symbols-outlined">arrow_drop_down</span>
-      </button>
-
-      <ul id="import-dropdown" class="dropdown-menu hidden" role="menu">
-        <li class="dropdown-submenu">
-          <a class="dropdown-item">
-            <span class="material-symbols-outlined">table_chart</span>
-            <span class="dropdown-item-label">Data</span>
-            <span class="caret material-symbols-outlined">chevron_right</span>
-          </a>
-          <ul class="dropdown-menu sub-menu">
-            <li>
-              <button id="import-data-csv-btn" class="dropdown-item">
-                <span class="material-symbols-outlined">description</span>
-                <span class="dropdown-item-label">Table Records</span>
-                <span class="dropdown-badge">CSV</span>
-              </button>
-            </li>
-            <li>
-              <button id="import-data-json-btn" class="dropdown-item">
-                <span class="material-symbols-outlined">data_object</span>
-                <span class="dropdown-item-label">Table Records</span>
-                <span class="dropdown-badge">JSON</span>
-              </button>
-            </li>
-          </ul>
-        </li>
-
-        <li class="dropdown-submenu">
-          <a class="dropdown-item">
-            <span class="material-symbols-outlined">account_tree</span>
-            <span class="dropdown-item-label">ERD</span>
-            <span class="caret material-symbols-outlined">chevron_right</span>
-          </a>
-          <ul class="dropdown-menu sub-menu">
-            <li>
-              <button id="import-erd-json-btn" class="dropdown-item">
-                <span class="material-symbols-outlined">layers</span>
-                <span class="dropdown-item-label">Canvas Layout</span>
-                <span class="dropdown-badge">JSON</span>
-              </button>
-            </li>
-          </ul>
-        </li>
-
-        <li class="dropdown-divider"></li>
-
-        <li>
-          <button id="import-db-sql-btn" class="dropdown-item danger">
-            <span class="material-symbols-outlined">database</span>
-            <span class="dropdown-item-label">Restore Database</span>
-            <span class="dropdown-badge danger">SQL / JSON</span>
-          </button>
-        </li>
-      </ul>
+  <div class="header-right">
+    <!-- Quick Search Pill (Supabase Style) -->
+    <div id="header-search-pill" class="header-search-pill" title="Quick search tables (Ctrl+K)">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <span class="search-placeholder">Search...</span>
+      <kbd class="search-kbd">Ctrl K</kbd>
     </div>
 
-    <!-- Export Dropdown -->
-    <div class="header-dropdown-wrap" style="position: relative;">
-      <button id="export-btn" class="header-btn primary" title="Export database or table data">
-        <span id="export-icon" class="material-symbols-outlined">download</span>
-        <span>Export</span>
-        <span id="export-arrow-icon" class="material-symbols-outlined">arrow_drop_down</span>
+    <div class="header-actions">
+      <!-- Import Pure Icon Button (Opens Import Modal) -->
+      <button id="import-btn" class="header-icon-btn" title="Import Data / Restore Database" aria-label="Import Data" type="button">
+        <span id="import-icon" class="material-symbols-outlined">upload</span>
       </button>
+
+      <!-- Export Pure Icon Button (Dropdown Popover) -->
+      <div class="header-dropdown-wrap" style="position: relative;">
+        <button id="export-btn" class="header-icon-btn" title="Export Data / Schema" aria-label="Export Data" type="button">
+          <span id="export-icon" class="material-symbols-outlined">download</span>
+        </button>
 
       <ul id="export-dropdown" class="dropdown-menu hidden" role="menu">
         <li class="dropdown-submenu">
@@ -208,6 +180,17 @@ export const HeaderHTML = /* html */ `
         </li>
       </ul>
     </div>
+
+    <!-- Help / Shortcuts Icon Button -->
+    <button id="header-help-btn" class="header-icon-btn" title="Shortcuts & Documentation" aria-label="Help" type="button">
+      <span class="material-symbols-outlined">help</span>
+    </button>
+
+    <!-- GitHub Link Icon Button -->
+    <a href="https://github.com/TerKSDev/drixio" target="_blank" rel="noopener noreferrer" class="header-icon-btn" title="GitHub Repository" aria-label="GitHub">
+      <span class="material-symbols-outlined">code</span>
+    </a>
   </div>
+</div>
 </header>
 `;

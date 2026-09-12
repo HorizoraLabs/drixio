@@ -56,14 +56,24 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
 
          renderTarget.innerHTML = /* html */ `
         <div class="toolbar">
-          <div class="filter-group">
-            <div class="filter-icon-container">
-              <span class="material-symbols-outlined">search</span>
-              <span>Search</span>
-            </div>
-            <div class="filter-input-wrapper">
-              <input type="text" id="schema-search-val-${tableName}" class="filter-input" placeholder="Search name or type..." value="${window.SchemaGrid.filterText}" />
-              <button type="button" id="btn-clear-schema-search-${tableName}" class="filter-clear-btn ${window.SchemaGrid.filterText ? '' : 'hidden'}" title="Clear search">
+          <div class="filter-bar-container" style="max-width: 320px;">
+            <div class="filter-bar-input-box">
+              <span class="material-symbols-outlined filter-bar-search-icon">search</span>
+              <input 
+                type="text" 
+                id="schema-search-val-${tableName}" 
+                class="filter-bar-input" 
+                placeholder="Search name or type..." 
+                value="${window.SchemaGrid.filterText}" 
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button 
+                type="button" 
+                id="btn-clear-schema-search-${tableName}" 
+                class="filter-bar-clear-btn ${window.SchemaGrid.filterText ? '' : 'hidden'}" 
+                title="Clear search"
+              >
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -393,6 +403,14 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                   isDragging: false,
                };
                window.renderSchemaGrid();
+            });
+         }
+
+         const inputBox = searchInput?.closest('.filter-bar-input-box');
+         if (inputBox && searchInput) {
+            inputBox.addEventListener('click', (e) => {
+               if (e.target.closest('.filter-bar-clear-btn')) return;
+               searchInput.focus();
             });
          }
 

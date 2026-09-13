@@ -50,7 +50,7 @@ export function getFilterQuery(tableName) {
 
 export function formatDisplayVal(val, colSchema) {
    if (val === null || val === undefined || val === 'null' || val === '') {
-      return { html: '<em>null</em>', title: '' };
+      return { html: '<em>NULL</em>', title: '' };
    }
    const typeUpper = (colSchema?.type || '').toUpperCase();
    const isDate = typeUpper === 'DATE';

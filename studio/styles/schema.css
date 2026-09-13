@@ -2,7 +2,7 @@
 
 /* Schema Table Column Widths & 100% Fit */
 [id^='schema-grid-container-'] {
-   overflow-x: hidden !important;
+   overflow-x: auto !important;
 }
 
 [id^='schema-grid-container-'] .data-table {
@@ -10,7 +10,7 @@
    min-width: 100%;
    border-collapse: separate;
    border-spacing: 0;
-   table-layout: fixed;
+   table-layout: auto;
 }
 
 /* Remove global 130px min-width from data.css on schema table headers */
@@ -30,47 +30,40 @@
    text-overflow: ellipsis;
 }
 
-[id^='schema-grid-container-'] .data-table th.table-corner-header,
-[id^='schema-grid-container-'] .data-table td.row-header {
-   width: 42px !important;
-   min-width: 42px !important;
-   max-width: 42px !important;
-}
-
 [id^='schema-grid-container-'] .data-table th[data-col-key='name'] {
-   width: 25%;
-   min-width: 140px;
+   width: 20%;
+   min-width: 120px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='type'] {
-   width: 13%;
-   min-width: 105px;
+   width: 15%;
+   min-width: 100px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='isPk'] {
-   width: 9%;
-   min-width: 75px;
+   width: 15%;
+   min-width: 140px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='nullable'] {
    width: 10%;
-   min-width: 86px;
+   min-width: 100px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='isUnique'] {
-   width: 9%;
-   min-width: 80px;
+   width: 10%;
+   min-width: 100px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='defaultValue'] {
-   width: 18%;
-   min-width: 120px;
+   width: 10%;
+   min-width: 100px;
 }
 
 [id^='schema-grid-container-'] .data-table th[data-col-key='indexing'],
 .data-table th.th-indexing {
-   width: 16% !important;
-   min-width: 160px !important;
+   width: 20% !important;
+   min-width: 200px !important;
    text-align: center !important;
    cursor: default !important;
    user-select: none;
@@ -346,7 +339,7 @@
 }
 
 .schema-autocomplete-section-title {
-   padding: 6px 12px 3px 12px;
+   padding: 10px 12px 6px 12px;
    font-size: 10px;
    font-weight: 700;
    text-transform: uppercase;

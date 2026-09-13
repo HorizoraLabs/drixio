@@ -2,6 +2,7 @@ import { updateSchemaCell } from './core.js';
 import { openIndexModal, openPkFkModal, openEnumModal } from './modals.js';
 import { openTypePicker } from '../../components/typePicker.js';
 import { openSupabaseCellEditor } from '../data/popoverEditor.js';
+import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 export function bindSchemaCellEditor(tableContainer, columns) {
    tableContainer.addEventListener('click', (e) => {
@@ -110,19 +111,36 @@ export function bindSchemaCellEditor(tableContainer, columns) {
             return;
          }
 
-         inputEl = document.createElement('select');
-         const opts = ['No', 'Yes'];
-         opts.forEach((opt) => {
-            const op = document.createElement('option');
-            op.value = opt;
-            op.textContent = opt;
-            if (
-               (opt === 'Yes' && rawText === '1') ||
-               (opt === 'No' && rawText === '')
-            )
-               op.selected = true;
-            inputEl.appendChild(op);
+         openDropdownPicker({
+            anchorEl: td,
+            title: 'Nullable Constraint',
+            placeholder: 'Search constraint...',
+            items: [
+               {
+                  name: 'No',
+                  value: 'No',
+                  desc: 'NOT NULL constraint (Cannot be empty)',
+                  icon: 'lock',
+               },
+               {
+                  name: 'Yes',
+                  value: 'Yes',
+                  desc: 'Allows NULL / empty values',
+                  icon: 'check',
+               },
+            ],
+            initialValue: rawText === '1' || rawText === 'Yes' ? 'Yes' : 'No',
+            onSelect: (val) => {
+               window.SchemaGrid.currentTransaction = [];
+               updateSchemaCell(td, val, columns);
+               if (window.SchemaGrid.currentTransaction.length > 0)
+                  window.SchemaGrid.history.push(
+                     window.SchemaGrid.currentTransaction,
+                  );
+               window.SchemaGrid.currentTransaction = null;
+            },
          });
+         return;
       } else if (colKey === 'isUnique') {
          const origColName = td.dataset.pk;
          const colSchema = window.SchemaGrid?.schema?.find(
@@ -159,19 +177,36 @@ export function bindSchemaCellEditor(tableContainer, columns) {
             return;
          }
 
-         inputEl = document.createElement('select');
-         const opts = ['No', 'Yes'];
-         opts.forEach((opt) => {
-            const op = document.createElement('option');
-            op.value = opt;
-            op.textContent = opt;
-            if (
-               (opt === 'Yes' && rawText === '1') ||
-               (opt === 'No' && rawText === '')
-            )
-               op.selected = true;
-            inputEl.appendChild(op);
+         openDropdownPicker({
+            anchorEl: td,
+            title: 'Unique Constraint',
+            placeholder: 'Search constraint...',
+            items: [
+               {
+                  name: 'No',
+                  value: 'No',
+                  desc: 'Duplicate values allowed',
+                  icon: 'close',
+               },
+               {
+                  name: 'Yes',
+                  value: 'Yes',
+                  desc: 'Enforces UNIQUE constraint',
+                  icon: 'verified',
+               },
+            ],
+            initialValue: rawText === '1' || rawText === 'Yes' ? 'Yes' : 'No',
+            onSelect: (val) => {
+               window.SchemaGrid.currentTransaction = [];
+               updateSchemaCell(td, val, columns);
+               if (window.SchemaGrid.currentTransaction.length > 0)
+                  window.SchemaGrid.history.push(
+                     window.SchemaGrid.currentTransaction,
+                  );
+               window.SchemaGrid.currentTransaction = null;
+            },
          });
+         return;
       } else if (colKey === 'type') {
          const origColName = td.dataset.pk;
          const colSchema = window.SchemaGrid?.schema?.find(
@@ -180,6 +215,7 @@ export function bindSchemaCellEditor(tableContainer, columns) {
          openTypePicker({
             anchorEl: td,
             initialValue: rawText,
+            dialect: window.AppState?.dbType,
             onSelect: (newType) => {
                if (newType === 'ENUM') {
                   setTimeout(() => openEnumModal(td, colSchema), 10);
@@ -202,8 +238,8 @@ export function bindSchemaCellEditor(tableContainer, columns) {
       }
 
       td.innerHTML = '';
+      td.classList.add('cell-editing');
       td.appendChild(inputEl);
-      inputEl.style.width = '100%';
 
       inputEl.addEventListener('keydown', (e2) => {
          if (e2.key === 'Enter') inputEl.blur();
@@ -223,6 +259,7 @@ export function bindSchemaCellEditor(tableContainer, columns) {
       inputEl.focus();
 
       const commitEdit = () => {
+         td.classList.remove('cell-editing');
          let newVal = inputEl.value;
          if (colKey === 'type' && newVal === 'ENUM') {
             return;

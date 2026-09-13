@@ -1,6 +1,7 @@
 import { updateCell } from './core.js';
 import { fetchTableWithName } from '../../lib/api.js';
 import { openSupabaseCellEditor } from './popoverEditor.js';
+import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 export function bindCellEditor(tableContainer, schema, columns) {
    tableContainer.addEventListener('dblclick', (e) => {
@@ -72,29 +73,10 @@ export function bindCellEditor(tableContainer, schema, columns) {
 
       let inputEl;
       if (colSchema && colSchema.fkTarget) {
-         inputEl = document.createElement('select');
-         const loadingOpt = document.createElement('option');
-         loadingOpt.value = rawText;
-         loadingOpt.textContent = 'Loading...';
-         inputEl.appendChild(loadingOpt);
-
-         // Fetch FK options asynchronously
          const { table, column } = colSchema.fkTarget;
-         fetchTableWithName(table, { limit: 100 })
+         fetchTableWithName(table, { limit: 200 })
             .then((res) => {
                if (res.success && res.data && res.data.rows) {
-                  inputEl.innerHTML = ''; // clear loading
-
-                  // Add a null/empty option if nullable
-                  if (colSchema.nullable) {
-                     const emptyOpt = document.createElement('option');
-                     emptyOpt.value = '';
-                     emptyOpt.textContent = '-- None --';
-                     if (!rawText) emptyOpt.selected = true;
-                     inputEl.appendChild(emptyOpt);
-                  }
-
-                  // Try to find a display column (e.g. name, title, label)
                   let displayCol = column;
                   if (res.data.columns) {
                      const possibleNames = [
@@ -102,6 +84,8 @@ export function bindCellEditor(tableContainer, schema, columns) {
                         'title',
                         'label',
                         'description',
+                        'username',
+                        'email',
                      ];
                      const found = res.data.columns.find((c) =>
                         possibleNames.includes(c.toLowerCase()),
@@ -109,35 +93,69 @@ export function bindCellEditor(tableContainer, schema, columns) {
                      if (found) displayCol = found;
                   }
 
+                  const fkItems = [];
+                  if (colSchema.nullable) {
+                     fkItems.push({
+                        name: '-- None --',
+                        value: '',
+                        desc: 'Set to NULL',
+                        icon: 'block',
+                     });
+                  }
+
                   res.data.rows.forEach((row) => {
                      const val = String(row[column]);
-                     const displayVal =
-                        displayCol !== column
-                           ? `${val} - ${row[displayCol]}`
-                           : val;
-                     const opt = document.createElement('option');
-                     opt.value = val;
-                     opt.textContent = displayVal;
-                     if (val === rawText) opt.selected = true;
-                     inputEl.appendChild(opt);
+                     const desc =
+                        displayCol !== column && row[displayCol]
+                           ? String(row[displayCol])
+                           : `Row in ${table}`;
+                     fkItems.push({
+                        name: val,
+                        value: val,
+                        desc: desc,
+                        icon: 'link',
+                     });
                   });
 
-                  // If the current rawText isn't in the limit 100, add it manually
                   if (
                      rawText &&
                      !res.data.rows.find((r) => String(r[column]) === rawText)
                   ) {
-                     const opt = document.createElement('option');
-                     opt.value = rawText;
-                     opt.textContent = `${rawText} (Not in limit)`;
-                     opt.selected = true;
-                     inputEl.appendChild(opt);
+                     fkItems.unshift({
+                        name: rawText,
+                        value: rawText,
+                        desc: 'Current value',
+                        icon: 'link',
+                     });
                   }
+
+                  openDropdownPicker({
+                     anchorEl: td,
+                     title: `REFERENCES ${table.toUpperCase()}.${column.toUpperCase()}`,
+                     placeholder: `Search ${table} by ${displayCol}...`,
+                     items: fkItems,
+                     initialValue: rawText,
+                     width: 360,
+                     onSelect: (newVal) => {
+                        window.DataGrid.currentTransaction = [];
+                        updateCell(td, newVal, columns);
+                        if (window.DataGrid.currentTransaction.length > 0)
+                           window.DataGrid.history.push(
+                              window.DataGrid.currentTransaction,
+                           );
+                        window.DataGrid.currentTransaction = null;
+                     },
+                  });
                }
             })
             .catch((err) => {
-               loadingOpt.textContent = 'Error loading options';
+               if (window.showToast)
+                  window.showToast(
+                     'Failed to load FK targets: ' + err.message,
+                     'error',
+                  );
             });
+         return;
       } else if (isEnum) {
          let options = colSchema?.enumValues || [];
          if (options.length === 0 && colSchema?.type) {
@@ -148,21 +166,43 @@ export function bindCellEditor(tableContainer, schema, columns) {
                   .map((s) => s.trim().replace(/^'|'$/g, ''));
             }
          }
-         inputEl = document.createElement('select');
+
+         const enumItems = [];
          if (colSchema?.nullable) {
-            const emptyOpt = document.createElement('option');
-            emptyOpt.value = '';
-            emptyOpt.textContent = '-- None --';
-            if (!rawText) emptyOpt.selected = true;
-            inputEl.appendChild(emptyOpt);
+            enumItems.push({
+               name: '-- None --',
+               value: '',
+               desc: 'Set to NULL',
+               icon: 'block',
+            });
          }
          options.forEach((opt) => {
-            const op = document.createElement('option');
-            op.value = opt;
-            op.textContent = opt;
-            if (opt === rawText) op.selected = true;
-            inputEl.appendChild(op);
+            enumItems.push({
+               name: opt,
+               value: opt,
+               desc: 'Enum option',
+               icon: 'label',
+            });
          });
+
+         openDropdownPicker({
+            anchorEl: td,
+            title: 'ENUM VALUES',
+            placeholder: 'Search enum values...',
+            items: enumItems,
+            initialValue: rawText,
+            width: 300,
+            onSelect: (newVal) => {
+               window.DataGrid.currentTransaction = [];
+               updateCell(td, newVal, columns);
+               if (window.DataGrid.currentTransaction.length > 0)
+                  window.DataGrid.history.push(
+                     window.DataGrid.currentTransaction,
+                  );
+               window.DataGrid.currentTransaction = null;
+            },
+         });
+         return;
       } else if (isDate) {
          inputEl = document.createElement('input');
          inputEl.type = 'date';
@@ -228,43 +268,59 @@ export function bindCellEditor(tableContainer, schema, columns) {
          inputEl.step = '1';
          inputEl.value = rawText ? rawText.slice(0, 8) : '';
       } else if (isBool) {
-         inputEl = document.createElement('select');
-         inputEl.className = 'data-cell-select data-cell-bool-select';
-
          const isNullable = colSchema ? colSchema.nullable !== false : true;
-
-         const optTrue = document.createElement('option');
-         optTrue.value = '1';
-         optTrue.textContent = 'true';
-
-         const optFalse = document.createElement('option');
-         optFalse.value = '0';
-         optFalse.textContent = 'false';
-
-         inputEl.appendChild(optTrue);
-         inputEl.appendChild(optFalse);
-
-         let optNull = null;
-         if (isNullable) {
-            optNull = document.createElement('option');
-            optNull.value = '';
-            optNull.textContent = 'null';
-            inputEl.appendChild(optNull);
-         }
-
          const isTrue = rawText === '1' || rawText.toLowerCase() === 'true';
          const isFalse = rawText === '0' || rawText.toLowerCase() === 'false';
-         if (isTrue) {
-            optTrue.selected = true;
-         } else if (isFalse) {
-            optFalse.selected = true;
-         } else if (optNull) {
-            optNull.selected = true;
+         const currentVal = isTrue ? '1' : isFalse ? '0' : '';
+
+         const boolItems = [
+            {
+               name: 'true',
+               value: '1',
+               desc: 'Logical True',
+               icon: 'check_circle',
+               badge: 'true',
+               badgeClass: 'bool-true',
+            },
+            {
+               name: 'false',
+               value: '0',
+               desc: 'Logical False',
+               icon: 'cancel',
+               badge: 'false',
+               badgeClass: 'bool-false',
+            },
+         ];
+
+         if (isNullable) {
+            boolItems.push({
+               name: 'null',
+               value: '',
+               desc: 'Empty / NULL value',
+               icon: 'remove',
+               badge: 'null',
+               badgeClass: 'bool-null',
+            });
          }
 
-         inputEl.addEventListener('change', () => {
-            commitEdit();
+         openDropdownPicker({
+            anchorEl: td,
+            title: 'BOOLEAN VALUE',
+            placeholder: 'Filter true / false / null...',
+            items: boolItems,
+            initialValue: currentVal,
+            width: 280,
+            onSelect: (newVal) => {
+               window.DataGrid.currentTransaction = [];
+               updateCell(td, newVal, columns);
+               if (window.DataGrid.currentTransaction.length > 0)
+                  window.DataGrid.history.push(
+                     window.DataGrid.currentTransaction,
+                  );
+               window.DataGrid.currentTransaction = null;
+            },
          });
+         return;
       } else {
          const isTextLike =
             !isEnum &&
@@ -327,6 +383,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
       };
 
       td.innerHTML = '';
+      td.classList.add('cell-editing');
       td.appendChild(inputEl);
       if (
          typeUpper === '' ||
@@ -352,7 +409,6 @@ export function bindCellEditor(tableContainer, schema, columns) {
          };
          td.appendChild(expandBtn);
 
-         inputEl.style.width = '100%';
          inputEl.style.paddingRight = '32px';
 
          inputEl.addEventListener('keydown', (e2) => {
@@ -396,6 +452,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
       inputEl.focus();
 
       const commitEdit = () => {
+         td.classList.remove('cell-editing');
          if (isModalOpen) return;
          let newVal = inputEl.value;
 

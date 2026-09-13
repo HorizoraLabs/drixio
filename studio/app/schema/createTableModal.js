@@ -8,6 +8,7 @@ import {
    STANDARD_DATA_TYPES,
    formatSqlDefaultValue,
 } from '../../lib/dataTypes.js';
+import { openTypePicker } from '../../components/typePicker.js';
 
 /**
  * Visual Table Creation Wizard Modal with Foreign Key, Unique, Presets & Live SQL Preview
@@ -420,39 +421,12 @@ export function openCreateTableModal(onSuccess) {
             ? `${col.fkTarget.table}.${col.fkTarget.column}${actionTag}`
             : '+ FK';
 
-         let existingEnumsHtml = '';
-         if (cachedEnums && cachedEnums.length > 0) {
-            existingEnumsHtml = `
-              <optgroup label="Existing Enums">
-                ${cachedEnums
-                   .map((ce) => {
-                      const isSel = !col.isNewEnum && col.type === ce.name;
-                      const preview =
-                         ce.values.slice(0, 3).join(', ') +
-                         (ce.values.length > 3 ? '...' : '');
-                      return `<option value="__ENUM_EXISTING__:${ce.name}" ${isSel ? 'selected' : ''}>${ce.name} (${preview})</option>`;
-                   })
-                   .join('')}
-              </optgroup>`;
+         let colDisplayType = col.type || defaultTypes[0] || 'INTEGER';
+         if (col.isNewEnum) {
+            colDisplayType = `ENUM (${col.newEnumName || 'Custom'})`;
+         } else if (col.isExistingEnum) {
+            colDisplayType = `${col.type} (Enum)`;
          }
-
-         const standardOptionsHtml = `
-              <optgroup label="Standard Types">
-                ${defaultTypes
-                   .map((t) => {
-                      if (t === 'ENUM') {
-                         return `<option value="__NEW_ENUM__" ${col.isNewEnum ? 'selected' : ''}>ENUM (Custom...)</option>`;
-                      }
-                      const isSel =
-                         !col.isNewEnum &&
-                         !col.isExistingEnum &&
-                         t === (col.type || '').toUpperCase();
-                      return `<option value="${t}" ${isSel ? 'selected' : ''}>${t}</option>`;
-                   })
-                   .join('')}
-              </optgroup>`;
-
-         const customEnumOptionHtml = '';
 
          let newEnumPanelHtml = '';
          if (col.isNewEnum) {
@@ -485,12 +459,10 @@ export function openCreateTableModal(onSuccess) {
         </div>
         <div>
           <div class="table-col-select-wrap">
-            <select class="table-col-select col-type-select" data-index="${index}">
-              ${standardOptionsHtml}
-              ${existingEnumsHtml}
-              ${customEnumOptionHtml}
-            </select>
-            <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
+            <button type="button" class="table-col-select col-type-trigger" data-index="${index}" style="text-align: left; display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding-right: 22px;">
+              <span class="col-type-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${colDisplayType}</span>
+              <span class="material-symbols-outlined table-col-select-arrow" style="pointer-events: none;">expand_more</span>
+            </button>
           </div>
         </div>
         <div style="display: flex; justify-content: center; align-items: center;">
@@ -597,37 +569,58 @@ export function openCreateTableModal(onSuccess) {
             updateSqlPreview();
          };
 
-         const typeSel = row.querySelector('.col-type-select');
-         typeSel.onchange = (e) => {
-            const val = e.target.value;
-            if (val === '__NEW_ENUM__') {
-               columns[index].isNewEnum = true;
-               columns[index].isExistingEnum = false;
-               if (!columns[index].newEnumName) {
-                  const guessed = columns[index].name
-                     ? columns[index].name.charAt(0).toUpperCase() +
-                       columns[index].name.slice(1) +
-                       'Enum'
-                     : 'CustomEnum';
-                  columns[index].newEnumName = guessed;
-                  columns[index].type = guessed;
-               }
-               if (!columns[index].enumValues) columns[index].enumValues = [];
-            } else if (val.startsWith('__ENUM_EXISTING__:')) {
-               const eName = val.slice('__ENUM_EXISTING__:'.length);
-               columns[index].isNewEnum = false;
-               columns[index].isExistingEnum = true;
-               columns[index].type = eName;
-               const found = cachedEnums.find((ce) => ce.name === eName);
-               columns[index].enumValues = found ? [...found.values] : [];
-            } else {
-               columns[index].isNewEnum = false;
-               columns[index].isExistingEnum = false;
-               columns[index].type = val;
-               columns[index].enumValues = undefined;
-            }
-            renderRows();
-            updateSqlPreview();
+         const typeTrigger = row.querySelector('.col-type-trigger');
+         typeTrigger.onclick = (e) => {
+            e.stopPropagation();
+            const existingEnumItems = cachedEnums.map((ce) => ({
+               name: ce.name,
+               value: `__ENUM_EXISTING__:${ce.name}`,
+               desc: `Existing Enum (${ce.values.slice(0, 3).join(', ')}${ce.values.length > 3 ? '...' : ''})`,
+               icon: 'list',
+               group: 'EXISTING DATABASE ENUMS',
+            }));
+
+            openTypePicker({
+               anchorEl: typeTrigger,
+               initialValue: col.isNewEnum
+                  ? 'ENUM'
+                  : col.isExistingEnum
+                    ? `__ENUM_EXISTING__:${col.type}`
+                    : col.type,
+               dialect: dbType,
+               extraItems: existingEnumItems,
+               onSelect: (val) => {
+                  if (val === 'ENUM' || val === '__NEW_ENUM__') {
+                     columns[index].isNewEnum = true;
+                     columns[index].isExistingEnum = false;
+                     if (!columns[index].newEnumName) {
+                        const guessed = columns[index].name
+                           ? columns[index].name.charAt(0).toUpperCase() +
+                             columns[index].name.slice(1) +
+                             'Enum'
+                           : 'CustomEnum';
+                        columns[index].newEnumName = guessed;
+                        columns[index].type = guessed;
+                     }
+                     if (!columns[index].enumValues)
+                        columns[index].enumValues = [];
+                  } else if (val.startsWith('__ENUM_EXISTING__:')) {
+                     const eName = val.slice('__ENUM_EXISTING__:'.length);
+                     columns[index].isNewEnum = false;
+                     columns[index].isExistingEnum = true;
+                     columns[index].type = eName;
+                     const found = cachedEnums.find((ce) => ce.name === eName);
+                     columns[index].enumValues = found ? [...found.values] : [];
+                  } else {
+                     columns[index].isNewEnum = false;
+                     columns[index].isExistingEnum = false;
+                     columns[index].type = val;
+                     columns[index].enumValues = undefined;
+                  }
+                  renderRows();
+                  updateSqlPreview();
+               },
+            });
          };
 
          const enumNameInp = row.querySelector('.new-enum-name-input');
@@ -969,7 +962,11 @@ export function openCreateTableModal(onSuccess) {
 
    // Close popover when clicking outside
    const handleDocumentClick = (e) => {
-      if (activeFkIndex !== null && !e.target.closest('.table-col-fk-wrap')) {
+      if (
+         activeFkIndex !== null &&
+         !e.target.closest('.table-col-fk-wrap') &&
+         !e.target.closest('.dropdown-picker-popover')
+      ) {
          activeFkIndex = null;
          renderRows();
       }

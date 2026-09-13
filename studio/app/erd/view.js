@@ -81,6 +81,11 @@ export async function loadErd(container) {
 
             <div class="erd-hud-divider"></div>
 
+            <button type="button" id="btn-erd-export" class="erd-hud-btn" title="Export diagram (SVG or SQL)">
+              <span class="material-symbols-outlined icon-18">download</span>
+              <span>Export</span>
+            </button>
+
             <button type="button" id="btn-erd-save-drafts" class="erd-hud-btn primary disabled" title="Save draft tables and columns (Ctrl+S)">
               <span class="material-symbols-outlined icon-18">save</span>
               <span>Save</span>
@@ -128,6 +133,9 @@ export async function loadErd(container) {
             </button>
             <button type="button" id="btn-erd-fit-view" class="erd-dock-btn" title="Fit tables to view">
               <span class="material-symbols-outlined icon-18">crop_free</span>
+            </button>
+            <button type="button" id="btn-erd-fullscreen" class="erd-dock-btn" title="Toggle Fullscreen">
+              <span class="material-symbols-outlined icon-18">fullscreen</span>
             </button>
             <div class="erd-dock-divider"></div>
             <button type="button" id="btn-erd-toggle-minimap" class="erd-dock-btn active" title="Toggle Minimap">

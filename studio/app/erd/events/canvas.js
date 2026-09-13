@@ -1,6 +1,18 @@
 import { ERDState } from '../state.js';
-import { drawLines, renderNodes, renderMinimap } from '../render.js';
-import { autoLayoutErd, saveErdDrafts } from '../core.js';
+import {
+   drawLines,
+   renderNodes,
+   renderMinimap,
+   focusRelationship,
+   focusTableRelationships,
+   clearRelationshipFocus,
+} from '../render.js';
+import {
+   autoLayoutErd,
+   saveErdDrafts,
+   exportErdAsSvg,
+   exportErdAsSql,
+} from '../core.js';
 import { addNewDraftTable, loadErd } from '../view.js';
 import { showContextMenu } from '../../../components/contextMenu.js';
 
@@ -136,6 +148,38 @@ export function bindCanvasEvents(wrapper) {
    const btnFitView = document.getElementById('btn-erd-fit-view');
    if (btnFitView) btnFitView.onclick = fitToView;
 
+   const btnFullscreen = document.getElementById('btn-erd-fullscreen');
+   if (btnFullscreen) {
+      btnFullscreen.onclick = () => {
+         const viewport = document.getElementById('erd-main-viewport');
+         if (!viewport) return;
+         if (!document.fullscreenElement) {
+            viewport.requestFullscreen?.().catch(() => {});
+            btnFullscreen.classList.add('active');
+            const icon = btnFullscreen.querySelector(
+               '.material-symbols-outlined',
+            );
+            if (icon) icon.textContent = 'fullscreen_exit';
+         } else {
+            document.exitFullscreen?.().catch(() => {});
+            btnFullscreen.classList.remove('active');
+            const icon = btnFullscreen.querySelector(
+               '.material-symbols-outlined',
+            );
+            if (icon) icon.textContent = 'fullscreen';
+         }
+      };
+      document.addEventListener('fullscreenchange', () => {
+         if (!document.fullscreenElement && btnFullscreen) {
+            btnFullscreen.classList.remove('active');
+            const icon = btnFullscreen.querySelector(
+               '.material-symbols-outlined',
+            );
+            if (icon) icon.textContent = 'fullscreen';
+         }
+      });
+   }
+
    // Minimap Toggle
    const toggleMinimapBtn = document.getElementById('btn-erd-toggle-minimap');
    const closeMinimapBtn = document.getElementById('btn-erd-close-minimap');
@@ -207,6 +251,34 @@ export function bindCanvasEvents(wrapper) {
             snapGridBtn.classList.remove('active');
             window.showToast('Grid Snapping: OFF (Free)', 'info');
          }
+      };
+   }
+
+   const exportBtn = document.getElementById('btn-erd-export');
+   if (exportBtn) {
+      exportBtn.onclick = (e) => {
+         e.stopPropagation();
+         showContextMenu(e, [
+            {
+               label: 'Export as SVG Diagram',
+               icon: 'image',
+               action: () => exportErdAsSvg(),
+            },
+            {
+               label: 'Copy SQL Schema (DDL)',
+               icon: 'code',
+               action: () => {
+                  const sql = exportErdAsSql(ERDState.erdData);
+                  if (sql) {
+                     navigator.clipboard.writeText(sql);
+                     window.showToast?.(
+                        'SQL schema copied to clipboard!',
+                        'success',
+                     );
+                  }
+               },
+            },
+         ]);
       };
    }
 
@@ -320,6 +392,11 @@ export function bindCanvasEvents(wrapper) {
                   if (autoLayoutBtn) autoLayoutBtn.click();
                },
             },
+            {
+               label: 'Export as SVG',
+               icon: 'image',
+               action: () => exportErdAsSvg(),
+            },
          ]);
       }
    });
@@ -397,19 +474,16 @@ export function bindCanvasEvents(wrapper) {
       }
    }
 
-   // Path hover interaction
+   // Enhanced Relationship & Table Focus Hover interaction
    wrapper.addEventListener('mouseover', (e) => {
       const path = e.target.closest('.erd-relationship-path');
       if (path) {
-         path.classList.add('is-hovered');
-         const fromTable = path.dataset.fromTable;
-         const toTable = path.dataset.toTable;
-         document
-            .querySelector(`.erd-node[data-table="${fromTable}"]`)
-            ?.classList.add('is-relationship-highlight');
-         document
-            .querySelector(`.erd-node[data-table="${toTable}"]`)
-            ?.classList.add('is-relationship-highlight');
+         focusRelationship(
+            path.dataset.fromTable,
+            path.dataset.fromCol,
+            path.dataset.toTable,
+            path.dataset.toCol,
+         );
          return;
       }
 
@@ -418,29 +492,36 @@ export function bindCanvasEvents(wrapper) {
          const tableNode = fkCol.closest('.erd-node');
          const colName = fkCol.dataset.col;
          if (tableNode) {
-            const matchingPath = document.querySelector(
+            const pathEl = document.querySelector(
                `.erd-relationship-path[data-from-table="${tableNode.dataset.table}"][data-from-col="${colName}"]`,
             );
-            if (matchingPath) matchingPath.classList.add('is-hovered');
+            if (pathEl) {
+               focusRelationship(
+                  pathEl.dataset.fromTable,
+                  pathEl.dataset.fromCol,
+                  pathEl.dataset.toTable,
+                  pathEl.dataset.toCol,
+               );
+               return;
+            }
+         }
+      }
+
+      const header = e.target.closest('.erd-node-header');
+      if (header) {
+         const tableNode = header.closest('.erd-node');
+         if (tableNode) {
+            focusTableRelationships(tableNode.dataset.table);
          }
       }
    });
 
    wrapper.addEventListener('mouseout', (e) => {
       const path = e.target.closest('.erd-relationship-path');
-      if (path) {
-         path.classList.remove('is-hovered');
-         document
-            .querySelectorAll('.erd-node.is-relationship-highlight')
-            .forEach((n) => n.classList.remove('is-relationship-highlight'));
-         return;
-      }
-
       const fkCol = e.target.closest('.erd-column.is-fk');
-      if (fkCol) {
-         document
-            .querySelectorAll('.erd-relationship-path.is-hovered')
-            .forEach((p) => p.classList.remove('is-hovered'));
+      const header = e.target.closest('.erd-node-header');
+      if (path || fkCol || header) {
+         clearRelationshipFocus();
       }
    });
 

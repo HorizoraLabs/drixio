@@ -93,7 +93,7 @@ export function updateCell(td, newVal, columns, recordHistory = true) {
       ? `<span class="cell-text">${displayInfo.html}</span>`
       : td.dataset.insertIndex !== undefined
         ? ghostPlaceholder
-        : '<em>null</em>';
+        : '<em>NULL</em>';
    if (displayInfo.title) {
       td.title = displayInfo.title;
    } else {

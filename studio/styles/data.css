@@ -596,8 +596,8 @@
 /* In-cell Editor */
 .data-table td input,
 .data-table td select {
-   width: 100%;
-   height: 100%;
+   width: calc(100% + 1px) !important;
+   height: calc(100% + 1px) !important;
    position: absolute;
    top: 0;
    left: 0;
@@ -609,7 +609,7 @@
    font-size: 13px;
    color: var(--color-text);
    background-color: var(--color-bg-primary);
-   box-shadow: var(--ring-primary-2);
+   box-shadow: inset 0 0 0 2px var(--color-primary) !important;
    z-index: 12;
 }
 
@@ -621,10 +621,11 @@
    padding: 0 10px;
 }
 
-[data-theme='dark'] .data-table td select,
-[data-theme='dark'] .data-table td input {
+[data-theme='dark'] .data-table td input,
+[data-theme='dark'] .data-table td select {
    background-color: #17171a;
    color: #f4f4f5;
+   box-shadow: inset 0 0 0 2px #3b82f6 !important;
 }
 
 .data-table td select option {
@@ -636,6 +637,19 @@
 [data-theme='dark'] .data-table td select option {
    background-color: #17171a;
    color: #f4f4f5;
+}
+
+/* Hide overlapping range outline & cell shadow during edit mode to ensure a clean, seamless 4-sided border */
+.data-table td:has(input)::after,
+.data-table td:has(select)::after,
+.data-table td.cell-editing::after {
+   display: none !important;
+}
+
+.data-table td:has(input),
+.data-table td:has(select),
+.data-table td.cell-editing {
+   box-shadow: none !important;
 }
 
 /* ==================== FOREIGN KEY JUMP & PREVIEW ==================== */

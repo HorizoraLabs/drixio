@@ -2,8 +2,13 @@ import {
    fetchTableSchema,
    fetchTableWithName,
    truncateTableApi,
+   mutateTableSchema,
 } from '../../lib/api.js';
-import { bindColumnResizer, bindCellSelection } from '../grid/view.js';
+import {
+   bindColumnResizer,
+   bindCellSelection,
+   selectAllGridCells,
+} from '../grid/view.js';
 import { bindCellEditor } from './events.js';
 import { getFilterQuery, generateRowHtml } from './utils.js';
 import { bindFkPreview } from './fkPreview.js';
@@ -229,44 +234,37 @@ export async function loadTableData(
             }
          } else {
             let tableHtml = `<table class="data-table" id="data-grid-table-${tableName}"><thead><tr>`;
-            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click or right-click for table actions (Mock Data, Export, Truncate)">#</th>`;
+            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click to select all, right-click for table actions">#</th>`;
             columns.forEach((col) => {
                const colSchema = schema.find((c) => c.name === col);
-               let pkBadge = '';
+               let colIcon = '';
                let typeText = colSchema?.type || '';
                if (colSchema) {
                   const isPk = !!colSchema.isPk;
                   const isFk = !!colSchema.fkTarget;
-                  if (isPk && isFk) {
-                     pkBadge = `<span class="col-badge badge-pfk" title="Primary Foreign Key (referencing ${colSchema.fkTarget.table}.${colSchema.fkTarget.column})">PFK</span>`;
-                  } else if (isPk) {
-                     pkBadge = `<span class="col-badge badge-pk" title="Primary Key">PK</span>`;
+                  if (isPk) {
+                     colIcon = `<span class="material-symbols-outlined col-pk-key-icon" title="Primary Key">key</span>`;
                   } else if (
                      isFk ||
                      colSchema.name.toLowerCase().includes('id')
                   ) {
-                     pkBadge = `<span class="col-badge badge-fk" title="Foreign Key">FK</span>`;
+                     colIcon = `<span class="material-symbols-outlined col-fk-icon" title="Foreign Key">link</span>`;
                   }
                }
-               let sortIcon = '';
-               let isSorted = window.DataGrid.sortState.col === col;
-               if (isSorted) {
-                  const arrowName = window.DataGrid.sortState.asc
-                     ? 'arrow_upward'
-                     : 'arrow_downward';
-                  sortIcon = `<span class="material-symbols-outlined th-sort-icon">${arrowName}</span>`;
-               }
-               tableHtml += /* html */ `<th class="sortable ${isSorted ? 'sorted' : ''}" data-col="${col}">
+
+               const isSorted = window.DataGrid.sortState.col === col;
+
+               tableHtml += /* html */ `<th class="sortable ${isSorted ? 'sorted' : ''}" data-col="${col}" title="Click for column options">
                       <div class="th-content-wrapper">
-                         <div class="th-col-info">
-                            <div class="th-name-row">
-                               <span class="th-col-name">${col}</span>
-                               ${pkBadge}
-                            </div>
-                            ${typeText ? `<span class="th-col-type">${typeText}</span>` : ''}
+                         <div class="th-main-group">
+                            ${colIcon}
+                            <span class="th-col-name">${col}</span>
+                            ${typeText ? `<span class="th-col-type">${typeText.toLowerCase()}</span>` : ''}
                          </div>
-                         <div class="th-sort-indicator ${isSorted ? 'active' : ''}">
-                            ${sortIcon}
+                         <div class="th-actions-group">
+                            <button type="button" class="th-menu-trigger ${isSorted ? 'is-sorted' : ''}" title="Column actions">
+                               <span class="material-symbols-outlined th-chevron-icon">keyboard_arrow_down</span>
+                            </button>
                          </div>
                       </div>
                     </th>`;
@@ -294,40 +292,222 @@ export async function loadTableData(
             tableContainer.innerHTML = tableHtml;
 
             tableContainer.querySelectorAll('th.sortable').forEach((th) => {
-               th.onclick = (e) => {
-                  if (window.DataGrid && window.DataGrid.isResizing) return;
-                  const hasPending =
-                     Object.keys(window.DataGrid.pendingEdits).length > 0 ||
-                     window.DataGrid.pendingInserts.length > 1 ||
-                     window.DataGrid.pendingDeletes.size > 0;
-                  if (hasPending) {
-                     alert(
-                        'You have unsaved changes. Please save changes before sorting.',
-                     );
-                     return;
-                  }
+               const col = th.dataset.col;
+               const currentTable = tableName;
 
-                  const col = th.dataset.col;
-                  const currentTable = tableName;
+               const openColumnMenu = (e) => {
+                  if (window.DataGrid && window.DataGrid.isResizing) return;
+                  if (e.target.closest('.resizer')) return;
+
                   const grid =
                      window.TableStates?.[currentTable]?.dataGrid ||
                      window.DataGrid;
-                  if (grid) {
-                     if (grid.sortState.col === col) {
-                        grid.sortState.asc = !grid.sortState.asc;
-                     } else {
-                        grid.sortState.col = col;
-                        grid.sortState.asc = true;
+                  const isSorted = grid?.sortState?.col === col;
+                  const isAsc = isSorted && grid?.sortState?.asc;
+
+                  const checkPendingChanges = () => {
+                     const hasPending =
+                        Object.keys(window.DataGrid.pendingEdits || {}).length >
+                           0 ||
+                        (window.DataGrid.pendingInserts || []).length > 1 ||
+                        (window.DataGrid.pendingDeletes &&
+                           window.DataGrid.pendingDeletes.size > 0);
+                     if (hasPending) {
+                        if (window.showToast) {
+                           window.showToast(
+                              'You have unsaved changes. Please save changes before sorting.',
+                              'warning',
+                           );
+                        } else {
+                           alert(
+                              'You have unsaved changes. Please save changes before sorting.',
+                           );
+                        }
+                        return false;
                      }
-                     grid.pagination.offset = 0;
+                     return true;
+                  };
+
+                  const applySort = (asc) => {
+                     if (!checkPendingChanges()) return;
+                     if (grid) {
+                        grid.sortState.col = col;
+                        grid.sortState.asc = asc;
+                        grid.pagination.offset = 0;
+                     }
+                     loadTableData(
+                        currentTable,
+                        btnElement,
+                        getFilterQuery(currentTable),
+                        true,
+                     );
+                     if (window.showToast) {
+                        window.showToast(
+                           `Sorted by ${col} (${asc ? 'Ascending' : 'Descending'})`,
+                           'info',
+                        );
+                     }
+                  };
+
+                  const clearSort = () => {
+                     if (!checkPendingChanges()) return;
+                     if (grid) {
+                        grid.sortState.col = null;
+                        grid.sortState.asc = true;
+                        grid.pagination.offset = 0;
+                     }
+                     loadTableData(
+                        currentTable,
+                        btnElement,
+                        getFilterQuery(currentTable),
+                        true,
+                     );
+                     if (window.showToast) {
+                        window.showToast(`Cleared sort on "${col}"`, 'info');
+                     }
+                  };
+
+                  const menuItems = [
+                     {
+                        icon: 'arrow_upward',
+                        label: 'Sort Ascending',
+                        checked: isSorted && isAsc,
+                        action: () => applySort(true),
+                     },
+                     {
+                        icon: 'arrow_downward',
+                        label: 'Sort Descending',
+                        checked: isSorted && !isAsc,
+                        action: () => applySort(false),
+                     },
+                  ];
+
+                  if (isSorted) {
+                     menuItems.push({
+                        icon: 'restart_alt',
+                        label: 'Clear Sort',
+                        action: () => clearSort(),
+                     });
                   }
 
-                  loadTableData(
-                     currentTable,
-                     btnElement,
-                     getFilterQuery(currentTable),
-                     true,
+                  menuItems.push(
+                     'divider',
+                     {
+                        icon: 'content_copy',
+                        label: 'Copy name',
+                        action: async () => {
+                           try {
+                              await navigator.clipboard.writeText(col);
+                           } catch {
+                              const ta = document.createElement('textarea');
+                              ta.value = col;
+                              document.body.appendChild(ta);
+                              ta.select();
+                              document.execCommand('copy');
+                              ta.remove();
+                           }
+                           if (window.showToast) {
+                              window.showToast(
+                                 `Copied "${col}" to clipboard!`,
+                                 'success',
+                              );
+                           }
+                        },
+                     },
+                     {
+                        icon: 'edit',
+                        label: 'Edit column',
+                        action: () => {
+                           if (typeof window.handleSwitchTab === 'function') {
+                              window.handleSwitchTab('schema-btn');
+                              if (window.showToast) {
+                                 window.showToast(
+                                    `Switched to Schema Editor for "${col}"`,
+                                    'info',
+                                 );
+                              }
+                           }
+                        },
+                     },
+                     {
+                        icon: 'filter_alt',
+                        label: 'Filter by this column',
+                        action: () => {
+                           const filterInput = document.getElementById(
+                              `filter-bar-input-${currentTable}`,
+                           );
+                           if (filterInput) {
+                              filterInput.focus();
+                              filterInput.value = `${col} = `;
+                              filterInput.dispatchEvent(
+                                 new Event('input', { bubbles: true }),
+                              );
+                           }
+                        },
+                     },
+                     'divider',
+                     {
+                        icon: 'delete',
+                        label: 'Delete column',
+                        danger: true,
+                        action: async () => {
+                           if (
+                              confirm(
+                                 `Are you sure you want to delete column "${col}" from table "${currentTable}"?\nThis action cannot be undone!`,
+                              )
+                           ) {
+                              try {
+                                 const res = await mutateTableSchema(
+                                    currentTable,
+                                    {
+                                       pendingDeletes: [col],
+                                       columns: schema,
+                                    },
+                                 );
+                                 if (res.success) {
+                                    if (window.showToast) {
+                                       window.showToast(
+                                          `Deleted column "${col}"`,
+                                          'success',
+                                       );
+                                    }
+                                    loadTableData(
+                                       currentTable,
+                                       btnElement,
+                                       '',
+                                       true,
+                                    );
+                                 } else {
+                                    alert(
+                                       `Failed to delete column: ${res.error}`,
+                                    );
+                                 }
+                              } catch (err) {
+                                 alert(`Error deleting column: ${err.message}`);
+                              }
+                           }
+                        },
+                     },
                   );
+
+                  const triggerBtn = th.querySelector('.th-menu-trigger');
+                  const targetRect = triggerBtn
+                     ? triggerBtn.getBoundingClientRect()
+                     : th.getBoundingClientRect();
+                  const menuEvent = {
+                     clientX: targetRect.left,
+                     clientY: targetRect.bottom + 4,
+                     preventDefault: () => {},
+                     stopPropagation: () => {},
+                  };
+
+                  showContextMenu(menuEvent, menuItems);
+               };
+
+               th.onclick = openColumnMenu;
+               th.oncontextmenu = (e) => {
+                  e.preventDefault();
+                  openColumnMenu(e);
                };
 
                bindColumnResizer(th, window.DataGrid);
@@ -342,7 +522,7 @@ export async function loadTableData(
             bindCellEditor(tableContainer, schema, columns);
             bindFkPreview(tableContainer, tableName);
 
-            // Bind table corner header (#) Context Menu
+            // Bind table corner header (#) Left-click (Select All) & Right-click (Context Menu)
             const cornerHeader = document.getElementById(
                `th-row-header-${tableName}`,
             );
@@ -367,6 +547,19 @@ export async function loadTableData(
                   };
 
                   showContextMenu(e, [
+                     {
+                        icon: 'select_all',
+                        label: 'Select All Cells',
+                        shortcut: 'Ctrl+A',
+                        action: () => {
+                           selectAllGridCells(
+                              `data-grid-table-${tableName}`,
+                              window.DataGrid,
+                              columns.length,
+                           );
+                        },
+                     },
+                     'divider',
                      {
                         icon: 'auto_fix_high',
                         label: 'Generate Mock Data...',
@@ -450,7 +643,18 @@ export async function loadTableData(
                   ]);
                };
 
-               cornerHeader.addEventListener('click', handleCornerMenu);
+               // Left-click selects all cells in the table
+               cornerHeader.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectAllGridCells(
+                     `data-grid-table-${tableName}`,
+                     window.DataGrid,
+                     columns.length,
+                  );
+               });
+
+               // Right-click opens the context menu
                cornerHeader.addEventListener('contextmenu', handleCornerMenu);
             }
          }

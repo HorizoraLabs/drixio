@@ -1,21 +1,42 @@
-/* ==================== RESIZER ==================== */
+/* ==================== GRID RESIZER & HEADER ENHANCEMENTS ==================== */
 .resizer {
-  position: absolute;
-  top: 0;
-  right: -4px; /* Wider hit area */
-  width: 8px;
-  cursor: col-resize;
-  user-select: none;
-  height: 100%;
-  z-index: 10;
+   position: absolute;
+   top: 0;
+   right: -4px; /* Wider hit area for easy mouse grabbing */
+   width: 8px;
+   cursor: col-resize;
+   user-select: none;
+   height: 100%;
+   z-index: 12;
+   transition: background-color 0.12s ease;
 }
+
 .resizer:hover,
 .resizer:active {
-  background-color: var(--color-primary);
-  opacity: 0.5;
+   background-color: var(--color-primary);
+   opacity: 0.6;
+}
+
+[data-theme='dark'] .resizer:hover,
+[data-theme='dark'] .resizer:active {
+   background-color: #3b82f6;
+   opacity: 0.8;
 }
 
 .data-table th:last-child .resizer {
-  display: none !important;
+   display: none !important;
 }
 
+/* Corner Header (#) */
+.table-corner-header {
+   cursor: pointer !important;
+   color: var(--color-text-soft) !important;
+   transition:
+      background-color 0.12s ease,
+      color 0.12s ease;
+}
+
+.table-corner-header:hover {
+   background-color: var(--color-bg-secondary-dark) !important;
+   color: var(--color-text) !important;
+}

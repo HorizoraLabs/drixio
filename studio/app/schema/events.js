@@ -1,11 +1,14 @@
 import { updateSchemaCell } from './core.js';
 import { openIndexModal, openPkFkModal, openEnumModal } from './modals.js';
-import { STANDARD_DATA_TYPES } from '../../lib/dataTypes.js';
+import { openTypePicker } from '../../components/typePicker.js';
+import { openSupabaseCellEditor } from '../data/popoverEditor.js';
 
 export function bindSchemaCellEditor(tableContainer, columns) {
    tableContainer.addEventListener('click', (e) => {
-      const manageCell = e.target.closest('.manage-indexes-cell');
-      if (manageCell) {
+      const manageBtn =
+         e.target.closest('.btn-manage-indexes') ||
+         e.target.closest('.manage-indexes-cell');
+      if (manageBtn) {
          openIndexModal();
          return;
       }
@@ -25,9 +28,13 @@ export function bindSchemaCellEditor(tableContainer, columns) {
 
    tableContainer.addEventListener('dblclick', (e) => {
       const td = e.target.closest('td.data-cell');
-      if (!td || td.querySelector('input, select')) return;
+      if (!td || td.querySelector('input, select, textarea')) return;
 
       const colKey = td.dataset.colKey;
+      if (colKey === 'indexing') {
+         openIndexModal();
+         return;
+      }
       const isNewRow = td.dataset.insertIndex !== undefined;
 
       const rawText =
@@ -35,14 +42,36 @@ export function bindSchemaCellEditor(tableContainer, columns) {
          td.textContent === '-' ||
          td.textContent === '+ New' ||
          td.textContent.includes('Add column') ||
+         td.textContent.includes('Add Column') ||
          td.textContent === '+ Add Row' ||
          td.textContent === 'null'
             ? ''
-            : td.textContent.trim().startsWith('Yes')
-              ? '1'
-              : td.textContent.trim() === 'No'
-                ? ''
-                : td.textContent;
+            : td.dataset.original !== undefined && td.dataset.original !== '-'
+              ? td.dataset.original
+              : td.textContent.trim().startsWith('Yes')
+                ? '1'
+                : td.textContent.trim() === 'No'
+                  ? ''
+                  : td.textContent.trim();
+
+      if (colKey === 'name' || colKey === 'defaultValue') {
+         openSupabaseCellEditor({
+            td,
+            colName: colKey === 'name' ? 'Column Name' : 'Default Value',
+            colType: colKey === 'name' ? 'VARCHAR' : 'DEFAULT',
+            initialValue: rawText,
+            onSave: (newVal) => {
+               window.SchemaGrid.currentTransaction = [];
+               updateSchemaCell(td, newVal, columns);
+               if (window.SchemaGrid.currentTransaction.length > 0)
+                  window.SchemaGrid.history.push(
+                     window.SchemaGrid.currentTransaction,
+                  );
+               window.SchemaGrid.currentTransaction = null;
+            },
+         });
+         return;
+      }
 
       let inputEl;
       if (colKey === 'isPk') {
@@ -148,28 +177,24 @@ export function bindSchemaCellEditor(tableContainer, columns) {
          const colSchema = window.SchemaGrid?.schema?.find(
             (c) => c.name === origColName,
          );
-         inputEl = document.createElement('select');
-         const opts = [...STANDARD_DATA_TYPES];
-         if (
-            rawText &&
-            !opts.some((o) => o.toUpperCase() === rawText.toUpperCase())
-         ) {
-            opts.unshift(rawText);
-         }
-         opts.forEach((opt) => {
-            const op = document.createElement('option');
-            op.value = opt;
-            op.textContent = opt === 'ENUM' ? 'ENUM (Configure...)' : opt;
-            if (opt.toUpperCase() === rawText.toUpperCase()) op.selected = true;
-            inputEl.appendChild(op);
+         openTypePicker({
+            anchorEl: td,
+            initialValue: rawText,
+            onSelect: (newType) => {
+               if (newType === 'ENUM') {
+                  setTimeout(() => openEnumModal(td, colSchema), 10);
+                  return;
+               }
+               window.SchemaGrid.currentTransaction = [];
+               updateSchemaCell(td, newType, columns);
+               if (window.SchemaGrid.currentTransaction.length > 0)
+                  window.SchemaGrid.history.push(
+                     window.SchemaGrid.currentTransaction,
+                  );
+               window.SchemaGrid.currentTransaction = null;
+            },
          });
-
-         inputEl.addEventListener('change', (ev) => {
-            if (ev.target.value === 'ENUM') {
-               inputEl.blur();
-               setTimeout(() => openEnumModal(td, colSchema), 10);
-            }
-         });
+         return;
       } else {
          inputEl = document.createElement('input');
          inputEl.type = 'text';

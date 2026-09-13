@@ -120,6 +120,7 @@ header {
    gap: 6px;
    font-size: 13px;
    line-height: 1;
+   height: 24px;
 }
 
 .breadcrumb-icon {

@@ -74,12 +74,19 @@ export function openCreateTableModal(onSuccess) {
    modal.innerHTML = /* html */ `
     <div class="modal-container create-table-modal-container">
       <div class="modal-header">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-size: 20px;">add_circle</span>
-          <h3 class="m-0 text-15 font-semibold">Create New Table</h3>
-          <span class="snippet-param-badge">${dbType}</span>
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge">
+            <span class="material-symbols-outlined">add_circle</span>
+          </div>
+          <div class="modal-title-col">
+            <div class="modal-title-row">
+              <h3 class="modal-title-text">Create New Table</h3>
+              <span class="modal-title-badge">${dbType}</span>
+            </div>
+            <p class="modal-subtitle-text">Define table name, columns, and foreign key constraints</p>
+          </div>
         </div>
-        <button type="button" id="close-create-table-modal-btn" class="modal-close-btn" title="Close">
+        <button type="button" id="close-create-table-modal-btn" class="modal-close-btn" title="Close (Esc)">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

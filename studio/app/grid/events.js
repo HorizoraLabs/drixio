@@ -10,7 +10,7 @@ import {
    markSchemaRowDeleted,
    unmarkSchemaRowDeleted,
 } from '../schema/core.js';
-import { renderSelection } from './view.js';
+import { renderSelection, selectAllGridCells } from './view.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 
 export const bindGridEvents = () => {
@@ -315,6 +315,41 @@ export const bindGridEvents = () => {
       )
          return;
 
+      if (e.key === 'Escape') {
+         const grid = isData ? window.DataGrid : window.SchemaGrid;
+         if (!grid || !grid.selection || grid.selection.startRow === -1) return;
+         if (
+            grid.selection.startRow !== grid.selection.endRow ||
+            grid.selection.startCol !== grid.selection.endCol ||
+            grid.selection.isRowSelection
+         ) {
+            grid.selection.endRow = grid.selection.startRow;
+            grid.selection.endCol = grid.selection.startCol;
+            grid.selection.isRowSelection = false;
+            grid.selection.isDraggingRow = false;
+            const t = window.AppState?.currentTable;
+            const tableId = isData
+               ? `data-grid-table-${t}`
+               : `schema-grid-table-${t}`;
+            renderSelection(tableId, grid);
+            return;
+         }
+      }
+
+      if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey)) {
+         const grid = isData ? window.DataGrid : window.SchemaGrid;
+         if (!grid) return;
+         e.preventDefault();
+         const t = window.AppState?.currentTable;
+         if (!t) return;
+         const tableId = isData
+            ? `data-grid-table-${t}`
+            : `schema-grid-table-${t}`;
+         const colsLength = isData ? grid.schema?.length || 1 : 6;
+         selectAllGridCells(tableId, grid, colsLength);
+         return;
+      }
+
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
          const grid = isData ? window.DataGrid : window.SchemaGrid;
          if (!grid || !grid.selection) return;
@@ -393,11 +428,59 @@ export const bindGridEvents = () => {
          return;
       }
 
+      // Fast Toggle for Boolean cells on Space key
+      if (e.key === ' ' || e.code === 'Space') {
+         if (isData && window.DataGrid?.selection?.startRow !== -1) {
+            const s = window.DataGrid.selection;
+            if (s.startRow === s.endRow && s.startCol === s.endCol) {
+               const t = window.AppState?.currentTable;
+               const td = document.querySelector(
+                  `#data-grid-table-${t} td.data-cell[data-row-idx="${s.startRow}"][data-col-idx="${s.startCol}"]`,
+               );
+               if (td && !td.querySelector('input, select')) {
+                  const colName = td.dataset.col;
+                  const colSchema = window.DataGrid.schema?.find(
+                     (c) => c.name === colName,
+                  );
+                  const typeUpper = colSchema?.type?.toUpperCase() || '';
+                  const isBool =
+                     typeUpper.includes('BOOL') || typeUpper === 'TINYINT(1)';
+                  if (isBool) {
+                     e.preventDefault();
+                     const currentText =
+                        td.dataset.original !== undefined &&
+                        td.dataset.original !== '-'
+                           ? td.dataset.original
+                           : td.textContent.trim();
+                     const isCurrentlyTrue =
+                        currentText === '1' ||
+                        currentText.toLowerCase() === 'true';
+                     const nextVal = isCurrentlyTrue ? '0' : '1';
+                     window.DataGrid.currentTransaction = [];
+                     updateCell(
+                        td,
+                        nextVal,
+                        window.DataGrid.schema.map((c) => c.name),
+                     );
+                     if (window.DataGrid.currentTransaction.length > 0) {
+                        window.DataGrid.history.push(
+                           window.DataGrid.currentTransaction,
+                        );
+                     }
+                     window.DataGrid.currentTransaction = null;
+                     return;
+                  }
+               }
+            }
+         }
+      }
+
       const isPrintable =
          e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
       const isF2 = e.key === 'F2';
 
       if (e.key === 'Enter' || isPrintable || isF2) {
+         if (e.repeat) return;
          const grid = isData ? window.DataGrid : window.SchemaGrid;
          if (!grid || !grid.selection || grid.selection.startRow === -1) return;
 

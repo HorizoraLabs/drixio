@@ -92,7 +92,7 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
    const colKey = td.dataset.colKey;
    const colIdx = td.dataset.colIdx;
    const ghostPlaceholder =
-      colIdx === '0' ? `<span class="ghost-cell-hint">+ Add column</span>` : '';
+      colIdx === '0' ? `<span class="ghost-cell-hint">+ Add Column</span>` : '';
 
    let displayHtml = newVal;
    if (colKey === 'isPk' && newVal) {
@@ -111,6 +111,16 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
       } else if (fkMatch) {
          displayHtml = `<span class="col-badge badge-fk" title="References ${fkMatch[1]}.${fkMatch[2]}${actionTag ? ` [ON DELETE ${fkMatch[3]}]` : ''}">FK &rarr; ${fkMatch[1]}.${fkMatch[2]}${actionTag}</span>`;
       }
+   } else if (colKey === 'nullable' && newVal) {
+      const isNull = newVal === 'Yes' || newVal === '1';
+      displayHtml = isNull
+         ? `<span class="badge-bool bool-true">Yes</span>`
+         : `<span class="badge-bool bool-false">No</span>`;
+   } else if (colKey === 'isUnique' && newVal) {
+      const isUniq = newVal === 'Yes' || newVal === '1';
+      displayHtml = isUniq
+         ? `<span class="badge-unique">Yes</span>`
+         : `<span class="text-soft">-</span>`;
    }
 
    td.innerHTML =
@@ -142,11 +152,22 @@ export function updateSchemaCell(td, newVal, columns, recordHistory = true) {
                if (c === 'indexing') return;
                const hint =
                   cIdx === 0
-                     ? `<span class="ghost-cell-hint">+ Add column</span>`
+                     ? `<span class="ghost-cell-hint">+ Add Column</span>`
                      : '';
                tr.innerHTML += `<td class="data-cell ghost-row" data-row-idx="${nextRowIdx}" data-col-idx="${cIdx}" data-insert-index="${idx + 1}" data-col-key="${c}">${hint}</td>`;
             });
             tbody.appendChild(tr);
+
+            const manageCell = document.querySelector(
+               `#schema-grid-table-${window.AppState.currentTable} .manage-indexes-cell`,
+            );
+            if (manageCell) {
+               const currentSpan = parseInt(
+                  manageCell.getAttribute('rowspan') || '1',
+                  10,
+               );
+               manageCell.setAttribute('rowspan', String(currentSpan + 1));
+            }
          }
       } else {
          if (window.SchemaGrid.pendingInserts[idx]) {

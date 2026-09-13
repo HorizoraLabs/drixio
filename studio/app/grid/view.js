@@ -16,7 +16,7 @@ export function renderSelection(tableId, gridState) {
       });
 
    const s = gridState.selection;
-   if (s.startRow === -1) return;
+   if (!s || s.startRow === -1) return;
 
    const minR = Math.min(s.startRow, s.endRow);
    const maxR = Math.max(s.startRow, s.endRow);
@@ -39,8 +39,8 @@ export function renderSelection(tableId, gridState) {
       }
    });
 
-   // Highlight row headers if the whole row is selected
-   if (s.isDraggingRow) {
+   // Highlight row headers if the whole row is selected (either during dragging or persisting)
+   if (s.isRowSelection || s.isDraggingRow) {
       document.querySelectorAll(`#${tableId} td.row-header`).forEach((td) => {
          const r = parseInt(td.dataset.rowIdx);
          if (r >= minR && r <= maxR) {
@@ -48,6 +48,25 @@ export function renderSelection(tableId, gridState) {
          }
       });
    }
+}
+
+export function selectAllGridCells(tableId, gridState, columnsLength) {
+   const rowElements = document.querySelectorAll(
+      `#${tableId} tbody tr:not(.ghost-row-tr)`,
+   );
+   const totalRows = rowElements.length;
+   if (totalRows === 0) return;
+
+   gridState.selection = {
+      isDragging: false,
+      isDraggingRow: false,
+      isRowSelection: true,
+      startRow: 0,
+      endRow: totalRows - 1,
+      startCol: 0,
+      endCol: Math.max(0, columnsLength - 1),
+   };
+   renderSelection(tableId, gridState);
 }
 
 export function bindCellSelection(
@@ -62,15 +81,31 @@ export function bindCellSelection(
       const rowHeader = e.target.closest('td.row-header');
       if (rowHeader && e.button !== 2) {
          const r = parseInt(rowHeader.dataset.rowIdx);
-         gridState.selection = {
-            isDragging: false,
-            isDraggingRow: true,
-            isRowSelection: true,
-            startRow: r,
-            endRow: r,
-            startCol: 0,
-            endCol: columnsLength - 1,
-         };
+         if (isNaN(r)) return;
+
+         if (
+            e.shiftKey &&
+            gridState.selection &&
+            gridState.selection.startRow !== -1
+         ) {
+            // Extend existing row selection with Shift+Click
+            gridState.selection.isDragging = false;
+            gridState.selection.isDraggingRow = false;
+            gridState.selection.isRowSelection = true;
+            gridState.selection.endRow = r;
+            gridState.selection.startCol = 0;
+            gridState.selection.endCol = columnsLength - 1;
+         } else {
+            gridState.selection = {
+               isDragging: false,
+               isDraggingRow: true,
+               isRowSelection: true,
+               startRow: r,
+               endRow: r,
+               startCol: 0,
+               endCol: columnsLength - 1,
+            };
+         }
          renderSelection(tableId, gridState);
          return;
       }
@@ -80,14 +115,29 @@ export function bindCellSelection(
 
       const r = parseInt(td.dataset.rowIdx);
       const c = parseInt(td.dataset.colIdx);
-      gridState.selection = {
-         isDragging: true,
-         isRowSelection: false,
-         startRow: r,
-         startCol: c,
-         endRow: r,
-         endCol: c,
-      };
+      if (isNaN(r) || isNaN(c)) return;
+
+      if (
+         e.shiftKey &&
+         gridState.selection &&
+         gridState.selection.startRow !== -1
+      ) {
+         // Extend existing cell range selection with Shift+Click
+         gridState.selection.isDragging = false;
+         gridState.selection.isDraggingRow = false;
+         gridState.selection.isRowSelection = false;
+         gridState.selection.endRow = r;
+         gridState.selection.endCol = c;
+      } else {
+         gridState.selection = {
+            isDragging: true,
+            isRowSelection: false,
+            startRow: r,
+            startCol: c,
+            endRow: r,
+            endCol: c,
+         };
+      }
       renderSelection(tableId, gridState);
    });
 
@@ -114,8 +164,6 @@ export function bindCellSelection(
          gridState.selection.isDraggingRow = false;
       }
    });
-
-   // Handle Context Menu for Row Deletion is now in grid/events.js
 }
 
 export function bindColumnResizer(th, gridState) {
@@ -124,17 +172,30 @@ export function bindColumnResizer(th, gridState) {
    th.appendChild(resizer);
    resizer.addEventListener('click', (e) => e.stopPropagation());
 
+   // Double-click to auto-fit / reset column width to content
+   resizer.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      th.style.width = '';
+      th.style.minWidth = '';
+      th.style.maxWidth = '';
+   });
+
    resizer.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      let startX = e.pageX;
-      let startWidth = th.offsetWidth;
+      const startX = e.pageX;
+      const startWidth = th.offsetWidth;
       let hasDragged = false;
+
+      // Prevent text selection during column resize
+      document.body.style.userSelect = 'none';
 
       const onMouseMove = (e2) => {
          hasDragged = true;
          if (gridState) gridState.isResizing = true;
-         const newWidth = startWidth + (e2.pageX - startX);
+         // Enforce a minimum column width of 60px to prevent disappearing columns
+         const newWidth = Math.max(60, startWidth + (e2.pageX - startX));
          th.style.width = newWidth + 'px';
          th.style.minWidth = newWidth + 'px';
          th.style.maxWidth = newWidth + 'px';
@@ -144,6 +205,7 @@ export function bindColumnResizer(th, gridState) {
          document.removeEventListener('mousemove', onMouseMove);
          document.removeEventListener('mouseup', onMouseUp);
          document.body.style.cursor = '';
+         document.body.style.userSelect = '';
          if (hasDragged) {
             setTimeout(() => {
                if (gridState) gridState.isResizing = false;

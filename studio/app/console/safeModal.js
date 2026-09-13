@@ -163,17 +163,20 @@ export const showSafeQueryModal = ({
 
    modal.innerHTML = /* html */ `
     <div class="modal-container safe-modal-container">
-      <div class="safe-modal-header">
-        <div class="safe-modal-title-wrap">
-          <div class="safe-modal-icon">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge warning">
             <span class="material-symbols-outlined">warning</span>
           </div>
-          <div>
-            <h3 class="safe-modal-title">${dangerInfo.title || 'Destructive Operation Warning'}</h3>
-            <span class="safe-modal-badge">${dangerInfo.type || 'HIGH RISK'}</span>
+          <div class="modal-title-col">
+            <div class="modal-title-row">
+              <h3 class="modal-title-text">${dangerInfo.title || 'Destructive Operation Warning'}</h3>
+              <span class="modal-title-badge" style="color: var(--color-error); border-color: rgba(239, 68, 68, 0.3);">${dangerInfo.type || 'HIGH RISK'}</span>
+            </div>
+            <p class="modal-subtitle-text">Destructive queries require confirmation under Safe Mode</p>
           </div>
         </div>
-        <button id="safe-modal-close-btn" class="modal-close-btn" title="Cancel">
+        <button id="safe-modal-close-btn" class="modal-close-btn" title="Cancel (Esc)">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

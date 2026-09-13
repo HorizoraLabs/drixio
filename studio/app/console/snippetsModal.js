@@ -76,11 +76,16 @@ export function openSaveSnippetModal({
    modal.innerHTML = /* html */ `
     <div class="modal-container snippet-modal-container">
       <div class="modal-header">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-size: 20px;">${isEdit ? 'edit_note' : 'bookmark_add'}</span>
-          <h3 class="m-0 text-15 font-semibold">${isEdit ? 'Edit Query Snippet' : 'Save Query as Snippet'}</h3>
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge">
+            <span class="material-symbols-outlined">${isEdit ? 'edit_note' : 'bookmark_add'}</span>
+          </div>
+          <div class="modal-title-col">
+            <h3 class="modal-title-text">${isEdit ? 'Edit Query Snippet' : 'Save Query as Snippet'}</h3>
+            <p class="modal-subtitle-text">${isEdit ? 'Modify snippet details and SQL' : 'Save this SQL query to .drixio/snippets.json'}</p>
+          </div>
         </div>
-        <button type="button" id="close-save-snippet-btn" class="modal-close-btn" title="Close">
+        <button type="button" id="close-save-snippet-btn" class="modal-close-btn" title="Close (Esc)" aria-label="Close modal">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -276,11 +281,16 @@ export function openParametricQueryModal({ snippet, onExecute }) {
    modal.innerHTML = /* html */ `
     <div class="modal-container snippet-modal-container" style="width: 600px;">
       <div class="modal-header">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-size: 20px;">tune</span>
-          <h3 class="m-0 text-15 font-semibold">Run Query with Parameters</h3>
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge">
+            <span class="material-symbols-outlined">tune</span>
+          </div>
+          <div class="modal-title-col">
+            <h3 class="modal-title-text">Run Query with Parameters</h3>
+            <p class="modal-subtitle-text">Fill in parameter placeholder values for execution</p>
+          </div>
         </div>
-        <button type="button" id="close-param-modal-btn" class="modal-close-btn" title="Close">
+        <button type="button" id="close-param-modal-btn" class="modal-close-btn" title="Close (Esc)" aria-label="Close modal">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

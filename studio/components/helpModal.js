@@ -3,42 +3,25 @@
  * Shows global keyboard shortcuts, tips, and documentation links.
  */
 
-let helpModalOverlay = null;
+import { createModal } from './modal.js';
+
+let activeHelpModal = null;
 
 export function openHelpModal() {
-   if (!helpModalOverlay) {
-      createHelpModalDOM();
+   if (activeHelpModal) {
+      activeHelpModal.close();
    }
-   helpModalOverlay.classList.remove('hidden');
-}
 
-export function closeHelpModal() {
-   if (helpModalOverlay) {
-      helpModalOverlay.classList.add('hidden');
-   }
-}
-
-function createHelpModalDOM() {
-   helpModalOverlay = document.createElement('div');
-   helpModalOverlay.id = 'help-modal-overlay';
-   helpModalOverlay.className = 'modal-overlay hidden';
-
-   helpModalOverlay.innerHTML = /* html */ `
-      <div class="modal-container help-modal-card">
-         <div class="modal-header">
-            <div class="import-modal-title-wrap">
-               <div class="import-icon-badge">
-                  <span class="material-symbols-outlined">help</span>
-               </div>
-               <div>
-                  <h3 class="import-modal-title">Shortcuts & Documentation</h3>
-                  <p class="import-modal-subtitle">Drixio Studio Edition Tips & Resources</p>
-               </div>
-            </div>
-            <button type="button" id="help-modal-close-btn" class="modal-close-btn" aria-label="Close modal">✕</button>
-         </div>
-
-         <div class="help-modal-body">
+   activeHelpModal = createModal({
+      id: 'help-modal-overlay',
+      icon: 'help',
+      iconColor: 'primary',
+      title: 'Shortcuts & Documentation',
+      subtitle: 'Drixio Studio Edition Tips & Resources',
+      badge: 'Help',
+      width: '640px',
+      body: /* html */ `
+         <div class="help-modal-body" style="padding: 0;">
             <div class="shortcuts-group">
                <h4 class="shortcuts-group-title">Global Shortcuts</h4>
                <div class="shortcut-row">
@@ -86,35 +69,25 @@ function createHelpModalDOM() {
                </a>
             </div>
          </div>
-
-         <div class="modal-footer help-modal-footer">
-            <span class="help-version-tag">Drixio Studio Edition</span>
-            <button type="button" id="help-modal-done-btn" class="import-cancel-btn">Close</button>
-         </div>
-      </div>
-   `;
-
-   document.body.appendChild(helpModalOverlay);
-
-   const closeBtn = document.getElementById('help-modal-close-btn');
-   const doneBtn = document.getElementById('help-modal-done-btn');
-
-   closeBtn?.addEventListener('click', closeHelpModal);
-   doneBtn?.addEventListener('click', closeHelpModal);
-
-   helpModalOverlay.addEventListener('click', (e) => {
-      if (e.target === helpModalOverlay) {
-         closeHelpModal();
-      }
+      `,
+      footer: /* html */ `
+         <span class="help-version-tag">Drixio Studio Edition</span>
+         <button type="button" id="help-modal-done-btn" class="btn-secondary" style="padding: 5px 14px; font-size: 12px; cursor: pointer;">Close</button>
+      `,
+      onClose: () => {
+         activeHelpModal = null;
+      },
    });
 
-   document.addEventListener('keydown', (e) => {
-      if (
-         e.key === 'Escape' &&
-         helpModalOverlay &&
-         !helpModalOverlay.classList.contains('hidden')
-      ) {
-         closeHelpModal();
-      }
-   });
+   const doneBtn = activeHelpModal.footer.querySelector('#help-modal-done-btn');
+   if (doneBtn) {
+      doneBtn.onclick = () => activeHelpModal.close();
+   }
+}
+
+export function closeHelpModal() {
+   if (activeHelpModal) {
+      activeHelpModal.close();
+      activeHelpModal = null;
+   }
 }

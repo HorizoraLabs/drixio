@@ -268,18 +268,20 @@ function createModalDOM() {
 
    modalOverlay.innerHTML = /* html */ `
       <div class="modal-container import-modal-card">
-         <div class="modal-header">
-            <div class="import-modal-title-wrap">
-               <div class="import-icon-badge">
-                  <span class="material-symbols-outlined">upload_file</span>
-               </div>
-               <div>
-                  <h3 class="import-modal-title">Import Data</h3>
-                  <p class="import-modal-subtitle">Upload records, ERD layouts, or restore your database</p>
-               </div>
-            </div>
-            <button type="button" id="import-modal-close-btn" class="modal-close-btn" aria-label="Close modal">✕</button>
-         </div>
+          <div class="modal-header">
+             <div class="modal-title-wrap">
+                <div class="modal-icon-badge">
+                   <span class="material-symbols-outlined">upload_file</span>
+                </div>
+                <div class="modal-title-col">
+                   <h3 class="modal-title-text">Import Data</h3>
+                   <p class="modal-subtitle-text">Upload records, ERD layouts, or restore your database</p>
+                </div>
+             </div>
+             <button type="button" id="import-modal-close-btn" class="modal-close-btn" title="Close (Esc)" aria-label="Close modal">
+                <span class="material-symbols-outlined">close</span>
+             </button>
+          </div>
 
          <div class="import-modal-body">
             <!-- Tabs -->

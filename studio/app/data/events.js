@@ -1,5 +1,6 @@
 import { updateCell } from './core.js';
 import { fetchTableWithName } from '../../lib/api.js';
+import { openSupabaseCellEditor } from './popoverEditor.js';
 
 export function bindCellEditor(tableContainer, schema, columns) {
    tableContainer.addEventListener('dblclick', (e) => {
@@ -227,10 +228,78 @@ export function bindCellEditor(tableContainer, schema, columns) {
          inputEl.step = '1';
          inputEl.value = rawText ? rawText.slice(0, 8) : '';
       } else if (isBool) {
-         inputEl = document.createElement('input');
-         inputEl.type = 'checkbox';
-         inputEl.checked = rawText === '1' || rawText.toLowerCase() === 'true';
+         inputEl = document.createElement('select');
+         inputEl.className = 'data-cell-select data-cell-bool-select';
+
+         const isNullable = colSchema ? colSchema.nullable !== false : true;
+
+         const optTrue = document.createElement('option');
+         optTrue.value = '1';
+         optTrue.textContent = 'true';
+
+         const optFalse = document.createElement('option');
+         optFalse.value = '0';
+         optFalse.textContent = 'false';
+
+         inputEl.appendChild(optTrue);
+         inputEl.appendChild(optFalse);
+
+         let optNull = null;
+         if (isNullable) {
+            optNull = document.createElement('option');
+            optNull.value = '';
+            optNull.textContent = 'null';
+            inputEl.appendChild(optNull);
+         }
+
+         const isTrue = rawText === '1' || rawText.toLowerCase() === 'true';
+         const isFalse = rawText === '0' || rawText.toLowerCase() === 'false';
+         if (isTrue) {
+            optTrue.selected = true;
+         } else if (isFalse) {
+            optFalse.selected = true;
+         } else if (optNull) {
+            optNull.selected = true;
+         }
+
+         inputEl.addEventListener('change', () => {
+            commitEdit();
+         });
       } else {
+         const isTextLike =
+            !isEnum &&
+            !isDate &&
+            !isDateTime &&
+            !isTime &&
+            !isBool &&
+            !(colSchema && colSchema.fkTarget) &&
+            (typeUpper === '' ||
+               typeUpper.includes('TEXT') ||
+               typeUpper.includes('VARCHAR') ||
+               typeUpper.includes('CHAR') ||
+               typeUpper.includes('JSON') ||
+               typeUpper.includes('CLOB') ||
+               typeUpper.includes('STRING'));
+
+         if (isTextLike) {
+            openSupabaseCellEditor({
+               td,
+               colName,
+               colType: typeUpper,
+               initialValue: rawText,
+               onSave: (newVal) => {
+                  window.DataGrid.currentTransaction = [];
+                  updateCell(td, newVal, columns);
+                  if (window.DataGrid.currentTransaction.length > 0)
+                     window.DataGrid.history.push(
+                        window.DataGrid.currentTransaction,
+                     );
+                  window.DataGrid.currentTransaction = null;
+               },
+            });
+            return;
+         }
+
          inputEl = document.createElement('input');
          inputEl.type = 'text';
          inputEl.value = rawText;
@@ -240,40 +309,21 @@ export function bindCellEditor(tableContainer, schema, columns) {
 
       const openModal = () => {
          isModalOpen = true;
-         const overlay = document.getElementById('modal-editor-overlay');
-         const textarea = document.getElementById('modal-textarea');
-         const cancelBtn = document.getElementById('modal-cancel-btn');
-         const saveBtn = document.getElementById('modal-save-btn');
-         const title = document.getElementById('modal-title');
-
-         if (!overlay || !textarea) return;
-
-         title.textContent = `Edit ${colName}`;
-         textarea.value = inputEl.value;
-         overlay.classList.remove('hidden');
-         overlay.style.display = 'flex';
-         textarea.focus();
-
-         const closeModal = () => {
-            overlay.classList.add('hidden');
-            overlay.style.display = 'none';
-            saveBtn.onclick = null;
-            cancelBtn.onclick = null;
-            isModalOpen = false;
-            inputEl.focus();
-         };
-
-         cancelBtn.onclick = closeModal;
-         saveBtn.onclick = () => {
-            inputEl.value = textarea.value;
-            closeModal();
-            commitEdit();
-         };
-
-         // Close on backdrop click
-         overlay.onclick = (e) => {
-            if (e.target === overlay) closeModal();
-         };
+         openSupabaseCellEditor({
+            td,
+            colName,
+            colType: typeUpper,
+            initialValue: inputEl.value,
+            onSave: (newVal) => {
+               inputEl.value = newVal;
+               isModalOpen = false;
+               commitEdit();
+            },
+            onCancel: () => {
+               isModalOpen = false;
+               inputEl.focus();
+            },
+         });
       };
 
       td.innerHTML = '';
@@ -347,7 +397,7 @@ export function bindCellEditor(tableContainer, schema, columns) {
 
       const commitEdit = () => {
          if (isModalOpen) return;
-         let newVal = isBool ? (inputEl.checked ? '1' : '0') : inputEl.value;
+         let newVal = inputEl.value;
 
          // Handle fixed-point decimal scaling (e.g. Numeric(30,2) or Decimal(10,2))
          const decimalMatch = typeUpper.match(

@@ -10,6 +10,7 @@ import { fetchSnippetsApi, deleteSnippetApi } from '../../lib/api.js';
 import { openSaveSnippetModal } from './snippetsModal.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 import { createModal } from '../../components/modal.js';
+import { initQueryHistory } from './history.js';
 
 export const bindConsoleEvents = (editor, resultsBody) => {
    // ==================== TABS STATE MANAGEMENT ====================
@@ -42,15 +43,32 @@ export const bindConsoleEvents = (editor, resultsBody) => {
 
    const saveTabsToStorage = () => {
       try {
-         // Store tabs without heavy result DOM
-         const serialized = tabs.map((t) => ({
-            id: t.id,
-            title: t.title,
-            sql: t.sql,
-            isDirty: t.isDirty,
-            isPreview: Boolean(t.isPreview),
-            lastResult: t.lastResult,
-         }));
+         // Store tabs safely without exploding localStorage quota
+         const serialized = tabs.map((t) => {
+            let safeResult = t.lastResult;
+            if (
+               safeResult &&
+               safeResult.data &&
+               safeResult.data.rows &&
+               safeResult.data.rows.length > 100
+            ) {
+               safeResult = {
+                  ...safeResult,
+                  data: {
+                     ...safeResult.data,
+                     rows: safeResult.data.rows.slice(0, 100),
+                  },
+               };
+            }
+            return {
+               id: t.id,
+               title: t.title,
+               sql: t.sql,
+               isDirty: t.isDirty,
+               isPreview: Boolean(t.isPreview),
+               lastResult: safeResult,
+            };
+         });
          localStorage.setItem('drixio_sql_tabs', JSON.stringify(serialized));
          localStorage.setItem('drixio_active_tab_id', activeTabId);
       } catch (err) {
@@ -1665,95 +1683,10 @@ export const bindConsoleEvents = (editor, resultsBody) => {
       });
    };
 
-   // Recent Query History with LocalStorage persistence
-   try {
-      const storedHist = localStorage.getItem('drixio_query_history');
-      if (storedHist) {
-         window.AppState.queryHistory = JSON.parse(storedHist);
-      }
-   } catch {
-      // ignore
-   }
-   if (!window.AppState.queryHistory) {
-      window.AppState.queryHistory = [];
-   }
-
-   const saveHistoryToStorage = () => {
-      try {
-         localStorage.setItem(
-            'drixio_query_history',
-            JSON.stringify(window.AppState.queryHistory || []),
-         );
-      } catch {
-         // ignore
-      }
-   };
-
-   const historyList = document.getElementById('console-recent-history-list');
-   const clearHistoryBtn = document.getElementById('console-clear-history-btn');
-
-   const loadAndRenderHistory = () => {
-      if (!historyList) return;
-      const history = window.AppState.queryHistory || [];
-
-      if (clearHistoryBtn) {
-         if (history.length > 0) clearHistoryBtn.classList.remove('hidden');
-         else clearHistoryBtn.classList.add('hidden');
-      }
-
-      if (history.length === 0) {
-         historyList.innerHTML = `<div class="sidebar-tree-empty">No recent queries</div>`;
-         return;
-      }
-
-      historyList.innerHTML = history
-         .slice(0, 15)
-         .map(
-            (sql, idx) => `
-         <button type="button" class="table-btn query-item-btn history-item" data-idx="${idx}" title="${sql}">
-           <div class="table-btn-label">
-             <i class="material-symbols-outlined table-item-icon">history</i>
-             <span class="table-name-text">${sql.replace(/\s+/g, ' ')}</span>
-           </div>
-           <span class="query-item-delete-btn" title="Remove from history">
-             <span class="material-symbols-outlined">close</span>
-           </span>
-         </button>
-       `,
-         )
-         .join('');
-
-      historyList.querySelectorAll('.history-item').forEach((el) => {
-         const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-         const sql = history[idx];
-         if (!sql) return;
-
-         el.onclick = (e) => {
-            if (e.target.closest('.query-item-delete-btn')) return;
-            openOrLoadQuery('Recent query', sql, true); // Open in preview mode!
-         };
-
-         const delBtn = el.querySelector('.query-item-delete-btn');
-         if (delBtn) {
-            delBtn.onclick = (e) => {
-               e.stopPropagation();
-               window.AppState.queryHistory.splice(idx, 1);
-               saveHistoryToStorage();
-               loadAndRenderHistory();
-            };
-         }
-      });
-   };
-
-   if (clearHistoryBtn) {
-      clearHistoryBtn.onclick = () => {
-         if (confirm('Clear all recent query history?')) {
-            window.AppState.queryHistory = [];
-            saveHistoryToStorage();
-            loadAndRenderHistory();
-         }
-      };
-   }
+   // Recent Query History with bounded persistence and truncation
+   initQueryHistory((sql) => {
+      openOrLoadQuery('Recent query', sql, true);
+   });
 
    // Clear Results Button
    const clearResultsBtn = document.getElementById('console-clear-results-btn');
@@ -1897,7 +1830,6 @@ export const bindConsoleEvents = (editor, resultsBody) => {
    renderQueryResultToBody(activeInitialTab.lastResult, resultsBody);
    loadAndRenderSavedQueries();
    renderTemplates();
-   loadAndRenderHistory();
    updateCursorAndSelectionInfo();
    editor.focus({ preventScroll: true });
 };

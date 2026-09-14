@@ -1,4 +1,5 @@
 import { openImportModal } from './importModal.js';
+import { escapeHtml } from '../lib/utils.js';
 
 let paletteContainer = null;
 let inputEl = null;
@@ -385,11 +386,4 @@ function executeItem(item) {
          console.error('Command execution failed:', err);
       }
    }, 100);
-}
-
-function escapeHtml(str) {
-   return (str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
 }

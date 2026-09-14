@@ -25,7 +25,6 @@ export function getFilterQuery(tableName) {
    if (!filterCol || !filterOp) return '';
 
    if (filterOp === 'IS NULL' || filterOp === 'IS NOT NULL') {
-      return `"${filterCol}" ${filterOp}`;
       return `${quoteId(filterCol)} ${filterOp}`;
    }
 

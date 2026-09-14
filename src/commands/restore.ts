@@ -1,5 +1,5 @@
 import pc from 'picocolors';
-import { DBConfig, createDBAdapter, restoreDatabase } from '../logic/index.js';
+import { DBConfig, createDBAdapter, restoreDatabase, getRestoreCandidates } from '../logic/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -21,30 +21,7 @@ export async function runRestoreCommand(
    if (!targetPath) {
       // Find candidate backup directories or files in current working directory
       try {
-         const entries = await fs.readdir(process.cwd(), {
-            withFileTypes: true,
-         });
-         const candidates: { name: string; value: string }[] = [];
-
-         for (const entry of entries) {
-            if (
-               entry.isDirectory() &&
-               entry.name.startsWith('drixio_backup_')
-            ) {
-               candidates.push({
-                  name: `📁 ${entry.name} (Backup Directory)`,
-                  value: entry.name,
-               });
-            } else if (
-               entry.isFile() &&
-               (entry.name.endsWith('.sql') || entry.name.endsWith('.json'))
-            ) {
-               candidates.push({
-                  name: `📄 ${entry.name} (${entry.name.endsWith('.sql') ? 'SQL Script' : 'JSON Dump'})`,
-                  value: entry.name,
-               });
-            }
-         }
+         const candidates = await getRestoreCandidates(process.cwd());
 
          if (candidates.length > 0) {
             candidates.push({

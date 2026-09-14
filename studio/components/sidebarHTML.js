@@ -11,15 +11,12 @@ export const SideBarHTML = /* html */ `
 
   <div id="sidebar-content">
     <div id="schema-selector-wrap" class="hidden">
-      <div class="schema-select-box" title="Switch Schema">
+      <div class="schema-select-box" id="schema-select-box" title="Switch Schema" style="cursor: pointer;">
         <div class="schema-select-text">
           <span class="schema-prefix">schema</span>
           <span class="schema-current-name" id="schema-current-display">public</span>
         </div>
         <span class="material-symbols-outlined schema-chevron">expand_more</span>
-        <select id="schema-select" class="schema-native-select" aria-label="Switch database schema">
-          <option value="public">public</option>
-        </select>
       </div>
     </div>
 

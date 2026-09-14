@@ -206,6 +206,8 @@ export function extractSnippetParams(sql: string): string[] {
 
 /**
  * Safely substitute parameters into a SQL template.
+ * Identifier params (table, column, child_table, parent_table, fk_col, pk_col)
+ * are quoted as SQL identifiers. All other params are escaped as string values.
  */
 export function substituteSnippetParams(
    sql: string,
@@ -215,11 +217,22 @@ export function substituteSnippetParams(
    if (!sql) return '';
    const dialect = getDialect(dbType as any);
 
+   // Params that represent SQL identifiers (table/column names)
+   const identifierKeys = new Set([
+      'table',
+      'column',
+      'child_table',
+      'parent_table',
+      'fk_col',
+      'pk_col',
+   ]);
+
    let result = sql;
 
    for (const [key, rawValue] of Object.entries(params)) {
       const valStr =
          rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
+      const isIdentifier = identifierKeys.has(key);
       const isNumber = !isNaN(Number(valStr)) && valStr.trim() !== '';
 
       // Pattern 1: Match '{{key}}' or ':key' inside single quotes: ':id' -> 'value'
@@ -234,12 +247,18 @@ export function substituteSnippetParams(
       const rawMustache = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
       result = result.replace(rawMustache, () => {
          return isNumber ? valStr : valStr;
+         if (isIdentifier) return dialect.quoteIdentifier(valStr);
+         if (isNumber) return valStr;
+         return `'${escapedVal}'`;
       });
 
       // Pattern 3: Match unquoted :key (ensure not preceded by colon)
       const rawColon = new RegExp(`(^|[^:]):${key}\\b`, 'g');
       result = result.replace(rawColon, (_match, prefix) => {
          return `${prefix}${valStr}`;
+         if (isIdentifier) return `${prefix}${dialect.quoteIdentifier(valStr)}`;
+         if (isNumber) return `${prefix}${valStr}`;
+         return `${prefix}'${escapedVal}'`;
       });
    }
 

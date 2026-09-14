@@ -152,14 +152,22 @@ export async function batchMutateTableData(
    }
 
    // 4. Execute queries sequentially
+   // 4. Execute queries within a transaction for atomicity
    let executedCount = 0;
    try {
+      await adapter.executeSql('BEGIN;');
       for (const sql of sqls) {
          await adapter.executeSql(sql);
          executedCount++;
       }
+      await adapter.executeSql('COMMIT;');
       return ok({ modifiedCount: executedCount, executedCount });
    } catch (e: any) {
+      try {
+         await adapter.executeSql('ROLLBACK;');
+      } catch {
+         // Ignore rollback error if connection is already broken
+      }
       return err(
          e.message || 'Failed to execute database mutations',
          undefined,

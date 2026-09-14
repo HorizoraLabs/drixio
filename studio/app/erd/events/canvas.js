@@ -6,11 +6,13 @@ import {
    focusRelationship,
    focusTableRelationships,
    clearRelationshipFocus,
+   showRelationshipPopover,
 } from '../render.js';
 import {
    autoLayoutErd,
    saveErdDrafts,
    exportErdAsSvg,
+   exportErdAsPng,
    exportErdAsSql,
 } from '../core.js';
 import { addNewDraftTable, loadErd } from '../view.js';
@@ -265,6 +267,11 @@ export function bindCanvasEvents(wrapper) {
                action: () => exportErdAsSvg(),
             },
             {
+               label: 'Export as PNG (2x HiDPI)',
+               icon: 'photo_camera',
+               action: () => exportErdAsPng(),
+            },
+            {
                label: 'Copy SQL Schema (DDL)',
                icon: 'code',
                action: () => {
@@ -397,6 +404,11 @@ export function bindCanvasEvents(wrapper) {
                icon: 'image',
                action: () => exportErdAsSvg(),
             },
+            {
+               label: 'Export as PNG',
+               icon: 'photo_camera',
+               action: () => exportErdAsPng(),
+            },
          ]);
       }
    });
@@ -522,6 +534,23 @@ export function bindCanvasEvents(wrapper) {
       const header = e.target.closest('.erd-node-header');
       if (path || fkCol || header) {
          clearRelationshipFocus();
+      }
+   });
+
+   wrapper.addEventListener('click', (e) => {
+      const path = e.target.closest('.erd-relationship-path');
+      if (path) {
+         e.stopPropagation();
+         showRelationshipPopover({
+            fromTable: path.dataset.fromTable,
+            fromCol: path.dataset.fromCol,
+            toTable: path.dataset.toTable,
+            toCol: path.dataset.toCol,
+            onDelete: path.dataset.onDelete,
+            onUpdate: path.dataset.onUpdate,
+            x: e.clientX,
+            y: e.clientY,
+         });
       }
    });
 

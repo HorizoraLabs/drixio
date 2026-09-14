@@ -9,6 +9,7 @@ export interface Dialect {
 export class SqliteDialect implements Dialect {
    quoteIdentifier(name: string): string {
       return `"${name}"`;
+      return `"${name.replace(/"/g, '""')}"`;
    }
 
    escapeString(val: string): string {
@@ -92,6 +93,7 @@ export class SqliteDialect implements Dialect {
 export class PostgresDialect implements Dialect {
    quoteIdentifier(name: string): string {
       return `"${name}"`;
+      return `"${name.replace(/"/g, '""')}"`;
    }
 
    escapeString(val: string): string {
@@ -182,10 +184,12 @@ export class PostgresDialect implements Dialect {
 export class MysqlDialect implements Dialect {
    quoteIdentifier(name: string): string {
       return `\`${name}\``;
+      return `\`${name.replace(/`/g, '``')}\``;
    }
 
    escapeString(val: string): string {
       return val.replace(/'/g, "''");
+      return val.replace(/\\/g, '\\\\').replace(/'/g, "''");
    }
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
@@ -275,6 +279,7 @@ export function getDialect(
 /**
  * Construct a SQL WHERE clause from user search input.
  * Detects explicit SQL expressions vs multi-column fuzzy text search.
+ * Always treats input as a safe fuzzy search term — never passes raw SQL.
  */
 export function buildSearchWhereClause(
    adapter: DBAdapter,
@@ -290,8 +295,10 @@ export function buildSearchWhereClause(
    if (isSqlCondition) {
       return searchVal;
    }
+   const dialect = getDialect(dbType as any);
 
    // 2. Multi-column fuzzy search
+   // Multi-column fuzzy search on text-like columns
    const strCols = columns.filter((c) => {
       const t = c.type.toLowerCase();
       return (
@@ -304,7 +311,7 @@ export function buildSearchWhereClause(
 
    if (strCols.length > 0) {
       const likeOp = dbType === 'postgres' ? 'ILIKE' : 'LIKE';
-      const escaped = searchVal.replace(/'/g, "''");
+      const escaped = dialect.escapeString(searchVal);
       const conditions = strCols.map(
          (c) => `${adapter.quoteIdentifier(c.name)} ${likeOp} '%${escaped}%'`,
       );
@@ -314,7 +321,7 @@ export function buildSearchWhereClause(
    // Fallback: match first column
    if (columns.length > 0) {
       const col = columns[0];
-      const escaped = searchVal.replace(/'/g, "''");
+      const escaped = dialect.escapeString(searchVal);
       return `${adapter.quoteIdentifier(col.name)} = '${escaped}'`;
    }
 
@@ -403,4 +410,58 @@ export function formatSqlDefaultValue(
    // 7. Otherwise, it's a plain string literal provided without quotes (e.g. active)
    const escaped = trimmed.replace(/'/g, "''");
    return `'${escaped}'`;
+}
+
+export function generateExplainQuery(
+   rawSql: string,
+   dbType: string,
+): { sql: string; error?: string } {
+   let cleanSql = rawSql
+      .replace(/--.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .trim()
+      .replace(/;+$/, '')
+      .trim();
+
+   if (!cleanSql) {
+      return { sql: '', error: 'SQL query is empty after stripping comments' };
+   }
+
+   if (/^(CREATE|DROP|ALTER|TRUNCATE)\s+/i.test(cleanSql)) {
+      return {
+         sql: '',
+         error: 'DDL statements (CREATE, DROP, ALTER, TRUNCATE) do not have query execution plans to explain.',
+      };
+   }
+
+   const hasUserExplain = /^EXPLAIN\b/i.test(cleanSql);
+   let targetSql = cleanSql;
+   if (hasUserExplain) {
+      targetSql = cleanSql
+         .replace(/^EXPLAIN\s+(QUERY\s+PLAN\s+)?/i, '')
+         .replace(
+            /^\((ANALYZE|COSTS|VERBOSE|BUFFERS|FORMAT\s+\w+|,|\s)+\)\s*/i,
+            '',
+         )
+         .trim();
+   }
+
+   let explainSql = '';
+   const isDmlWrite = /^(INSERT|UPDATE|DELETE)\s+/i.test(targetSql);
+
+   if (dbType === 'sqlite') {
+      explainSql = `EXPLAIN QUERY PLAN ${targetSql}`;
+   } else if (dbType === 'postgres') {
+      if (isDmlWrite) {
+         explainSql = `EXPLAIN (COSTS, VERBOSE) ${targetSql}`;
+      } else {
+         explainSql = `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS) ${targetSql}`;
+      }
+   } else if (dbType === 'mysql') {
+      explainSql = `EXPLAIN ${targetSql}`;
+   } else {
+      explainSql = `EXPLAIN ${targetSql}`;
+   }
+
+   return { sql: explainSql };
 }

@@ -11,6 +11,32 @@ import { createTable } from './schema.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+export async function getRestoreCandidates(dir: string): Promise<{name: string; value: string}[]> {
+   const candidates: { name: string; value: string }[] = [];
+   try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+         if (entry.isDirectory() && entry.name.startsWith('drixio_backup_')) {
+            candidates.push({
+               name: `📁 ${entry.name} (Backup Directory)`,
+               value: entry.name,
+            });
+         } else if (
+            entry.isFile() &&
+            (entry.name.endsWith('.sql') || entry.name.endsWith('.json'))
+         ) {
+            candidates.push({
+               name: `📄 ${entry.name} (${entry.name.endsWith('.sql') ? 'SQL Script' : 'JSON Dump'})`,
+               value: entry.name,
+            });
+         }
+      }
+   } catch {
+      // ignore
+   }
+   return candidates;
+}
+
 export interface ExportTableOptions {
    whereClause?: string;
    orderBy?: { col: string; asc: boolean };
@@ -693,3 +719,177 @@ export function generateDatabaseSqlDumpStream(
       },
    });
 }
+
+export function nodeToWebStream(nodeStream: import('node:stream').Readable) {
+   return new ReadableStream({
+      start(controller) {
+         nodeStream.on('data', (chunk) => controller.enqueue(chunk));
+         nodeStream.on('end', () => controller.close());
+         nodeStream.on('error', (err) => controller.error(err));
+      },
+      cancel() {
+         nodeStream.destroy();
+      },
+   });
+}
+
+export async function exportDatabaseNative(
+   dbType: string,
+   connectionUrl: string,
+   schemaOnly: boolean,
+): Promise<Result<ReadableStream>> {
+   try {
+      const executeNativeDump = (
+         cmd: string,
+         args: string[],
+         envName: string,
+      ) => {
+         return new Promise<ReadableStream>((resolve, reject) => {
+            const cp = import('node:child_process').then(m => m.spawn(cmd, args));
+            let started = false;
+
+            cp.then(cpInstance => {
+               const stream = nodeToWebStream(cpInstance.stdout!);
+               cpInstance.on('error', (e: any) => {
+                  if (!started)
+                     reject(
+                        new Error(
+                           `Native tool '${cmd}' not found. Please install ${envName}.`,
+                        ),
+                     );
+               });
+               setTimeout(() => {
+                  if (!cpInstance.killed) {
+                     started = true;
+                     resolve(stream);
+                  }
+               }, 100);
+            });
+         });
+      };
+
+      let stream: ReadableStream;
+      if (dbType === 'sqlite') {
+         const dbPath = connectionUrl.replace('file:', '');
+         stream = await executeNativeDump(
+            'sqlite3',
+            [dbPath, schemaOnly ? '.schema' : '.dump'],
+            'SQLite CLI',
+         );
+      } else if (dbType === 'mysql') {
+         const parsed = new URL(connectionUrl);
+         const user = parsed.username;
+         const pass = parsed.password;
+         const host = parsed.hostname;
+         const port = parsed.port || '3306';
+         const dbname = parsed.pathname.substring(1);
+         const args = ['-u', user, `-p${pass}`, '-h', host, '-P', port];
+         if (schemaOnly) args.push('--no-data');
+         args.push(dbname);
+         stream = await executeNativeDump(
+            'mysqldump',
+            args,
+            'MySQL Client',
+         );
+      } else if (dbType === 'postgres') {
+         const args = [connectionUrl];
+         if (schemaOnly) args.push('--schema-only');
+         stream = await executeNativeDump(
+            'pg_dump',
+            args,
+            'PostgreSQL CLI',
+         );
+      } else {
+         return err('Unsupported database type for native export');
+      }
+
+      return ok(stream);
+   } catch (e: any) {
+      return err(e.message || 'Failed to export database using native tool', undefined, e);
+   }
+}
+
+export async function importDatabaseNative(
+   adapter: DBAdapter,
+   dbType: string,
+   connectionUrl: string,
+   sqlContent: string,
+): Promise<Result<{ message: string }>> {
+   try {
+      const executeNativeImport = (
+         cmd: string,
+         args: string[],
+         fileContent: string,
+         envName: string,
+      ) => {
+         return new Promise<void>((resolve, reject) => {
+            import('node:child_process').then(m => {
+               const cp = m.spawn(cmd, args);
+               let started = false;
+               let errStr = '';
+               cp.on('error', (e: any) => {
+                  if (!started)
+                     reject(
+                        new Error(
+                           `Native tool '${cmd}' not found. Please install ${envName}.`,
+                        ),
+                     );
+               });
+               cp.stderr!.on('data', (d) => (errStr += d.toString()));
+               cp.on('close', (code) => {
+                  if (code === 0) resolve();
+                  else reject(new Error(`Native import failed: ${errStr}`));
+               });
+               cp.stdin!.write(fileContent);
+               cp.stdin!.end();
+               started = true;
+            });
+         });
+      };
+
+      try {
+         if (dbType === 'sqlite') {
+            const dbPath = connectionUrl.replace('file:', '');
+            await executeNativeImport(
+               'sqlite3',
+               [dbPath],
+               sqlContent,
+               'SQLite CLI',
+            );
+         } else if (dbType === 'mysql') {
+            const parsed = new URL(connectionUrl);
+            const user = parsed.username;
+            const pass = parsed.password;
+            const host = parsed.hostname;
+            const port = parsed.port || '3306';
+            const dbname = parsed.pathname.substring(1);
+            await executeNativeImport(
+               'mysql',
+               ['-u', user, `-p${pass}`, '-h', host, '-P', port, dbname],
+               sqlContent,
+               'MySQL Client',
+            );
+         } else if (dbType === 'postgres') {
+            await executeNativeImport(
+               'psql',
+               [connectionUrl],
+               sqlContent,
+               'PostgreSQL CLI',
+            );
+         } else {
+            return err('Unsupported database type for native import');
+         }
+      } catch (e: any) {
+         if (e.message.includes('Native tool')) {
+            await adapter.executeSql(sqlContent);
+         } else {
+            throw e;
+         }
+      }
+
+      return ok({ message: 'Import completed successfully' });
+   } catch (e: any) {
+      return err(`Import Failed: ${e.message}`, undefined, e);
+   }
+}
+

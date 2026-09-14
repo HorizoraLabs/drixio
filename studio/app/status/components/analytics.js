@@ -6,31 +6,56 @@ window.navigateToTableData = function (tableName) {
    window.handleSwitchTab('data-btn');
 };
 
-export function renderAnalyticsSplitView(tableStats) {
+export function renderAnalyticsSplitView(tableStats = {}) {
    const distContainer = document.getElementById(
       'status-distribution-container',
    );
    const topContainer = document.getElementById('status-toptables-container');
-   if (!distContainer || !topContainer) return;
+   if (!distContainer || !topContainer) return 0;
 
    const entries = Object.entries(tableStats).sort((a, b) => b[1] - a[1]);
-   if (entries.length === 0) {
-      topContainer.classList.add('hidden');
-      distContainer.classList.add('hidden');
-      return;
-   }
-
-   const top5 = entries.slice(0, 5);
    const totalRows = entries.reduce((sum, [_, count]) => sum + count, 0);
 
-   // Colors aligned with Drixio brand design palette
-   const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+   if (entries.length === 0) {
+      topContainer.classList.remove('hidden');
+      distContainer.classList.add('hidden');
+      topContainer.style.gridColumn = '1 / -1';
+      topContainer.innerHTML = /* html */ `
+         <div class="supabase-empty-analytics">
+            <div class="supabase-empty-icon">
+               <span class="material-symbols-outlined">table_chart_view</span>
+            </div>
+            <div class="supabase-empty-title">No tables found in this database</div>
+            <div class="supabase-empty-desc">Create your first database table or import a SQL script to populate data analytics and track records.</div>
+            <div class="supabase-empty-actions">
+               <button type="button" class="btn-primary" onclick="window.openCreateTableModal ? window.openCreateTableModal() : document.getElementById('add-table-btn')?.click()">
+                  <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
+                  <span>Create Table</span>
+               </button>
+               <button type="button" class="btn-secondary" onclick="document.getElementById('btn-quick-import-backup')?.click()">
+                  <span class="material-symbols-outlined" style="font-size: 15px;">upload</span>
+                  <span>Import SQL</span>
+               </button>
+            </div>
+         </div>
+      `;
+      return 0;
+   }
+
+   topContainer.style.gridColumn = '';
+   const top5 = entries.slice(0, 5);
+
+   // Brand colors: blue, indigo, cyan, amber, pink
+   const colors = ['#3b82f6', '#6366f1', '#06b6d4', '#f59e0b', '#ec4899'];
 
    // 1. Render Top Tables with Horizontal Bar Visualizer
    let listHtml = /* html */ `
     <div class="analytics-panel-header">
-      <h3 class="analytics-panel-title">Top Largest Tables</h3>
-      <span class="analytics-panel-badge">${entries.length} tables</span>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary" style="font-size: 18px;">leaderboard</span>
+        <h3 class="analytics-panel-title">Largest Tables by Rows</h3>
+      </div>
+      <span class="analytics-panel-badge">${entries.length} tables total</span>
     </div>
     <div class="top-tables-list">
   `;
@@ -43,7 +68,7 @@ export function renderAnalyticsSplitView(tableStats) {
          totalRows > 0 ? ((count / totalRows) * 100).toFixed(1) : 0;
 
       listHtml += /* html */ `
-      <div class="top-table-item hover-clickable" onclick="window.navigateToTableData('${tableName}')" title="Click to view ${tableName} data">
+      <div class="top-table-item hover-clickable" data-table="${tableName}" onclick="window.navigateToTableData('${tableName}')" title="Click to view ${tableName} data">
         <div class="top-table-bar-fill" style="width: ${barPct}%; background-color: ${colors[index]}"></div>
         <div class="top-table-content">
           <div class="top-table-left">
@@ -67,14 +92,16 @@ export function renderAnalyticsSplitView(tableStats) {
    // 2. Render Distribution Donut Chart with Centered Total Rows
    let chartHtml = /* html */ `
     <div class="analytics-panel-header">
-      <h3 class="analytics-panel-title">Row Count Distribution</h3>
-      <span class="analytics-panel-badge">${totalRows.toLocaleString()} total</span>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary" style="font-size: 18px;">pie_chart</span>
+        <h3 class="analytics-panel-title">Row Count Distribution</h3>
+      </div>
+      <span class="analytics-panel-badge">${totalRows.toLocaleString()} total rows</span>
     </div>
     <div class="distribution-content">
   `;
 
    let legendHtml = /* html */ `<div class="distribution-legend">`;
-
    let pieStops = [];
    let currentPct = 0;
 
@@ -91,7 +118,7 @@ export function renderAnalyticsSplitView(tableStats) {
          currentPct = end;
 
          legendHtml += /* html */ `
-        <div class="legend-item" onclick="window.navigateToTableData('${tableName}')" style="cursor: pointer;" title="View ${tableName}">
+        <div class="legend-item" data-table="${tableName}" onclick="window.navigateToTableData('${tableName}')" style="cursor: pointer;" title="View ${tableName}">
           <div class="legend-color" style="background: ${colors[index]}"></div>
           <span class="legend-name">${tableName}</span>
           <span class="legend-pct">${pct.toFixed(1)}%</span>
@@ -116,11 +143,16 @@ export function renderAnalyticsSplitView(tableStats) {
       `;
       }
 
+      const totalFormatted =
+         totalRows > 999999
+            ? (totalRows / 1000000).toFixed(1) + 'M'
+            : totalRows.toLocaleString();
+
       chartHtml += /* html */ `
       <div class="distribution-pie-wrapper">
         <div class="distribution-pie" style="background: conic-gradient(${pieStops.join(', ')});"></div>
         <div class="donut-center-info">
-          <span class="donut-total-num">${totalRows > 999999 ? (totalRows / 1000000).toFixed(1) + 'M' : totalRows.toLocaleString()}</span>
+          <span class="donut-total-num">${totalFormatted}</span>
           <span class="donut-total-label">Total Rows</span>
         </div>
       </div>
@@ -143,4 +175,37 @@ export function renderAnalyticsSplitView(tableStats) {
    distContainer.innerHTML = chartHtml;
    distContainer.classList.remove('hidden');
    distContainer.classList.add('block');
+
+   // Bind Hover Sync between top-table-item and legend-item
+   topContainer.querySelectorAll('.top-table-item').forEach((item) => {
+      const tbl = item.dataset.table;
+      item.addEventListener('mouseenter', () => {
+         distContainer
+            .querySelector(`.legend-item[data-table="${tbl}"]`)
+            ?.classList.add('is-hovered');
+      });
+      item.addEventListener('mouseleave', () => {
+         distContainer
+            .querySelector(`.legend-item[data-table="${tbl}"]`)
+            ?.classList.remove('is-hovered');
+      });
+   });
+
+   distContainer
+      .querySelectorAll('.legend-item[data-table]')
+      .forEach((item) => {
+         const tbl = item.dataset.table;
+         item.addEventListener('mouseenter', () => {
+            topContainer
+               .querySelector(`.top-table-item[data-table="${tbl}"]`)
+               ?.classList.add('is-hovered');
+         });
+         item.addEventListener('mouseleave', () => {
+            topContainer
+               .querySelector(`.top-table-item[data-table="${tbl}"]`)
+               ?.classList.remove('is-hovered');
+         });
+      });
+
+   return totalRows;
 }

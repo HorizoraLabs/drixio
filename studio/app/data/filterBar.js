@@ -76,13 +76,26 @@ export function hasActiveFilters(tableName) {
 
 /**
  * Construct SQL WHERE clause from active filters and free text search
+ * Construct SQL WHERE clause from active filters and free text search.
+ *
+ * NOTE: This client-side SQL construction is a convenience for the data grid.
+ * The constructed WHERE clause is sent to the server which passes it to the
+ * database adapter. Ideally this should be replaced with structured filter
+ * objects sent to a server-side query builder.
  */
 export function buildTableWhereClause(tableName, schema = []) {
    const state = getTableFilterState(tableName);
    const clauses = [];
 
+   /** @param {string} name */
+   const quoteId = (name) => `"${(name || '').replace(/"/g, '""')}"`;
+   /** @param {string} val */
+   const escapeStr = (val) => (val || '').replace(/'/g, "''");
+
    // 1. Process active filter pills
    for (const filter of state.activeFilters) {
+      // Allow raw SQL filters as they are a required flexible feature.
+      // NOTE: Values injected here are not escaped, users should construct safe raw SQL.
       if (filter.type === 'sql' || filter.op === 'RAW') {
          if (filter.val && filter.val.trim()) {
             clauses.push(`(${filter.val.trim()})`);
@@ -94,25 +107,25 @@ export function buildTableWhereClause(tableName, schema = []) {
       if (!col || !op) continue;
 
       if (op === 'IS NULL' || op === 'IS NOT NULL') {
-         clauses.push(`"${col}" ${op}`);
+         clauses.push(`${quoteId(col)} ${op}`);
          continue;
       }
 
       if (op === 'IN') {
          let formattedVal = (val || '').trim();
          if (!formattedVal.startsWith('(')) formattedVal = `(${formattedVal})`;
-         clauses.push(`"${col}" IN ${formattedVal}`);
+         clauses.push(`${quoteId(col)} IN ${formattedVal}`);
          continue;
       }
 
-      const escapedVal = (val || '').replace(/'/g, "''");
+      const escapedVal = escapeStr(val);
 
       if (op === 'LIKE') {
          const pattern =
             escapedVal.includes('%') || escapedVal.includes('_')
                ? escapedVal
                : `%${escapedVal}%`;
-         clauses.push(`"${col}" LIKE '${pattern}'`);
+         clauses.push(`${quoteId(col)} LIKE '${pattern}'`);
          continue;
       }
 
@@ -121,8 +134,7 @@ export function buildTableWhereClause(tableName, schema = []) {
             escapedVal.includes('%') || escapedVal.includes('_')
                ? escapedVal
                : `%${escapedVal}%`;
-         // Standard universal ILIKE fallback for Postgres/SQLite/MySQL
-         clauses.push(`LOWER("${col}") LIKE LOWER('${pattern}')`);
+         clauses.push(`LOWER(${quoteId(col)}) LIKE LOWER('${pattern}')`);
          continue;
       }
 
@@ -131,7 +143,7 @@ export function buildTableWhereClause(tableName, schema = []) {
             escapedVal.includes('%') || escapedVal.includes('_')
                ? escapedVal
                : `%${escapedVal}%`;
-         clauses.push(`"${col}" NOT LIKE '${pattern}'`);
+         clauses.push(`${quoteId(col)} NOT LIKE '${pattern}'`);
          continue;
       }
 
@@ -139,12 +151,12 @@ export function buildTableWhereClause(tableName, schema = []) {
       const isNum = !isNaN(Number(val)) && val.trim() !== '';
       const safeVal = isNum ? val.trim() : `'${escapedVal}'`;
       const sqlOp = op === '!=' ? '<>' : op;
-      clauses.push(`"${col}" ${sqlOp} ${safeVal}`);
+      clauses.push(`${quoteId(col)} ${sqlOp} ${safeVal}`);
    }
 
    // 2. Process free text search fallback
    if (state.freeTextSearch && state.freeTextSearch.trim()) {
-      const searchStr = state.freeTextSearch.trim().replace(/'/g, "''");
+      const searchStr = escapeStr(state.freeTextSearch.trim());
       const textCols = schema
          .filter((c) => {
             const t = (c.type || '').toUpperCase();
@@ -162,7 +174,7 @@ export function buildTableWhereClause(tableName, schema = []) {
          textCols.length > 0 ? textCols : schema.map((c) => c.name);
       if (targetCols.length > 0) {
          const textClauses = targetCols.map(
-            (c) => `LOWER("${c}") LIKE LOWER('%${searchStr}%')`,
+            (c) => `LOWER(${quoteId(c)}) LIKE LOWER('%${searchStr}%')`,
          );
          clauses.push(`(${textClauses.join(' OR ')})`);
       }

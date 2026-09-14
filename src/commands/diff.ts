@@ -8,6 +8,7 @@ import {
    diffDatabases,
    SchemaSnapshot,
    SchemaDiffResult,
+   isConnectionString,
 } from '../logic/index.js';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -119,11 +120,7 @@ export async function runDiffCommand(
 
       let diffResult: SchemaDiffResult;
 
-      const isRemoteUrl =
-         targetArg.startsWith('postgres://') ||
-         targetArg.startsWith('postgresql://') ||
-         targetArg.startsWith('mysql://') ||
-         targetArg.startsWith('file:');
+      const isRemoteUrl = isConnectionString(targetArg) || targetArg.startsWith('file:');
 
       if (isRemoteUrl) {
          console.log(

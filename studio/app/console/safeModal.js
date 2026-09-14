@@ -18,129 +18,30 @@ export const setSafeModeEnabled = (enabled) => {
    );
 };
 
-/**
- * Strips comments from SQL text
- */
-const stripSqlComments = (sql) => {
-   return sql
-      .replace(/--.*$/gm, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .trim();
-};
-
-/**
- * Analyzes SQL statement(s) for destructive operations without WHERE clauses
- */
-export const analyzeDangerousQuery = (rawSql) => {
+export const analyzeDangerousQuery = async (rawSql) => {
    if (!rawSql) return { isDangerous: false };
-
-   const cleaned = stripSqlComments(rawSql);
-   if (!cleaned) return { isDangerous: false };
-
-   // Split multiple statements separated by semicolon (not inside quotes)
-   const statements = cleaned
-      .split(/;(?=(?:[^'"]*['"][^'"]*['"])*[^'"]*$)/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-   for (const stmt of statements) {
-      const normalized = stmt.replace(/\s+/g, ' ');
-
-      // 1. DROP TABLE or DROP DATABASE / SCHEMA
-      const dropMatch = normalized.match(
-         /^DROP\s+(TABLE|DATABASE|SCHEMA)\s+(IF\s+EXISTS\s+)?([`"']?[a-zA-Z0-9_]+[`"']?)/i,
-      );
-      if (dropMatch) {
-         const targetType = dropMatch[1].toUpperCase();
-         const targetName = dropMatch[3] || 'target';
+   
+   try {
+      const res = await fetch('/api/query/analyze', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ sql: rawSql }),
+      });
+      const data = await res.json();
+      if (data.success) {
          return {
-            isDangerous: true,
-            type: `DROP ${targetType}`,
-            title: `Permanent Deletion: DROP ${targetType}`,
-            description: `This statement will permanently destroy the ${targetType.toLowerCase()} <code>${targetName}</code> and all data contained within it.`,
-            sql: stmt,
+            isDangerous: data.isDangerous,
+            type: data.type,
+            title: data.title,
+            description: data.description,
+            sql: data.sql
          };
       }
-
-      // 2. TRUNCATE TABLE or TRUNCATE
-      const truncateMatch = normalized.match(
-         /^TRUNCATE(\s+TABLE)?\s+([`"']?[a-zA-Z0-9_]+[`"']?)/i,
-      );
-      if (truncateMatch) {
-         const targetName = truncateMatch[2] || 'target';
-         return {
-            isDangerous: true,
-            type: 'TRUNCATE TABLE',
-            title: 'Wipe Out Table: TRUNCATE',
-            description: `This statement will immediately wipe out ALL records in table <code>${targetName}</code>.`,
-            sql: stmt,
-         };
-      }
-
-      // 3. DELETE without WHERE or trivial WHERE (WHERE 1=1 or WHERE true)
-      if (
-         /^DELETE\s+FROM\s+/i.test(normalized) ||
-         /^DELETE\s+[a-zA-Z0-9_`"']+\s+FROM/i.test(normalized)
-      ) {
-         const hasWhere = /\bWHERE\b/i.test(normalized);
-         if (!hasWhere) {
-            return {
-               isDangerous: true,
-               type: 'DELETE without WHERE',
-               title: 'Unrestricted DELETE Statement',
-               description:
-                  'This <b>DELETE</b> query does NOT contain a <code>WHERE</code> clause. Executing this will permanently delete <b>EVERY SINGLE RECORD</b> in the table.',
-               sql: stmt,
-            };
-         }
-
-         // Check trivial WHERE like WHERE 1=1 or WHERE true
-         const wherePart = normalized
-            .substring(normalized.search(/\bWHERE\b/i) + 5)
-            .trim();
-         if (/^(1\s*=\s*1|true|1)\s*$/i.test(wherePart)) {
-            return {
-               isDangerous: true,
-               type: 'DELETE with Trivial WHERE',
-               title: 'Unrestricted DELETE Statement',
-               description:
-                  'This <b>DELETE</b> query uses an unconditional clause (<code>WHERE 1=1 / true</code>) which will delete <b>ALL RECORDS</b> in the table.',
-               sql: stmt,
-            };
-         }
-      }
-
-      // 4. UPDATE without WHERE or trivial WHERE
-      if (/^UPDATE\s+([`"']?[a-zA-Z0-9_]+[`"']?)\s+SET\s+/i.test(normalized)) {
-         const hasWhere = /\bWHERE\b/i.test(normalized);
-         if (!hasWhere) {
-            return {
-               isDangerous: true,
-               type: 'UPDATE without WHERE',
-               title: 'Unrestricted UPDATE Statement',
-               description:
-                  'This <b>UPDATE</b> query does NOT contain a <code>WHERE</code> clause. Executing this will overwrite data in <b>EVERY SINGLE RECORD</b> in the table.',
-               sql: stmt,
-            };
-         }
-
-         const wherePart = normalized
-            .substring(normalized.search(/\bWHERE\b/i) + 5)
-            .trim();
-         if (/^(1\s*=\s*1|true|1)\s*$/i.test(wherePart)) {
-            return {
-               isDangerous: true,
-               type: 'UPDATE with Trivial WHERE',
-               title: 'Unrestricted UPDATE Statement',
-               description:
-                  'This <b>UPDATE</b> query uses an unconditional clause (<code>WHERE 1=1 / true</code>) which will overwrite <b>ALL RECORDS</b> in the table.',
-               sql: stmt,
-            };
-         }
-      }
+      return { isDangerous: false };
+   } catch (e) {
+      console.error(e);
+      return { isDangerous: false };
    }
-
-   return { isDangerous: false };
 };
 
 /**

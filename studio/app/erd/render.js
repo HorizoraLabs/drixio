@@ -232,17 +232,23 @@ export function drawLines() {
                : 'url(#one-and-only-one)';
 
             pathsHtml += /* html */ `
-          <path 
-            class="erd-relationship-path"
-            d="M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}" 
-            fill="none" 
-            marker-start="${startMarker}"
-            marker-end="${endMarker}"
-            data-from-table="${fromTable}"
-            data-from-col="${col.name}"
-            data-to-table="${toTable}"
-            data-to-col="${toCol}"
-          />
+          <g class="erd-relationship-group">
+            <path 
+              class="erd-relationship-path"
+              d="M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}" 
+              fill="none" 
+              marker-start="${startMarker}"
+              marker-end="${endMarker}"
+              data-from-table="${fromTable}"
+              data-from-col="${col.name}"
+              data-to-table="${toTable}"
+              data-to-col="${toCol}"
+              data-on-delete="${col.fkTarget.onDelete || 'NO ACTION'}"
+              data-on-update="${col.fkTarget.onUpdate || 'NO ACTION'}"
+            />
+            <text class="erd-cardinality-badge cardinality-fk" x="${startX + (startX < endX ? 14 : -14)}" y="${startY - 6}" text-anchor="middle">N</text>
+            <text class="erd-cardinality-badge cardinality-pk" x="${endX + (startX < endX ? -14 : 14)}" y="${endY - 6}" text-anchor="middle">1</text>
+          </g>
         `;
          }
       });
@@ -269,6 +275,86 @@ export function drawLines() {
     </defs>
     ${pathsHtml}
   `;
+}
+
+let activeRelPopover = null;
+
+export function hideRelationshipPopover() {
+   if (activeRelPopover) {
+      activeRelPopover.remove();
+      activeRelPopover = null;
+   }
+}
+
+export function showRelationshipPopover({
+   fromTable,
+   fromCol,
+   toTable,
+   toCol,
+   onDelete,
+   onUpdate,
+   x,
+   y,
+}) {
+   hideRelationshipPopover();
+
+   const pop = document.createElement('div');
+   pop.className = 'erd-rel-popover';
+   pop.style.left = `${Math.min(window.innerWidth - 300, Math.max(16, x - 130))}px`;
+   pop.style.top = `${Math.min(window.innerHeight - 180, Math.max(16, y - 40))}px`;
+
+   pop.innerHTML = /* html */ `
+      <div class="erd-rel-pop-header">
+         <div class="erd-rel-pop-title">
+            <span class="material-symbols-outlined" style="font-size:16px; color:var(--color-primary);">link</span>
+            <span>Foreign Key Relationship</span>
+         </div>
+         <button type="button" class="erd-rel-pop-close icon-btn" title="Close">
+            <span class="material-symbols-outlined" style="font-size:14px;">close</span>
+         </button>
+      </div>
+      <div class="erd-rel-pop-body">
+         <div class="erd-rel-pop-row">
+            <span class="erd-rel-pop-label">Source (FK):</span>
+            <span class="erd-rel-pop-code">${fromTable}.${fromCol}</span>
+         </div>
+         <div class="erd-rel-pop-row">
+            <span class="erd-rel-pop-label">Target (PK):</span>
+            <span class="erd-rel-pop-code">${toTable}.${toCol}</span>
+         </div>
+         <div class="erd-rel-pop-rules">
+            <span>ON DELETE: <strong>${onDelete || 'NO ACTION'}</strong></span>
+            <span>ON UPDATE: <strong>${onUpdate || 'NO ACTION'}</strong></span>
+         </div>
+      </div>
+      <div class="erd-rel-pop-footer">
+         <button type="button" class="btn-secondary erd-rel-pop-focus-btn">Focus Tables</button>
+      </div>
+   `;
+
+   document.body.appendChild(pop);
+   activeRelPopover = pop;
+
+   pop.querySelector('.erd-rel-pop-close').onclick = (e) => {
+      e.stopPropagation();
+      hideRelationshipPopover();
+   };
+
+   pop.querySelector('.erd-rel-pop-focus-btn').onclick = (e) => {
+      e.stopPropagation();
+      focusRelationship(fromTable, fromCol, toTable, toCol);
+      hideRelationshipPopover();
+   };
+
+   const outsideHandler = (e) => {
+      if (!pop.contains(e.target)) {
+         hideRelationshipPopover();
+         document.removeEventListener('pointerdown', outsideHandler);
+      }
+   };
+   setTimeout(() => {
+      document.addEventListener('pointerdown', outsideHandler);
+   }, 50);
 }
 
 export function focusRelationship(fromTable, fromCol, toTable, toCol) {

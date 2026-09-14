@@ -9,6 +9,7 @@ import {
    formatSqlDefaultValue,
 } from '../../lib/dataTypes.js';
 import { openTypePicker } from '../../components/typePicker.js';
+import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 /**
  * Visual Table Creation Wizard Modal with Foreign Key, Unique, Presets & Live SQL Preview
@@ -494,52 +495,32 @@ export function openCreateTableModal(onSuccess) {
             </div>
             <div class="table-fk-popover-field">
               <label>Target Table</label>
-              <div class="table-col-select-wrap">
-                <select class="table-col-select fk-target-table-select">
-                  <option value="">-- Select Table --</option>
-                  ${cachedTables
-                     .map(
-                        (tbl) =>
-                           `<option value="${tbl}" ${col.fkTarget?.table === tbl ? 'selected' : ''}>${tbl}</option>`,
-                     )
-                     .join('')}
-                </select>
-                <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
-              </div>
+              <button type="button" class="table-col-select fk-target-table-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 30px; cursor: pointer; text-align: left; padding: 0 8px;">
+                <span class="fk-table-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${col.fkTarget?.table || '-- Select Table --'}</span>
+                <span class="material-symbols-outlined table-col-select-arrow" style="font-size: 16px; color: var(--color-text-soft);">expand_more</span>
+              </button>
             </div>
             <div class="table-fk-popover-field">
               <label>Target Column</label>
-              <div class="table-col-select-wrap">
-                <select class="table-col-select fk-target-column-select" ${!col.fkTarget?.table ? 'disabled' : ''}>
-                  <option value="">-- Select Column --</option>
-                </select>
-                <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
-              </div>
+              <button type="button" class="table-col-select fk-target-column-select" ${!col.fkTarget?.table ? 'disabled' : ''} style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 30px; cursor: pointer; text-align: left; padding: 0 8px;">
+                <span class="fk-col-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${col.fkTarget?.column || '-- Select Column --'}</span>
+                <span class="material-symbols-outlined table-col-select-arrow" style="font-size: 16px; color: var(--color-text-soft);">expand_more</span>
+              </button>
             </div>
             <div class="table-fk-popover-grid-2">
               <div class="table-fk-popover-field">
                 <label>On Delete</label>
-                <div class="table-col-select-wrap">
-                  <select class="table-col-select fk-on-delete-select">
-                    <option value="NO ACTION" ${!col.fkTarget?.onDelete || col.fkTarget?.onDelete === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
-                    <option value="CASCADE" ${col.fkTarget?.onDelete === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
-                    <option value="SET NULL" ${col.fkTarget?.onDelete === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
-                    <option value="RESTRICT" ${col.fkTarget?.onDelete === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
-                  </select>
-                  <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
-                </div>
+                <button type="button" class="table-col-select fk-on-delete-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 30px; cursor: pointer; text-align: left; padding: 0 8px;">
+                  <span class="fk-on-delete-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${col.fkTarget?.onDelete || 'NO ACTION'}</span>
+                  <span class="material-symbols-outlined table-col-select-arrow" style="font-size: 16px; color: var(--color-text-soft);">expand_more</span>
+                </button>
               </div>
               <div class="table-fk-popover-field">
                 <label>On Update</label>
-                <div class="table-col-select-wrap">
-                  <select class="table-col-select fk-on-update-select">
-                    <option value="NO ACTION" ${!col.fkTarget?.onUpdate || col.fkTarget?.onUpdate === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
-                    <option value="CASCADE" ${col.fkTarget?.onUpdate === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
-                    <option value="RESTRICT" ${col.fkTarget?.onUpdate === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
-                    <option value="SET NULL" ${col.fkTarget?.onUpdate === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
-                  </select>
-                  <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
-                </div>
+                <button type="button" class="table-col-select fk-on-update-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 30px; cursor: pointer; text-align: left; padding: 0 8px;">
+                  <span class="fk-on-update-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${col.fkTarget?.onUpdate || 'NO ACTION'}</span>
+                  <span class="material-symbols-outlined table-col-select-arrow" style="font-size: 16px; color: var(--color-text-soft);">expand_more</span>
+                </button>
               </div>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
@@ -687,55 +668,137 @@ export function openCreateTableModal(onSuccess) {
          const fkClearBtn = row.querySelector('.fk-clear-btn');
          const fkDoneBtn = row.querySelector('.fk-done-btn');
 
-         async function loadTableColumns(tableName, selectCol) {
+         let pendingFkTable = col.fkTarget?.table || '';
+         let pendingFkCol = col.fkTarget?.column || '';
+         let pendingOnDelete = col.fkTarget?.onDelete || 'NO ACTION';
+         let pendingOnUpdate = col.fkTarget?.onUpdate || 'NO ACTION';
+
+         async function loadTableColumns(tableName) {
             if (!tableName) {
-               fkColSelect.innerHTML =
-                  '<option value="">-- Select Column --</option>';
-               fkColSelect.disabled = true;
+               if (fkColSelect) {
+                  const disp = fkColSelect.querySelector('.fk-col-display');
+                  if (disp) disp.textContent = '-- Select Column --';
+                  fkColSelect.disabled = true;
+               }
                return;
             }
 
-            fkColSelect.disabled = false;
-            fkColSelect.innerHTML =
-               '<option value="">Loading columns...</option>';
-
-            if (tableColumnsCache[tableName]) {
-               populateColOptions(tableColumnsCache[tableName], selectCol);
-               return;
+            if (fkColSelect) {
+               fkColSelect.disabled = false;
+               const disp = fkColSelect.querySelector('.fk-col-display');
+               if (disp) disp.textContent = 'Loading...';
             }
 
-            try {
-               const schema = await fetchTableSchema(tableName);
-               if (Array.isArray(schema)) {
-                  tableColumnsCache[tableName] = schema.map((c) => c.name);
-               } else if (schema && Array.isArray(schema.columns)) {
-                  tableColumnsCache[tableName] = schema.columns.map(
-                     (c) => c.name,
-                  );
-               } else {
+            if (!tableColumnsCache[tableName]) {
+               try {
+                  const schema = await fetchTableSchema(tableName);
+                  if (Array.isArray(schema)) {
+                     tableColumnsCache[tableName] = schema.map((c) => c.name);
+                  } else if (schema && Array.isArray(schema.columns)) {
+                     tableColumnsCache[tableName] = schema.columns.map(
+                        (c) => c.name,
+                     );
+                  } else {
+                     tableColumnsCache[tableName] = ['id'];
+                  }
+               } catch (err) {
                   tableColumnsCache[tableName] = ['id'];
                }
-               populateColOptions(tableColumnsCache[tableName], selectCol);
-            } catch (err) {
-               fkColSelect.innerHTML = '<option value="id">id</option>';
+            }
+
+            const cols = tableColumnsCache[tableName] || [];
+            if (!pendingFkCol || !cols.includes(pendingFkCol)) {
+               const idCol = cols.find((c) => c.toLowerCase() === 'id');
+               pendingFkCol = idCol || cols[0] || '';
+            }
+            if (fkColSelect) {
+               const disp = fkColSelect.querySelector('.fk-col-display');
+               if (disp)
+                  disp.textContent = pendingFkCol || '-- Select Column --';
             }
          }
 
-         function populateColOptions(cols, selectCol) {
-            fkColSelect.innerHTML =
-               '<option value="">-- Select Column --</option>';
-            cols.forEach((colName) => {
-               const opt = document.createElement('option');
-               opt.value = colName;
-               opt.textContent = colName;
-               if (selectCol && selectCol === colName) {
-                  opt.selected = true;
-               } else if (!selectCol && colName.toLowerCase() === 'id') {
-                  opt.selected = true;
-               }
-               fkColSelect.appendChild(opt);
+         fkTableSelect.onclick = (e) => {
+            e.stopPropagation();
+            openDropdownPicker({
+               anchorEl: fkTableSelect,
+               title: 'Select Target Table',
+               searchable: true,
+               placeholder: 'Search tables...',
+               initialValue: pendingFkTable,
+               items: cachedTables.map((tbl) => ({
+                  name: tbl,
+                  value: tbl,
+                  icon: 'table_chart',
+               })),
+               onSelect: async (val) => {
+                  pendingFkTable = val;
+                  const disp = fkTableSelect.querySelector('.fk-table-display');
+                  if (disp) disp.textContent = val;
+                  pendingFkCol = '';
+                  await loadTableColumns(val);
+               },
             });
-         }
+         };
+
+         fkColSelect.onclick = (e) => {
+            e.stopPropagation();
+            if (!pendingFkTable) return;
+            const cols = tableColumnsCache[pendingFkTable] || [];
+            openDropdownPicker({
+               anchorEl: fkColSelect,
+               title: `Columns in ${pendingFkTable}`,
+               searchable: true,
+               placeholder: 'Search columns...',
+               initialValue: pendingFkCol,
+               items: cols.map((c) => ({
+                  name: c,
+                  value: c,
+                  icon: 'tag',
+               })),
+               onSelect: (val) => {
+                  pendingFkCol = val;
+                  const disp = fkColSelect.querySelector('.fk-col-display');
+                  if (disp) disp.textContent = val;
+               },
+            });
+         };
+
+         fkOnDeleteSelect.onclick = (e) => {
+            e.stopPropagation();
+            openDropdownPicker({
+               anchorEl: fkOnDeleteSelect,
+               title: 'ON DELETE Action',
+               searchable: false,
+               initialValue: pendingOnDelete,
+               items: ['NO ACTION', 'CASCADE', 'SET NULL', 'RESTRICT'],
+               onSelect: (val) => {
+                  pendingOnDelete = val;
+                  const disp = fkOnDeleteSelect.querySelector(
+                     '.fk-on-delete-display',
+                  );
+                  if (disp) disp.textContent = val;
+               },
+            });
+         };
+
+         fkOnUpdateSelect.onclick = (e) => {
+            e.stopPropagation();
+            openDropdownPicker({
+               anchorEl: fkOnUpdateSelect,
+               title: 'ON UPDATE Action',
+               searchable: false,
+               initialValue: pendingOnUpdate,
+               items: ['NO ACTION', 'CASCADE', 'RESTRICT', 'SET NULL'],
+               onSelect: (val) => {
+                  pendingOnUpdate = val;
+                  const disp = fkOnUpdateSelect.querySelector(
+                     '.fk-on-update-display',
+                  );
+                  if (disp) disp.textContent = val;
+               },
+            });
+         };
 
          fkBtn.onclick = (e) => {
             e.stopPropagation();
@@ -750,9 +813,8 @@ export function openCreateTableModal(onSuccess) {
                );
                if (openedPopover) {
                   const targetTbl = col.fkTarget?.table || '';
-                  const targetCol = col.fkTarget?.column || '';
                   if (targetTbl) {
-                     loadTableColumns(targetTbl, targetCol);
+                     loadTableColumns(targetTbl);
                   }
                   const curBtn = document.querySelector(
                      `.col-fk-btn[data-index="${index}"]`,
@@ -772,11 +834,6 @@ export function openCreateTableModal(onSuccess) {
             fkPopover.style.display = 'none';
          };
 
-         fkTableSelect.onchange = (e) => {
-            const chosenTable = e.target.value;
-            loadTableColumns(chosenTable, null);
-         };
-
          fkClearBtn.onclick = (e) => {
             e.stopPropagation();
             columns[index].fkTarget = null;
@@ -787,21 +844,17 @@ export function openCreateTableModal(onSuccess) {
 
          fkDoneBtn.onclick = (e) => {
             e.stopPropagation();
-            const chosenTable = fkTableSelect.value;
-            const chosenCol = fkColSelect.value;
-            const chosenOnDelete = fkOnDeleteSelect?.value;
-            const chosenOnUpdate = fkOnUpdateSelect?.value;
-            if (chosenTable && chosenCol) {
+            if (pendingFkTable && pendingFkCol) {
                columns[index].fkTarget = {
-                  table: chosenTable,
-                  column: chosenCol,
+                  table: pendingFkTable,
+                  column: pendingFkCol,
                   onDelete:
-                     chosenOnDelete !== 'NO ACTION'
-                        ? chosenOnDelete
+                     pendingOnDelete !== 'NO ACTION'
+                        ? pendingOnDelete
                         : undefined,
                   onUpdate:
-                     chosenOnUpdate !== 'NO ACTION'
-                        ? chosenOnUpdate
+                     pendingOnUpdate !== 'NO ACTION'
+                        ? pendingOnUpdate
                         : undefined,
                };
             } else {

@@ -10,6 +10,7 @@ import {
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
 import { openCreateTableModal } from '../app/schema/createTableModal.js';
+import { openDropdownPicker } from './dropdownPicker.js';
 
 window.openCreateTableModal = openCreateTableModal;
 window.refreshTableList = initSidebar;
@@ -337,11 +338,13 @@ async function updateDatabaseStatus() {
 }
 
 let schemaSelectorBound = false;
+let currentActiveSchema = 'public';
+let availableSchemasList = [];
 
 async function updateSchemaSelector() {
    const wrap = document.getElementById('schema-selector-wrap');
-   const select = document.getElementById('schema-select');
-   if (!wrap || !select) return;
+   const box = document.getElementById('schema-select-box');
+   if (!wrap || !box) return;
 
    try {
       const res = await fetchSchemas();
@@ -351,68 +354,70 @@ async function updateSchemaSelector() {
       }
 
       const { schemas, currentSchema } = res.data;
+      availableSchemasList = schemas || [];
+      currentActiveSchema = currentSchema || 'public';
       const display = document.getElementById('schema-current-display');
       if (display) {
-         display.textContent = currentSchema || 'public';
-      }
-
-      // Populate options
-      select.innerHTML = '';
-      for (const s of schemas) {
-         const opt = document.createElement('option');
-         opt.value = s;
-         opt.textContent = s;
-         if (s === currentSchema) opt.selected = true;
-         select.appendChild(opt);
+         display.textContent = currentActiveSchema;
       }
 
       wrap.classList.remove('hidden');
 
-      // Bind change event once
       if (!schemaSelectorBound) {
          schemaSelectorBound = true;
-         select.addEventListener('change', async () => {
-            const chosen = select.value;
-            if (display) display.textContent = chosen;
-            select.disabled = true;
+         box.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDropdownPicker({
+               anchorEl: box,
+               title: 'Database Schemas',
+               searchable: availableSchemasList.length > 4,
+               placeholder: 'Search schemas...',
+               initialValue: currentActiveSchema,
+               items: availableSchemasList.map((s) => ({
+                  name: s,
+                  value: s,
+                  icon: 'folder',
+                  badge: s === currentActiveSchema ? 'active' : '',
+               })),
+               onSelect: async (chosen) => {
+                  if (chosen === currentActiveSchema) return;
+                  if (display) display.textContent = chosen;
 
-            try {
-               const switchRes = await switchSchemaApi(chosen);
-               if (switchRes.success) {
-                  // Reset current table selection
-                  window.AppState.currentTable = null;
-                  window.AppState.currentTableBtnElement = null;
+                  try {
+                     const switchRes = await switchSchemaApi(chosen);
+                     if (switchRes.success) {
+                        currentActiveSchema = chosen;
+                        window.AppState.currentTable = null;
+                        window.AppState.currentTableBtnElement = null;
 
-                  // Refresh sidebar tables
-                  await initSidebar(true);
+                        await initSidebar(true);
 
-                  if (window.showToast) {
-                     window.showToast(
-                        `Switched to schema "${chosen}" (${switchRes.data?.tableCount ?? 0} tables)`,
-                        'success',
-                     );
+                        if (window.showToast) {
+                           window.showToast(
+                              `Switched to schema "${chosen}" (${switchRes.data?.tableCount ?? 0} tables)`,
+                              'success',
+                           );
+                        }
+                     } else {
+                        if (window.showToast) {
+                           window.showToast(
+                              `Failed to switch schema: ${switchRes.error}`,
+                              'error',
+                           );
+                        }
+                        await updateSchemaSelector();
+                     }
+                  } catch (err) {
+                     if (window.showToast) {
+                        window.showToast(
+                           `Schema switch error: ${err.message}`,
+                           'error',
+                        );
+                     }
+                     await updateSchemaSelector();
                   }
-               } else {
-                  if (window.showToast) {
-                     window.showToast(
-                        `Failed to switch schema: ${switchRes.error}`,
-                        'error',
-                     );
-                  }
-                  // Revert dropdown
-                  await updateSchemaSelector();
-               }
-            } catch (err) {
-               if (window.showToast) {
-                  window.showToast(
-                     `Schema switch error: ${err.message}`,
-                     'error',
-                  );
-               }
-               await updateSchemaSelector();
-            } finally {
-               select.disabled = false;
-            }
+               },
+            });
          });
       }
    } catch {

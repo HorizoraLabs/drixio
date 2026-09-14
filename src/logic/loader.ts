@@ -426,3 +426,36 @@ export async function saveDatabaseUrl(url: string): Promise<Result<void>> {
       );
    }
 }
+
+export function assembleConnectionUrl(
+   type: string,
+   host: string,
+   port: string | number,
+   user: string,
+   password: string,
+   database: string,
+): string {
+   const targetHost = host || 'localhost';
+   const targetPort = port || (type === 'postgres' ? '5432' : '3306');
+   const targetUser = user || (type === 'postgres' ? 'postgres' : 'root');
+   const auth = password
+      ? `${encodeURIComponent(targetUser)}:${encodeURIComponent(password)}`
+      : encodeURIComponent(targetUser);
+   const defaultDb = type === 'postgres' ? 'postgres' : '';
+   const dbNameStr = database || defaultDb;
+   return `${type}://${auth}@${targetHost}:${targetPort}/${dbNameStr}`;
+}
+
+export function resolveLocalDbPath(targetUrl: string, cwd: string): string {
+   const cleanPath = targetUrl.replace(/^file:/, '').trim();
+   return path.isAbsolute(cleanPath)
+      ? cleanPath
+      : path.resolve(cwd, cleanPath);
+}
+
+export function isConnectionString(url: string): boolean {
+   const trimmed = url.trim();
+   return trimmed.startsWith('postgres://') ||
+      trimmed.startsWith('postgresql://') ||
+      trimmed.startsWith('mysql://');
+}

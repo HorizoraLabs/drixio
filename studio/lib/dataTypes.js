@@ -39,6 +39,8 @@ export function isEnumType(type) {
  * @param {string} rawDefault
  * @returns {string|null}
  */
+// NOTE: This is intentionally duplicated from src/logic/dialect.ts for client-side performance.
+// Any changes should be kept in sync with the server-side version.
 export function formatSqlDefaultValue(rawDefault) {
    if (rawDefault === undefined || rawDefault === null) return null;
    let trimmed = String(rawDefault).trim();

@@ -33,24 +33,16 @@ import {
    updateSnippet,
    deleteSnippet,
    getDrixioVersion,
+   exportDatabaseNative,
+   importDatabaseNative,
+   assembleConnectionUrl,
+   resolveLocalDbPath,
+   generateExplainQuery,
+   parseReplCommand,
+   getDatabaseEnums,
 } from '../logic/index.js';
-import { spawn } from 'node:child_process';
-import { Readable } from 'node:stream';
 import path from 'node:path';
 import fs from 'node:fs';
-
-function nodeToWebStream(nodeStream: Readable) {
-   return new ReadableStream({
-      start(controller) {
-         nodeStream.on('data', (chunk) => controller.enqueue(chunk));
-         nodeStream.on('end', () => controller.close());
-         nodeStream.on('error', (err) => controller.error(err));
-      },
-      cancel() {
-         nodeStream.destroy();
-      },
-   });
-}
 
 export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    const api = new Hono();
@@ -482,7 +474,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
-   api.post('/analyze-query', async (c) => {
+   api.post('/query/analyze', async (c) => {
       try {
          const { sql } = await c.req.json().catch(() => ({}));
          const result = analyzeDangerousQuery(sql);
@@ -502,12 +494,10 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             );
          }
 
-         const trimmed = sql.trim();
+         const replCmd = parseReplCommand(sql);
 
-         // 1. Intercept CONNECT <url> command
-         const connectMatch = trimmed.match(/^CONNECT\s+([^\s;]+)\s*;?$/i);
-         if (connectMatch) {
-            const rawUrl = connectMatch[1];
+         if (replCmd.type === 'connect' && replCmd.url) {
+            const rawUrl = replCmd.url;
             const newConfig = await detectDatabase(rawUrl);
             const newAdapter = createDBAdapter(newConfig);
             await newAdapter.getTables();
@@ -542,8 +532,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             });
          }
 
-         // 2. Intercept DISCONNECT command
-         if (/^DISCONNECT\s*;?$/i.test(trimmed)) {
+         if (replCmd.type === 'disconnect') {
             if (currentAdapter) {
                try {
                   await currentAdapter.close();
@@ -571,12 +560,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             });
          }
 
-         // 3. Intercept CREATE DATABASE <name> command
-         const createDbMatch = trimmed.match(
-            /^CREATE\s+DATABASE\s+(?:IF\s+NOT\s+EXISTS\s+)?['"`]?([^'";`\s]+)['"`]?\s*;?$/i,
-         );
-         if (createDbMatch) {
-            const dbName = createDbMatch[1];
+         if (replCmd.type === 'create_database' && replCmd.dbName) {
+            const dbName = replCmd.dbName;
             // If currently connected to Postgres or MySQL, run CREATE DATABASE on the server
             if (
                currentAdapter &&
@@ -675,66 +660,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
 
          const adapter = getAdapter();
-         // 1. Strip comments and trailing semicolons
-         let cleanSql = sql
-            .replace(/--.*$/gm, '')
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .trim()
-            .replace(/;+$/, '')
-            .trim();
-
-         if (!cleanSql) {
-            return c.json(
-               {
-                  success: false,
-                  error: 'SQL query is empty after stripping comments',
-               },
-               400,
-            );
+         const explainRes = generateExplainQuery(sql, currentDbConfig.type);
+         if (explainRes.error || !explainRes.sql) {
+            return c.json({ success: false, error: explainRes.error }, 400);
          }
-
-         // 2. Reject DDL statements that cannot be explained
-         if (/^(CREATE|DROP|ALTER|TRUNCATE)\s+/i.test(cleanSql)) {
-            return c.json(
-               {
-                  success: false,
-                  error: 'DDL statements (CREATE, DROP, ALTER, TRUNCATE) do not have query execution plans to explain.',
-               },
-               400,
-            );
-         }
-
-         // 3. Strip redundant user-provided EXPLAIN prefixes if present
-         const hasUserExplain = /^EXPLAIN\b/i.test(cleanSql);
-         let targetSql = cleanSql;
-         if (hasUserExplain) {
-            targetSql = cleanSql
-               .replace(/^EXPLAIN\s+(QUERY\s+PLAN\s+)?/i, '')
-               .replace(
-                  /^\((ANALYZE|COSTS|VERBOSE|BUFFERS|FORMAT\s+\w+|,|\s)+\)\s*/i,
-                  '',
-               )
-               .trim();
-         }
-
-         let explainSql = '';
-         const isDmlWrite = /^(INSERT|UPDATE|DELETE)\s+/i.test(targetSql);
-
-         if (currentDbConfig.type === 'sqlite') {
-            explainSql = `EXPLAIN QUERY PLAN ${targetSql}`;
-         } else if (currentDbConfig.type === 'postgres') {
-            // For write statements (INSERT/UPDATE/DELETE), DO NOT use ANALYZE to prevent accidental data changes!
-            // Use COSTS and VERBOSE instead, which only plans without executing.
-            if (isDmlWrite) {
-               explainSql = `EXPLAIN (COSTS, VERBOSE) ${targetSql}`;
-            } else {
-               explainSql = `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS) ${targetSql}`;
-            }
-         } else if (currentDbConfig.type === 'mysql') {
-            explainSql = `EXPLAIN ${targetSql}`;
-         } else {
-            explainSql = `EXPLAIN ${targetSql}`;
-         }
+         let explainSql = explainRes.sql;
 
          const startTime = performance.now();
          let res;
@@ -743,7 +673,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          } catch (primaryErr: any) {
             // Postgres fallback if ANALYZE or BUFFERS fails
             if (currentDbConfig.type === 'postgres') {
-               explainSql = `EXPLAIN ${targetSql}`;
+               const fallbackRes = generateExplainQuery(sql, 'unknown');
+               explainSql = fallbackRes.sql;
                res = await adapter.query(explainSql);
             } else {
                throw primaryErr;
@@ -849,75 +780,21 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
          const type = currentDbConfig.type;
          const url = currentDbConfig.targetUrl;
-         let child;
          let filename = 'backup.sql';
 
-         // Native Dump Wrapper Promise
-         const executeNativeDump = (
-            cmd: string,
-            args: string[],
-            envName: string,
-         ) => {
-            return new Promise<ReadableStream>((resolve, reject) => {
-               const cp = spawn(cmd, args);
-               let started = false;
-
-               // Initialize the stream immediately so we don't miss the 'end' event
-               // if the native tool completes extremely fast (< 100ms)
-               const stream = nodeToWebStream(cp.stdout);
-
-               cp.on('error', (err: any) => {
-                  if (!started)
-                     reject(
-                        new Error(
-                           `Native tool '${cmd}' not found. Please install ${envName}.`,
-                        ),
-                     );
-               });
-
-               // Wait briefly to ensure it spawned successfully before returning the stream
-               setTimeout(() => {
-                  if (!cp.killed) {
-                     started = true;
-                     resolve(stream);
-                  }
-               }, 100);
-            });
-         };
-
          try {
-            let stream;
             const baseName = getDbName();
             const timeStr = getDatetimeStr();
             filename = `${baseName}_backup_${timeStr}.sql`;
 
-            if (type === 'sqlite') {
-               const dbPath = url.replace('file:', '');
-               stream = await executeNativeDump(
-                  'sqlite3',
-                  [dbPath, '.dump'],
-                  'SQLite CLI',
-               );
-            } else if (type === 'mysql') {
-               const parsed = new URL(url);
-               const user = parsed.username;
-               const pass = parsed.password;
-               const host = parsed.hostname;
-               const port = parsed.port || '3306';
-               const dbname = parsed.pathname.substring(1);
-               stream = await executeNativeDump(
-                  'mysqldump',
-                  ['-u', user, `-p${pass}`, '-h', host, '-P', port, dbname],
-                  'MySQL Client',
-               );
-            } else if (type === 'postgres') {
-               stream = await executeNativeDump(
-                  'pg_dump',
-                  [url],
-                  'PostgreSQL CLI',
-               );
-            } else {
-               throw new Error('Unsupported database type for native export');
+            const exportRes = await exportDatabaseNative(
+               type,
+               url,
+               false
+            );
+
+            if (!exportRes.success) {
+               throw new Error(exportRes.error);
             }
 
             c.header(
@@ -925,7 +802,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                `attachment; filename="${filename}"`,
             );
             c.header('Content-Type', 'application/sql');
-            return c.body(stream);
+            return c.body(exportRes.data);
          } catch (err: any) {
             // Fallback to JS dump if native tool is missing
             if (err.message.includes('Native tool')) {
@@ -987,74 +864,14 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          const type = currentDbConfig.type;
          const url = currentDbConfig.targetUrl;
 
-         const executeNativeImport = (
-            cmd: string,
-            args: string[],
-            fileContent: string,
-            envName: string,
-         ) => {
-            return new Promise<void>((resolve, reject) => {
-               const cp = spawn(cmd, args);
-               let started = false;
-               let errStr = '';
-               cp.on('error', (err: any) => {
-                  if (!started)
-                     reject(
-                        new Error(
-                           `Native tool '${cmd}' not found. Please install ${envName}.`,
-                        ),
-                     );
-               });
-               cp.stderr.on('data', (d) => (errStr += d.toString()));
-               cp.on('close', (code) => {
-                  if (code === 0) resolve();
-                  else reject(new Error(`Native import failed: ${errStr}`));
-               });
-               cp.stdin.write(fileContent);
-               cp.stdin.end();
-               started = true;
-            });
-         };
-
-         try {
-            if (type === 'sqlite') {
-               const dbPath = url.replace('file:', '');
-               await executeNativeImport(
-                  'sqlite3',
-                  [dbPath],
-                  sqlContent,
-                  'SQLite CLI',
-               );
-            } else if (type === 'mysql') {
-               const parsed = new URL(url);
-               const user = parsed.username;
-               const pass = parsed.password;
-               const host = parsed.hostname;
-               const port = parsed.port || '3306';
-               const dbname = parsed.pathname.substring(1);
-               await executeNativeImport(
-                  'mysql',
-                  ['-u', user, `-p${pass}`, '-h', host, '-P', port, dbname],
-                  sqlContent,
-                  'MySQL Client',
-               );
-            } else if (type === 'postgres') {
-               await executeNativeImport(
-                  'psql',
-                  [url],
-                  sqlContent,
-                  'PostgreSQL CLI',
-               );
-            } else {
-               throw new Error('Unsupported database type for native import');
-            }
-         } catch (err: any) {
-            if (err.message.includes('Native tool')) {
-               // JS Fallback — all adapters now support multi-statement executeSql
-               await getAdapter().executeSql(sqlContent);
-            } else {
-               throw err;
-            }
+         const importRes = await importDatabaseNative(
+            getAdapter(),
+            type,
+            url,
+            sqlContent,
+         );
+         if (!importRes.success) {
+            return c.json({ success: false, error: importRes.error }, 500);
          }
 
          return c.json({
@@ -1446,10 +1263,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          if (dialect === 'sqlite') {
             const rawPath =
                body.url || body.sqlitePath || dbName || 'drixio.sqlite';
-            const cleanPath = rawPath.replace(/^file:/, '').trim();
-            const fullPath = path.isAbsolute(cleanPath)
-               ? cleanPath
-               : path.resolve(process.cwd(), cleanPath);
+            const fullPath = resolveLocalDbPath(rawPath, process.cwd());
 
             if (mode === 'create') {
                const dir = path.dirname(fullPath);
@@ -1514,16 +1328,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          // Server databases (PostgreSQL, MySQL)
          let targetUrl = '';
          if (mode === 'create') {
-            const targetHost = host || 'localhost';
-            const targetPort =
-               port || (dialect === 'postgres' ? '5432' : '3306');
-            const targetUser =
-               user || (dialect === 'postgres' ? 'postgres' : 'root');
-            const auth = password
-               ? `${encodeURIComponent(targetUser)}:${encodeURIComponent(password)}`
-               : encodeURIComponent(targetUser);
-            const defaultDb = dialect === 'postgres' ? 'postgres' : '';
-            targetUrl = `${dialect}://${auth}@${targetHost}:${targetPort}/${defaultDb}`;
+            targetUrl = assembleConnectionUrl(dialect, host, port, user, password, '');
          } else {
             const rawUrl = body.url;
             if (!rawUrl) {
@@ -1678,45 +1483,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             return c.json({ success: true, data: [] });
          }
 
-         // 1. If PostgreSQL, use native catalog getCustomEnums()
-         if (adapter.getCustomEnums) {
-            const enums = await adapter.getCustomEnums();
-            return c.json({ success: true, data: enums });
+         const result = await getDatabaseEnums(adapter);
+         if (!result.success) {
+            return c.json({ success: false, error: result.error }, 500);
          }
 
-         // 2. Cross-dialect fallback: scan enums from existing tables
-         const enumsMap = new Map<string, string[]>();
-         try {
-            const tables = await adapter.getTables();
-            for (const t of tables.slice(0, 30)) {
-               const cols = await adapter.getSchema(t);
-               for (const col of cols) {
-                  if (col.enumValues && col.enumValues.length > 0) {
-                     const key =
-                        col.type &&
-                        ![
-                           'enum',
-                           'varchar',
-                           'varchar(255)',
-                           'text',
-                           'string',
-                        ].includes(col.type.toLowerCase())
-                           ? col.type
-                           : col.name;
-                     if (!enumsMap.has(key)) {
-                        enumsMap.set(key, col.enumValues);
-                     }
-                  }
-               }
-            }
-         } catch {}
-
-         const data = Array.from(enumsMap.entries()).map(([name, values]) => ({
-            name,
-            values,
-         }));
-
-         return c.json({ success: true, data });
+         return c.json({ success: true, data: result.data });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

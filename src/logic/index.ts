@@ -14,3 +14,4 @@ export * from './diff.js';
 export * from './snippets.js';
 export * from './version.js';
 export * from './serialization.js';
+export * from './repl.js';

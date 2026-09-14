@@ -13,6 +13,11 @@ export function getFilterQuery(tableName) {
       return filterBarWhere;
    }
 
+   /** @param {string} name */
+   const quoteId = (name) => `"${(name || '').replace(/"/g, '""')}"`;
+   /** @param {string} val */
+   const escapeStr = (val) => (val || '').replace(/'/g, "''");
+
    const filterVal = document.getElementById(`filter-val-${t}`)?.value.trim();
    const filterOp = document.getElementById(`filter-op-${t}`)?.value;
    const filterCol = document.getElementById(`filter-col-${t}`)?.value;
@@ -21,6 +26,7 @@ export function getFilterQuery(tableName) {
 
    if (filterOp === 'IS NULL' || filterOp === 'IS NOT NULL') {
       return `"${filterCol}" ${filterOp}`;
+      return `${quoteId(filterCol)} ${filterOp}`;
    }
 
    if (!filterVal) return '';
@@ -28,24 +34,12 @@ export function getFilterQuery(tableName) {
    if (filterOp === 'IN') {
       let formattedVal = filterVal;
       if (!formattedVal.startsWith('(')) formattedVal = `(${formattedVal})`;
-      return `"${filterCol}" IN ${formattedVal}`;
+      return `${quoteId(filterCol)} IN ${formattedVal}`;
    }
 
-   let safeVal = filterVal;
-   if (
-      safeVal &&
-      !safeVal.startsWith("'") &&
-      !safeVal.endsWith("'") &&
-      isNaN(Number(safeVal))
-   ) {
-      const isRawSql =
-         safeVal.toUpperCase().includes(' AND ') ||
-         safeVal.toUpperCase().includes(' OR ');
-      if (!isRawSql) {
-         safeVal = `'${safeVal.replace(/'/g, "''")}'`;
-      }
-   }
-   return `"${filterCol}" ${filterOp} ${safeVal}`;
+   const isNum = !isNaN(Number(filterVal)) && filterVal.trim() !== '';
+   const safeVal = isNum ? filterVal : `'${escapeStr(filterVal)}'`;
+   return `${quoteId(filterCol)} ${filterOp} ${safeVal}`;
 }
 
 export function formatDisplayVal(val, colSchema) {

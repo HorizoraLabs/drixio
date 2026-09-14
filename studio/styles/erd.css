@@ -791,6 +791,134 @@
    stroke: var(--color-border) !important;
 }
 
+.erd-cardinality-badge {
+   font-family: var(--font-mono);
+   font-size: 10px;
+   font-weight: 700;
+   fill: var(--color-text-soft);
+   pointer-events: none;
+   user-select: none;
+   opacity: 0.75;
+   transition:
+      fill 0.18s,
+      opacity 0.18s;
+}
+
+.erd-relationship-group:hover .erd-cardinality-badge {
+   fill: var(--color-primary);
+   opacity: 1;
+}
+
+/* 7.1 Relationship Inspector Popover */
+.erd-rel-popover {
+   position: fixed;
+   z-index: 1050;
+   background: var(--color-bg-primary);
+   border: 1px solid var(--color-border);
+   border-radius: 8px;
+   box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.2),
+      0 8px 10px -6px rgba(0, 0, 0, 0.1);
+   width: 270px;
+   overflow: hidden;
+   display: flex;
+   flex-direction: column;
+}
+
+.erd-rel-pop-header {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   padding: 8px 12px;
+   background: var(--color-bg-secondary);
+   border-bottom: 1px solid var(--color-border);
+}
+
+.erd-rel-pop-title {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   font-size: 12px;
+   font-weight: 600;
+   color: var(--color-text);
+}
+
+.erd-rel-pop-close {
+   width: 20px;
+   height: 20px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   background: transparent;
+   border: none;
+   cursor: pointer;
+   color: var(--color-text-soft);
+   border-radius: 4px;
+}
+
+.erd-rel-pop-close:hover {
+   background: var(--color-border);
+   color: var(--color-text);
+}
+
+.erd-rel-pop-body {
+   padding: 10px 12px;
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
+}
+
+.erd-rel-pop-row {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 8px;
+   font-size: 11px;
+}
+
+.erd-rel-pop-label {
+   color: var(--color-text-soft);
+   font-size: 11px;
+}
+
+.erd-rel-pop-code {
+   font-family: var(--font-mono);
+   font-weight: 600;
+   color: var(--color-primary);
+   background: rgba(59, 130, 246, 0.08);
+   padding: 1px 5px;
+   border-radius: 3px;
+   font-size: 11px;
+}
+
+.erd-rel-pop-rules {
+   margin-top: 4px;
+   padding-top: 6px;
+   border-top: 1px dashed var(--color-border);
+   display: flex;
+   flex-direction: column;
+   gap: 3px;
+   font-size: 10px;
+   font-family: var(--font-mono);
+   color: var(--color-text-secondary);
+}
+
+.erd-rel-pop-rules strong {
+   color: var(--color-text);
+}
+
+.erd-rel-pop-footer {
+   padding: 6px 12px 8px;
+   display: flex;
+   justify-content: flex-end;
+}
+
+.erd-rel-pop-focus-btn {
+   font-size: 11px;
+   padding: 3px 10px;
+   border-radius: 4px;
+}
+
 /* 8. Empty & Loading States */
 .erd-empty-workspace {
    position: absolute;

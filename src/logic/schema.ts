@@ -707,3 +707,49 @@ export async function exportDatabaseSchemaDdl(
       );
    }
 }
+
+export async function getDatabaseEnums(
+   adapter: DBAdapter,
+): Promise<Result<Array<{ name: string; values: string[] }>>> {
+   try {
+      if (adapter.getCustomEnums) {
+         const enums = await adapter.getCustomEnums();
+         return ok(enums as any);
+      }
+
+      const enumsMap = new Map<string, string[]>();
+      try {
+         const tables = await adapter.getTables();
+         for (const t of tables.slice(0, 30)) {
+            const cols = await adapter.getSchema(t);
+            for (const col of cols) {
+               if (col.enumValues && col.enumValues.length > 0) {
+                  const key =
+                     col.type &&
+                     ![
+                        'enum',
+                        'varchar',
+                        'varchar(255)',
+                        'text',
+                        'string',
+                     ].includes(col.type.toLowerCase())
+                        ? col.type
+                        : col.name;
+                  if (!enumsMap.has(key)) {
+                     enumsMap.set(key, col.enumValues);
+                  }
+               }
+            }
+         }
+      } catch {}
+
+      const data = Array.from(enumsMap.entries()).map(([name, values]) => ({
+         name,
+         values,
+      }));
+
+      return ok(data);
+   } catch (e: any) {
+      return err(e.message || 'Failed to get database enums', undefined, e);
+   }
+}

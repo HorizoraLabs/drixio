@@ -1,6 +1,4 @@
-/**
- * Modern ORM Schema Generator Modal (Prisma & Drizzle)
- */
+import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 export async function openExportOrmModal(initialTable) {
    let modal = document.getElementById('orm-export-modal');
@@ -41,10 +39,10 @@ export async function openExportOrmModal(initialTable) {
 
         <div class="orm-scope-group">
           <label class="orm-scope-label" for="orm-scope-select">Scope:</label>
-          <select id="orm-scope-select" class="orm-scope-select">
-            ${initialTable ? `<option value="${initialTable}" selected>Table: ${initialTable}</option>` : ''}
-            <option value="*" ${!initialTable ? 'selected' : ''}>All Tables (Database)</option>
-          </select>
+          <button type="button" id="orm-scope-select" class="orm-scope-select" style="display: flex; justify-content: space-between; align-items: center; gap: 6px; cursor: pointer; height: 28px; padding: 0 8px; font-size: 12px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text);">
+            <span id="orm-scope-display">${initialTable ? `Table: ${initialTable}` : 'All Tables (Database)'}</span>
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-text-soft);">expand_more</span>
+          </button>
         </div>
       </div>
 
@@ -101,6 +99,17 @@ export async function openExportOrmModal(initialTable) {
    const tabDrizzle = document.getElementById('tab-orm-drizzle');
    const scopeSelect = document.getElementById('orm-scope-select');
 
+   let availableTables = [];
+   try {
+      const res = await fetch('/api/tables');
+      const json = await res.json();
+      if (json.success && json.data) {
+         availableTables = json.data;
+      }
+   } catch (e) {
+      // ignore
+   }
+
    const fetchOrmCode = async () => {
       codeDisplay.textContent = `// Loading ${activeTarget === 'prisma' ? 'Prisma' : 'Drizzle'} schema...`;
       fileNameLabel.textContent =
@@ -138,9 +147,33 @@ export async function openExportOrmModal(initialTable) {
       fetchOrmCode();
    };
 
-   scopeSelect.onchange = () => {
-      activeScope = scopeSelect.value;
-      fetchOrmCode();
+   scopeSelect.onclick = (e) => {
+      e.stopPropagation();
+      const items = [
+         { name: 'All Tables (Database)', value: '*', icon: 'database' },
+         ...availableTables.map((t) => ({
+            name: `Table: ${t}`,
+            value: t,
+            icon: 'table_chart',
+         })),
+      ];
+
+      openDropdownPicker({
+         anchorEl: scopeSelect,
+         title: 'ORM Generation Scope',
+         searchable: availableTables.length > 4,
+         placeholder: 'Search tables...',
+         initialValue: activeScope,
+         items,
+         onSelect: (val) => {
+            activeScope = val;
+            const disp = document.getElementById('orm-scope-display');
+            if (disp)
+               disp.textContent =
+                  val === '*' ? 'All Tables (Database)' : `Table: ${val}`;
+            fetchOrmCode();
+         },
+      });
    };
 
    copyBtn.onclick = () => {

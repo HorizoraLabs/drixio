@@ -1,5 +1,6 @@
 import { updateSchemaCell } from './core.js';
 import { fetchDatabaseEnums } from '../../lib/api.js';
+import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 export function openIndexModal() {
    const sg = window.SchemaGrid;
@@ -382,48 +383,34 @@ export async function openPkFkModal(td, currentText) {
           <div id="fk-settings-container" class="key-fk-drawer ${isFk ? 'open' : ''}">
             <div class="key-field-group">
               <label class="key-field-label">Target Table</label>
-              <div class="key-select-wrapper">
-                <select id="modal-fk-table" class="key-select">
-                  <option value="">Loading tables...</option>
-                </select>
-                <span class="material-symbols-outlined key-select-arrow">expand_more</span>
-              </div>
+              <button type="button" id="modal-fk-table" class="key-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 32px; cursor: pointer; text-align: left; padding: 0 10px;">
+                <span id="modal-fk-table-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fkTable || 'Select a table...'}</span>
+                <span class="material-symbols-outlined key-select-arrow" style="font-size: 16px;">expand_more</span>
+              </button>
             </div>
 
             <div class="key-field-group">
               <label class="key-field-label">Target Column</label>
-              <div class="key-select-wrapper">
-                <select id="modal-fk-col" class="key-select" ${!fkTable ? 'disabled' : ''}>
-                  <option value="">Select a table first</option>
-                </select>
-                <span class="material-symbols-outlined key-select-arrow">expand_more</span>
-              </div>
+              <button type="button" id="modal-fk-col" class="key-select" ${!fkTable ? 'disabled' : ''} style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 32px; cursor: pointer; text-align: left; padding: 0 10px;">
+                <span id="modal-fk-col-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fkCol || (fkTable ? 'Select column...' : 'Select a table first')}</span>
+                <span class="material-symbols-outlined key-select-arrow" style="font-size: 16px;">expand_more</span>
+              </button>
             </div>
 
             <div class="key-field-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div>
                 <label class="key-field-label">On Delete</label>
-                <div class="key-select-wrapper">
-                  <select id="modal-fk-ondelete" class="key-select">
-                    <option value="NO ACTION" ${fkOnDelete === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
-                    <option value="CASCADE" ${fkOnDelete === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
-                    <option value="RESTRICT" ${fkOnDelete === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
-                    <option value="SET NULL" ${fkOnDelete === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
-                  </select>
-                  <span class="material-symbols-outlined key-select-arrow">expand_more</span>
-                </div>
+                <button type="button" id="modal-fk-ondelete" class="key-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 32px; cursor: pointer; text-align: left; padding: 0 10px;">
+                  <span id="modal-fk-ondelete-display">${fkOnDelete || 'NO ACTION'}</span>
+                  <span class="material-symbols-outlined key-select-arrow" style="font-size: 16px;">expand_more</span>
+                </button>
               </div>
               <div>
                 <label class="key-field-label">On Update</label>
-                <div class="key-select-wrapper">
-                  <select id="modal-fk-onupdate" class="key-select">
-                    <option value="NO ACTION" ${fkOnUpdate === 'NO ACTION' ? 'selected' : ''}>NO ACTION</option>
-                    <option value="CASCADE" ${fkOnUpdate === 'CASCADE' ? 'selected' : ''}>CASCADE</option>
-                    <option value="RESTRICT" ${fkOnUpdate === 'RESTRICT' ? 'selected' : ''}>RESTRICT</option>
-                    <option value="SET NULL" ${fkOnUpdate === 'SET NULL' ? 'selected' : ''}>SET NULL</option>
-                  </select>
-                  <span class="material-symbols-outlined key-select-arrow">expand_more</span>
-                </div>
+                <button type="button" id="modal-fk-onupdate" class="key-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 32px; cursor: pointer; text-align: left; padding: 0 10px;">
+                  <span id="modal-fk-onupdate-display">${fkOnUpdate || 'NO ACTION'}</span>
+                  <span class="material-symbols-outlined key-select-arrow" style="font-size: 16px;">expand_more</span>
+                </button>
               </div>
             </div>
           </div>
@@ -487,6 +474,12 @@ export async function openPkFkModal(td, currentText) {
 
    let availableTables = [];
 
+   let currentFkTable = fkTable || '';
+   let currentFkCol = fkCol || '';
+   let currentOnDelete = fkOnDelete || 'NO ACTION';
+   let currentOnUpdate = fkOnUpdate || 'NO ACTION';
+   let availableColumns = [];
+
    fkCheckbox.addEventListener('change', () => {
       const checked = fkCheckbox.checked;
       if (checked && availableTables.length === 0) {
@@ -510,9 +503,11 @@ export async function openPkFkModal(td, currentText) {
       if (checked) {
          fkContainer.classList.add('open');
          // Auto-select first available table if none selected yet
-         if (!tableSelect.value && availableTables.length > 0) {
+         if (!currentFkTable && availableTables.length > 0) {
             const firstTable = availableTables[0];
-            tableSelect.value = firstTable;
+            currentFkTable = firstTable;
+            const disp = document.getElementById('modal-fk-table-display');
+            if (disp) disp.textContent = firstTable;
             loadColumnsForTable(firstTable);
          }
       } else {
@@ -529,28 +524,18 @@ export async function openPkFkModal(td, currentText) {
          // Exclude current table so FK cannot reference columns within its own table
          availableTables = json.data.filter((t) => t !== currentTable);
 
-         tableSelect.innerHTML =
-            (availableTables.length === 0
-               ? '<option value="">No other tables available</option>'
-               : '<option value="">-- Select Table --</option>') +
-            availableTables
-               .map(
-                  (t) =>
-                     `<option value="${t}" ${t === fkTable ? 'selected' : ''}>${t}</option>`,
-               )
-               .join('');
-
-         if (fkTable && availableTables.includes(fkTable)) {
-            loadColumnsForTable(fkTable, fkCol);
+         if (currentFkTable && availableTables.includes(currentFkTable)) {
+            loadColumnsForTable(currentFkTable, currentFkCol);
          }
       }
    } catch (err) {
-      tableSelect.innerHTML = '<option value="">Error loading tables</option>';
+      // ignore
    }
 
    async function loadColumnsForTable(tName, selectedCol = '') {
       colSelect.disabled = true;
-      colSelect.innerHTML = '<option value="">Loading columns...</option>';
+      const colDisplay = document.getElementById('modal-fk-col-display');
+      if (colDisplay) colDisplay.textContent = 'Loading columns...';
       try {
          const res = await fetch(`/api/tables/${tName}/schema`);
          const json = await res.json();
@@ -561,6 +546,8 @@ export async function openPkFkModal(td, currentText) {
                   ? json.data.filter((c) => c.name !== colName)
                   : json.data;
 
+            availableColumns = cols;
+
             let defaultCol = selectedCol;
             if (!defaultCol || !cols.some((c) => c.name === defaultCol)) {
                const idCol = cols.find(
@@ -569,43 +556,112 @@ export async function openPkFkModal(td, currentText) {
                defaultCol = idCol ? idCol.name : cols[0]?.name || '';
             }
 
-            colSelect.innerHTML =
-               '<option value="">-- Select Column --</option>' +
-               cols
-                  .map(
-                     (c) =>
-                        `<option value="${c.name}" ${c.name === defaultCol ? 'selected' : ''}>${c.name}</option>`,
-                  )
-                  .join('');
+            currentFkCol = defaultCol;
+            if (colDisplay)
+               colDisplay.textContent = defaultCol || 'Select column...';
             colSelect.disabled = false;
          }
       } catch (err) {
-         colSelect.innerHTML =
-            '<option value="">Error loading columns</option>';
+         if (colDisplay) colDisplay.textContent = 'Error loading columns';
       }
    }
 
-   tableSelect.addEventListener('change', (e) => {
-      const t = e.target.value;
-      if (t) {
-         loadColumnsForTable(t);
-      } else {
-         colSelect.innerHTML = '<option value="">Select a table first</option>';
-         colSelect.disabled = true;
-      }
-   });
+   tableSelect.onclick = (e) => {
+      e.stopPropagation();
+      openDropdownPicker({
+         anchorEl: tableSelect,
+         title: 'Select Target Table',
+         searchable: true,
+         placeholder: 'Search tables...',
+         initialValue: currentFkTable,
+         items: availableTables.map((t) => ({
+            name: t,
+            value: t,
+            icon: 'table_chart',
+         })),
+         onSelect: (chosen) => {
+            currentFkTable = chosen;
+            const disp = document.getElementById('modal-fk-table-display');
+            if (disp) disp.textContent = chosen;
+            loadColumnsForTable(chosen);
+         },
+      });
+   };
+
+   colSelect.onclick = (e) => {
+      e.stopPropagation();
+      if (!currentFkTable || availableColumns.length === 0) return;
+      openDropdownPicker({
+         anchorEl: colSelect,
+         title: `Columns in ${currentFkTable}`,
+         searchable: true,
+         placeholder: 'Search columns...',
+         initialValue: currentFkCol,
+         items: availableColumns.map((c) => ({
+            name: c.name,
+            value: c.name,
+            icon: 'tag',
+            desc: c.type || '',
+         })),
+         onSelect: (chosen) => {
+            currentFkCol = chosen;
+            const disp = document.getElementById('modal-fk-col-display');
+            if (disp) disp.textContent = chosen;
+         },
+      });
+   };
+
+   const onDeleteBtn = document.getElementById('modal-fk-ondelete');
+   const onUpdateBtn = document.getElementById('modal-fk-onupdate');
+
+   if (onDeleteBtn) {
+      onDeleteBtn.onclick = (e) => {
+         e.stopPropagation();
+         openDropdownPicker({
+            anchorEl: onDeleteBtn,
+            title: 'ON DELETE Action',
+            searchable: false,
+            initialValue: currentOnDelete,
+            items: ['NO ACTION', 'CASCADE', 'RESTRICT', 'SET NULL'],
+            onSelect: (val) => {
+               currentOnDelete = val;
+               const disp = document.getElementById(
+                  'modal-fk-ondelete-display',
+               );
+               if (disp) disp.textContent = val;
+            },
+         });
+      };
+   }
+
+   if (onUpdateBtn) {
+      onUpdateBtn.onclick = (e) => {
+         e.stopPropagation();
+         openDropdownPicker({
+            anchorEl: onUpdateBtn,
+            title: 'ON UPDATE Action',
+            searchable: false,
+            initialValue: currentOnUpdate,
+            items: ['NO ACTION', 'CASCADE', 'RESTRICT', 'SET NULL'],
+            onSelect: (val) => {
+               currentOnUpdate = val;
+               const disp = document.getElementById(
+                  'modal-fk-onupdate-display',
+               );
+               if (disp) disp.textContent = val;
+            },
+         });
+      };
+   }
 
    document.getElementById('save-pkfk-btn').onclick = () => {
       const pkChecked = pkCheckbox.checked;
       const fkChecked = fkCheckbox.checked;
 
-      const t = tableSelect.value;
-      const c = colSelect.value;
-
-      const onDeleteSelect = document.getElementById('modal-fk-ondelete');
-      const onUpdateSelect = document.getElementById('modal-fk-onupdate');
-      const chosenOnDelete = onDeleteSelect?.value || 'NO ACTION';
-      const chosenOnUpdate = onUpdateSelect?.value || 'NO ACTION';
+      const t = currentFkTable;
+      const c = currentFkCol;
+      const chosenOnDelete = currentOnDelete || 'NO ACTION';
+      const chosenOnUpdate = currentOnUpdate || 'NO ACTION';
 
       if (
          pkChecked === isPk &&
@@ -792,20 +848,10 @@ export async function openEnumModal(td, origCol) {
               ? `
         <div class="table-fk-popover-field">
           <label style="font-size: 11px; font-weight: 500; color: var(--color-text-secondary);">Enum Source</label>
-          <div class="table-col-select-wrap">
-            <select id="modal-enum-source" class="table-col-select">
-              <option value="__NEW__" ${!selectedExistingEnum ? 'selected' : ''}>+ Define New Enum...</option>
-              <optgroup label="Existing Database Enums">
-                ${cachedEnums
-                   .map(
-                      (ce) =>
-                         `<option value="${ce.name}" ${selectedExistingEnum?.name === ce.name ? 'selected' : ''}>${ce.name} (${ce.values.slice(0, 3).join(', ')}${ce.values.length > 3 ? '...' : ''})</option>`,
-                   )
-                   .join('')}
-              </optgroup>
-            </select>
-            <span class="material-symbols-outlined table-col-select-arrow">expand_more</span>
-          </div>
+          <button type="button" id="modal-enum-source" class="table-col-select" style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 32px; cursor: pointer; text-align: left; padding: 0 10px;">
+            <span id="modal-enum-source-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${selectedExistingEnum ? selectedExistingEnum.name : '+ Define New Enum...'}</span>
+            <span class="material-symbols-outlined table-col-select-arrow" style="font-size: 16px;">expand_more</span>
+          </button>
         </div>
         `
               : ''
@@ -873,9 +919,13 @@ export async function openEnumModal(td, origCol) {
    const valuesInp = document.getElementById('modal-enum-values');
    const previewEl = document.getElementById('modal-enum-preview');
 
+   let currentEnumSource = selectedExistingEnum
+      ? selectedExistingEnum.name
+      : '__NEW__';
+
    function getParsedValues() {
-      if (sourceSel && sourceSel.value !== '__NEW__') {
-         const found = cachedEnums.find((e) => e.name === sourceSel.value);
+      if (sourceSel && currentEnumSource !== '__NEW__') {
+         const found = cachedEnums.find((e) => e.name === currentEnumSource);
          return found ? [...found.values] : [];
       }
       return valuesInp.value
@@ -903,8 +953,8 @@ export async function openEnumModal(td, origCol) {
       if (dbType === 'sqlite') {
          previewEl.textContent = `TEXT CHECK("${colName}" IN (${valsJoined}))`;
       } else if (dbType === 'postgres') {
-         if (sourceSel && sourceSel.value !== '__NEW__') {
-            previewEl.textContent = `Type: "${sourceSel.value}" (Values: ${valsJoined})`;
+         if (sourceSel && currentEnumSource !== '__NEW__') {
+            previewEl.textContent = `Type: "${currentEnumSource}" (Values: ${valsJoined})`;
          } else {
             previewEl.textContent = `CREATE TYPE "${rawName}" AS ENUM (${valsJoined});`;
          }
@@ -914,15 +964,50 @@ export async function openEnumModal(td, origCol) {
    }
 
    if (sourceSel) {
-      sourceSel.onchange = () => {
-         if (sourceSel.value === '__NEW__') {
-            customFields.style.display = 'flex';
-         } else {
-            customFields.style.display = 'none';
-         }
-         updatePreview();
+      sourceSel.onclick = (e) => {
+         e.stopPropagation();
+         const items = [
+            {
+               name: '+ Define New Enum...',
+               value: '__NEW__',
+               icon: 'add_circle',
+            },
+            ...cachedEnums.map((ce) => ({
+               name: ce.name,
+               value: ce.name,
+               desc:
+                  ce.values.slice(0, 3).join(', ') +
+                  (ce.values.length > 3 ? '...' : ''),
+               icon: 'list',
+               group: 'Existing Database Enums',
+            })),
+         ];
+
+         openDropdownPicker({
+            anchorEl: sourceSel,
+            title: 'Select Enum Source',
+            searchable: true,
+            placeholder: 'Search enum types...',
+            initialValue: currentEnumSource,
+            items,
+            onSelect: (val) => {
+               currentEnumSource = val;
+               const disp = document.getElementById(
+                  'modal-enum-source-display',
+               );
+               if (disp)
+                  disp.textContent =
+                     val === '__NEW__' ? '+ Define New Enum...' : val;
+               if (val === '__NEW__') {
+                  customFields.style.display = 'flex';
+               } else {
+                  customFields.style.display = 'none';
+               }
+               updatePreview();
+            },
+         });
       };
-      if (sourceSel.value !== '__NEW__') {
+      if (currentEnumSource !== '__NEW__') {
          customFields.style.display = 'none';
       }
    }
@@ -949,8 +1034,8 @@ export async function openEnumModal(td, origCol) {
       let chosenName = '';
       let isNew = true;
 
-      if (sourceSel && sourceSel.value !== '__NEW__') {
-         chosenName = sourceSel.value;
+      if (sourceSel && currentEnumSource !== '__NEW__') {
+         chosenName = currentEnumSource;
          isNew = false;
       } else {
          chosenName = (

@@ -174,12 +174,11 @@ export function exportErdAsSql(erdData) {
    return lines.join('\n\n');
 }
 
-export function exportErdAsSvg() {
+export function generateErdSvgData() {
    const nodes = document.querySelectorAll('.erd-node');
    const svgLayer = document.getElementById('erd-svg-layer');
    if (!nodes || nodes.length === 0 || !svgLayer) {
-      window.showToast?.('No tables to export', 'warning');
-      return;
+      return null;
    }
 
    let minX = Infinity,
@@ -198,8 +197,8 @@ export function exportErdAsSvg() {
    });
 
    const pad = 60;
-   const width = maxX - minX + pad * 2;
-   const height = maxY - minY + pad * 2;
+   const width = Math.max(400, Math.round(maxX - minX + pad * 2));
+   const height = Math.max(300, Math.round(maxY - minY + pad * 2));
    const offsetX = minX - pad;
    const offsetY = minY - pad;
 
@@ -305,7 +304,19 @@ export function exportErdAsSvg() {
    <g>${nodesSvg}</g>
 </svg>`;
 
-   const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+   return { svgStr, width, height };
+}
+
+export function exportErdAsSvg() {
+   const data = generateErdSvgData();
+   if (!data) {
+      window.showToast?.('No tables to export', 'warning');
+      return;
+   }
+
+   const blob = new Blob([data.svgStr], {
+      type: 'image/svg+xml;charset=utf-8',
+   });
    const url = URL.createObjectURL(blob);
    const a = document.createElement('a');
    a.href = url;
@@ -313,4 +324,56 @@ export function exportErdAsSvg() {
    a.click();
    URL.revokeObjectURL(url);
    window.showToast?.('Exported ERD as SVG!', 'success');
+}
+
+export function exportErdAsPng() {
+   const data = generateErdSvgData();
+   if (!data) {
+      window.showToast?.('No tables to export', 'warning');
+      return;
+   }
+
+   const blob = new Blob([data.svgStr], {
+      type: 'image/svg+xml;charset=utf-8',
+   });
+   const url = URL.createObjectURL(blob);
+   const img = new Image();
+
+   img.onload = () => {
+      const scale = 2; // HiDPI 2x Retina scale
+      const canvas = document.createElement('canvas');
+      canvas.width = data.width * scale;
+      canvas.height = data.height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+         URL.revokeObjectURL(url);
+         window.showToast?.('Failed to create canvas context', 'error');
+         return;
+      }
+
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob((pngBlob) => {
+         if (!pngBlob) {
+            window.showToast?.('Failed to generate PNG blob', 'error');
+            return;
+         }
+         const pngUrl = URL.createObjectURL(pngBlob);
+         const a = document.createElement('a');
+         a.href = pngUrl;
+         a.download = `erd-diagram-${new Date().toISOString().slice(0, 10)}.png`;
+         a.click();
+         URL.revokeObjectURL(pngUrl);
+         window.showToast?.('Exported ERD as PNG (2x HiDPI)!', 'success');
+      }, 'image/png');
+   };
+
+   img.onerror = () => {
+      URL.revokeObjectURL(url);
+      window.showToast?.('Failed to render ERD PNG', 'error');
+   };
+
+   img.src = url;
 }

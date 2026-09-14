@@ -88,6 +88,7 @@ export async function initSidebar(isRefresh = false) {
                ) {
                   window.handleSwitchTab('data-btn');
                } else {
+                  window.updateUrlHash?.(window.AppState.currentTab, tableName);
                   window.renderCurrentView();
                }
             };
@@ -198,17 +199,28 @@ export async function initSidebar(isRefresh = false) {
             tableNav.appendChild(btn);
          });
 
-         // Preserve active state or select first table
-         if (window.AppState.currentTable) {
+         // Preserve active state or select table from hash / first table
+         const hashInfo = window.parseHash
+            ? window.parseHash()
+            : { route: null, table: null };
+         const targetTable = hashInfo.table || window.AppState.currentTable;
+
+         if (targetTable) {
             const activeBtn = document.querySelector(
-               `.table-btn[data-table="${window.AppState.currentTable}"]`,
+               `.table-btn[data-table="${targetTable}"]`,
             );
             if (activeBtn) {
                activeBtn.classList.add('active');
+               window.AppState.currentTable = targetTable;
                window.AppState.currentTableBtnElement = activeBtn;
             }
-         } else if (!isRefresh) {
-            window.handleSwitchTab('data-btn');
+         }
+
+         if (!isRefresh) {
+            const initialTab = window.getInitialRouteTab
+               ? window.getInitialRouteTab()
+               : null;
+            window.handleSwitchTab(initialTab || 'data-btn');
          }
 
          // Fetch row count stats asynchronously

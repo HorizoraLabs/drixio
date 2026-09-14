@@ -17,6 +17,13 @@ import { openImportModal } from '../components/importModal.js';
 import { openHelpModal } from '../components/helpModal.js';
 import { initDbSwitcher } from '../components/dbSwitcher.js';
 import { saveConnection } from '../lib/connections.js';
+import { gsap } from 'gsap';
+import {
+   initCommandPalette,
+   openCommandPalette,
+} from '../components/commandPalette.js';
+
+window.gsap = gsap;
 const header = document.getElementById('header-container');
 const sidebar = document.getElementById('sidebar-container');
 const tab = document.getElementById('tab-container');
@@ -53,35 +60,20 @@ if (headerConnectBtn) {
 // Supabase-style Project/Database Switcher Dropdown
 initDbSwitcher();
 
-// Quick Search Pill & Global Ctrl+K / Cmd+K Shortcut
-const triggerQuickSearch = () => {
-   if (
-      window.AppState.currentTab !== 'data-btn' &&
-      window.AppState.currentTab !== 'schema-btn'
-   ) {
-      window.handleSwitchTab('data-btn');
-   }
-   const aside = document.getElementById('sidebar-panel');
-   if (aside && aside.classList.contains('collapsed')) {
-      aside.classList.remove('collapsed');
-      localStorage.setItem('drixio_sidebar_collapsed', 'false');
-      const collapseIcon = document.getElementById('sidebar-collapse-icon');
-      if (collapseIcon) collapseIcon.textContent = 'menu_open';
-   }
-   const searchInput = document.getElementById('search-input');
-   searchInput?.focus();
-   searchInput?.select();
-};
+// Global Command Palette (Ctrl+K / Cmd+K)
+initCommandPalette();
 
 const headerSearchPill = document.getElementById('header-search-pill');
 if (headerSearchPill) {
-   headerSearchPill.addEventListener('click', triggerQuickSearch);
+   headerSearchPill.addEventListener('click', () => {
+      openCommandPalette();
+   });
 }
 
 document.addEventListener('keydown', (e) => {
    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
-      triggerQuickSearch();
+      openCommandPalette();
    }
 });
 
@@ -441,7 +433,58 @@ window.updateSidebarDirtyState = function () {
    });
 };
 
-window.handleSwitchTab = function (tab) {
+// Lightweight Hash Router Implementation
+const ROUTE_MAP = {
+   data: 'data-btn',
+   schema: 'schema-btn',
+   sql: 'sql-btn',
+   erd: 'erd-btn',
+   status: 'status-btn',
+   connect: 'connect-btn',
+};
+
+const TAB_TO_ROUTE = {
+   'data-btn': 'data',
+   'schema-btn': 'schema',
+   'sql-btn': 'sql',
+   'erd-btn': 'erd',
+   'status-btn': 'status',
+   'connect-btn': 'connect',
+};
+
+export function parseHash() {
+   const raw = window.location.hash.replace(/^#\/?/, '').trim();
+   if (!raw) return { route: null, table: null };
+   const parts = raw.split('/');
+   const route = parts[0] ? parts[0].toLowerCase() : null;
+   const table = parts[1] ? decodeURIComponent(parts[1]) : null;
+   return { route, table };
+}
+window.parseHash = parseHash;
+
+export function updateUrlHash(tab, tableName) {
+   const route = TAB_TO_ROUTE[tab] || 'data';
+   const targetTable =
+      tableName !== undefined ? tableName : window.AppState?.currentTable;
+   let newHash = `#${route}`;
+   if (targetTable && (tab === 'data-btn' || tab === 'schema-btn')) {
+      newHash = `#${route}/${encodeURIComponent(targetTable)}`;
+   }
+   if (window.location.hash !== newHash) {
+      history.replaceState(null, '', newHash);
+   }
+}
+window.updateUrlHash = updateUrlHash;
+
+window.getInitialRouteTab = function () {
+   const { route } = parseHash();
+   if (route && ROUTE_MAP[route]) {
+      return ROUTE_MAP[route];
+   }
+   return null;
+};
+
+window.handleSwitchTab = function (tab, updateHash = true) {
    const tabs = document.querySelectorAll('.tab-btn');
    tabs.forEach((btn) => btn.classList.remove('isCurrentTab'));
    const currentTab = document.getElementById(tab);
@@ -486,8 +529,32 @@ window.handleSwitchTab = function (tab) {
       }
    }
 
+   if (updateHash) {
+      updateUrlHash(tab);
+   }
+
    window.renderCurrentView();
 };
+
+window.addEventListener('hashchange', () => {
+   const { route, table } = parseHash();
+   if (route && ROUTE_MAP[route]) {
+      const targetTab = ROUTE_MAP[route];
+      if (table && (targetTab === 'data-btn' || targetTab === 'schema-btn')) {
+         window.AppState.currentTable = table;
+         const btn = document.querySelector(
+            `.table-btn[data-table="${table}"]`,
+         );
+         window.AppState.currentTableBtnElement = btn || null;
+      }
+      if (
+         window.AppState.currentTab !== targetTab ||
+         (table && window.AppState.currentTable !== table)
+      ) {
+         window.handleSwitchTab(targetTab, false);
+      }
+   }
+});
 
 window.renderEmptyState = function (container) {
    container.innerHTML = /* html */ `

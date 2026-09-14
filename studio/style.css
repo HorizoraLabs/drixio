@@ -19,6 +19,7 @@
 @import url('./styles/connect.css');
 @import url('./styles/typePicker.css');
 @import url('./styles/dropdownPicker.css');
+@import url('./styles/commandPalette.css');
 
 :root {
    --color-bg-primary: #ffffff;

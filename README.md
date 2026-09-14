@@ -62,6 +62,7 @@ available port starting at `51213` (or the value of `PORT`). It includes:
 - **Schema Diff & Migrations**: Visual schema comparison against snapshots or external databases, live preview of Up / Down migration DDL, and one-click apply.
 - **Status & Analytics**: Real-time database metrics, table size breakdown, and row distribution statistics.
 - **Interactive ERD**: Pan-and-zoom entity relationship diagram with table node dragging and relation link visualization.
+- **Command Palette (Ctrl+K)**: Universal quick search and command dispatcher for navigating tables, switching views, and triggering operations.
 
 ## CLI commands
 

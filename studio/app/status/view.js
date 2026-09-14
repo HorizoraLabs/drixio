@@ -9,15 +9,15 @@ export function refreshStatusDashboard() {
 
 export async function loadStatusDashboard(container) {
    container.innerHTML = /* html */ `
-    <div class="status-dashboard">
+    <div class="status-dashboard" style="opacity: 0;">
       <!-- Top Section: Left (Title + Endpoint + 6 Cards) | Right (Dotted Matrix Canvas) -->
       <div class="status-dashboard-hero">
         <!-- Left Column -->
-        <div class="supabase-hero-left">
-          <div class="supabase-hero-header">
-            <h1 class="status-dashboard-db-title" id="hero-db-name">Database</h1>
+        <div class="drixio-hero-left">
+          <div class="drixio-hero-header skeleton-target">
+            <h1 class="status-dashboard-db-title" id="hero-db-name">Loading...</h1>
             <div class="status-dashboard-endpoint">
-              <span class="status-dashboard-endpoint-text" id="hero-conn-uri">Connecting...</span>
+              <span class="status-dashboard-endpoint-text" id="hero-conn-uri">Connecting to database instance...</span>
               <button type="button" class="status-dashboard-copy-btn" id="btn-copy-conn-uri" title="Copy Connection URI">
                 <span class="material-symbols-outlined" style="font-size: 13px;">content_copy</span>
                 <span id="btn-copy-conn-label">Copy</span>
@@ -27,12 +27,28 @@ export async function loadStatusDashboard(container) {
 
           <!-- 6 Supabase-style Compact Status Tiles (2x3 Grid) -->
           <div class="status-dashboard-tiles-grid" id="status-cards-container">
-            <!-- Rendered by cards.js -->
+            <!-- Skeleton Cards -->
+            ${Array(6)
+               .fill(
+                  /* html */ `
+              <div class="status-dashboard-status-tile skeleton-target" style="background: rgba(255,255,255,0.02); border: 1px solid var(--color-border);">
+                <div class="status-dashboard-tile-icon" style="background: rgba(255,255,255,0.05); color: transparent;">
+                  <span class="material-symbols-outlined">circle</span>
+                </div>
+                <div class="status-dashboard-tile-main">
+                  <div class="status-dashboard-tile-label" style="width: 40px; height: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;"></div>
+                  <div class="status-dashboard-tile-value-row">
+                    <span class="status-dashboard-tile-value" style="width: 80px; height: 16px; background: rgba(255,255,255,0.15); border-radius: 4px;"></span>
+                  </div>
+                </div>
+              </div>`,
+               )
+               .join('')}
           </div>
         </div>
 
         <!-- Right Column: Supabase Dotted Matrix Canvas with Primary DB Node -->
-        <div class="status-dashboard-hero-right">
+        <div class="status-dashboard-hero-right skeleton-target">
           <div class="status-dashboard-canvas-wrapper">
             <div class="status-dashboard-canvas-dots"></div>
             
@@ -43,30 +59,30 @@ export async function loadStatusDashboard(container) {
             </div>
 
             <!-- Floating Primary DB Node -->
-            <div class="status-dashboard-canvas-node" id="primary-db-node">
+            <div class="status-dashboard-canvas-node" id="primary-db-node" style="opacity: 0;">
               <div class="node-main">
                 <div class="node-icon-box" id="node-engine-avatar">
                   <span class="material-symbols-outlined" id="node-engine-icon">database</span>
                 </div>
                 <div class="node-text">
                   <div class="node-title" id="node-db-title">Primary Database</div>
-                  <div class="node-subtitle" id="node-db-desc">Local Serverless Instance</div>
-                  <div class="node-location" id="node-db-path">localhost · in-process</div>
+                  <div class="node-subtitle" id="node-db-desc">Initializing Engine</div>
+                  <div class="node-location" id="node-db-path">Connecting...</div>
                 </div>
                 <div class="node-badge" id="node-latency-pill">
                   <span class="node-badge-dot"></span>
-                  <span id="node-latency-text">0ms</span>
+                  <span id="node-latency-text">---</span>
                 </div>
               </div>
 
               <div class="node-metrics-bar">
-                <span id="node-stat-cpu">CPU 0%</span>
+                <span id="node-stat-cpu">CPU --%</span>
                 <span class="sep">·</span>
-                <span id="node-stat-disk">Disk 0B</span>
+                <span id="node-stat-disk">Disk --</span>
                 <span class="sep">·</span>
-                <span id="node-stat-ram">RAM 0%</span>
+                <span id="node-stat-ram">RAM --%</span>
                 <span class="sep">·</span>
-                <span id="node-stat-conns">1 conn</span>
+                <span id="node-stat-conns">-- conn</span>
               </div>
             </div>
           </div>
@@ -74,19 +90,19 @@ export async function loadStatusDashboard(container) {
       </div>
 
       <!-- Activity Ribbon -->
-      <div class="status-dashboard-ribbon">
+      <div class="status-dashboard-ribbon skeleton-target">
         <div class="status-dashboard-ribbon-left">
           <div class="status-dashboard-health-stat">
-            <span class="supabase-health-dot"></span>
-            <span class="supabase-health-label">100.0% Connection Health</span>
+            <span class="drixio-health-dot"></span>
+            <span class="drixio-health-label" id="ribbon-health-label">Connecting...</span>
           </div>
           <span class="status-dashboard-ribbon-sep">•</span>
-          <div class="supabase-records-stat">
-            <span id="ribbon-records-count">0 Total Records</span>
+          <div class="drixio-records-stat">
+            <span id="ribbon-records-count">Loading Records...</span>
           </div>
           <span class="status-dashboard-ribbon-sep">•</span>
-          <div class="supabase-updated-stat">
-            <span>Updated: <span id="header-last-updated" class="font-mono">Just now</span></span>
+          <div class="drixio-updated-stat">
+            <span>Updated: <span id="header-last-updated" class="font-mono">Waiting</span></span>
           </div>
         </div>
 
@@ -103,27 +119,27 @@ export async function loadStatusDashboard(container) {
       </div>
 
       <!-- Analytics Split View (Top Tables & Row Count Distribution) -->
-      <div class="supabase-analytics-grid">
-        <div id="status-toptables-container" class="supabase-panel hidden">
+      <div class="drixio-analytics-grid">
+        <div id="status-toptables-container" class="drixio-panel hidden skeleton-target">
           <!-- Top tables injected here -->
         </div>
-        <div id="status-distribution-container" class="supabase-panel hidden">
+        <div id="status-distribution-container" class="drixio-panel hidden skeleton-target">
           <!-- Distribution Donut injected here -->
         </div>
       </div>
 
       <!-- Quick Operations (6 Clean Action Cards) -->
-      <div class="supabase-actions-panel">
-        <div class="supabase-panel-header">
+      <div class="drixio-actions-panel skeleton-target">
+        <div class="drixio-panel-header">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-primary" style="font-size: 17px;">bolt</span>
-            <h3 class="supabase-panel-title">Quick Operations</h3>
+            <h3 class="drixio-panel-title">Quick Operations</h3>
           </div>
-          <span class="supabase-panel-tag">Database Actions</span>
+          <span class="drixio-panel-tag">Database Actions</span>
         </div>
-        <div class="supabase-actions-grid">
+        <div class="drixio-actions-grid">
           <!-- 1. Export Full Backup -->
-          <button type="button" class="supabase-action-card" id="btn-quick-export-backup" title="Export full database backup (.sql)">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-export-backup" title="Export full database backup (.sql)">
             <div class="action-icon-box" style="color: #3b82f6;">
               <span class="material-symbols-outlined">download</span>
             </div>
@@ -134,7 +150,7 @@ export async function loadStatusDashboard(container) {
           </button>
 
           <!-- 2. Export Schema DDL -->
-          <button type="button" class="supabase-action-card" id="btn-quick-export-ddl" title="Export schema DDL definitions (.sql)">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-export-ddl" title="Export schema DDL definitions (.sql)">
             <div class="action-icon-box" style="color: #06b6d4;">
               <span class="material-symbols-outlined">description</span>
             </div>
@@ -145,7 +161,7 @@ export async function loadStatusDashboard(container) {
           </button>
 
           <!-- 3. Import & Restore -->
-          <button type="button" class="supabase-action-card" id="btn-quick-import-backup" title="Import SQL script or JSON data">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-import-backup" title="Import SQL script or JSON data">
             <div class="action-icon-box" style="color: #10b981;">
               <span class="material-symbols-outlined">upload</span>
             </div>
@@ -156,7 +172,7 @@ export async function loadStatusDashboard(container) {
           </button>
 
           <!-- 4. Data Dictionary -->
-          <button type="button" class="supabase-action-card" id="btn-quick-export-dict" title="Download database markdown data dictionary">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-export-dict" title="Download database markdown data dictionary">
             <div class="action-icon-box" style="color: #8b5cf6;">
               <span class="material-symbols-outlined">menu_book</span>
             </div>
@@ -167,7 +183,7 @@ export async function loadStatusDashboard(container) {
           </button>
 
           <!-- 5. SQL Console -->
-          <button type="button" class="supabase-action-card" id="btn-quick-open-console" title="Open SQL Query Console">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-open-console" title="Open SQL Query Console">
             <div class="action-icon-box" style="color: #f59e0b;">
               <span class="material-symbols-outlined">terminal</span>
             </div>
@@ -178,7 +194,7 @@ export async function loadStatusDashboard(container) {
           </button>
 
           <!-- 6. Visual ERD -->
-          <button type="button" class="supabase-action-card" id="btn-quick-open-erd" title="View Entity Relationship Diagram">
+          <button type="button" class="drixio-action-card stagger-in" id="btn-quick-open-erd" title="View Entity Relationship Diagram">
             <div class="action-icon-box" style="color: #ec4899;">
               <span class="material-symbols-outlined">hub</span>
             </div>
@@ -191,19 +207,19 @@ export async function loadStatusDashboard(container) {
       </div>
 
       <!-- Collapsible Engine Specifications Drawer -->
-      <div class="supabase-runtime-panel">
-        <div class="supabase-runtime-header" id="runtime-toggle-header" role="button" tabindex="0">
+      <div class="drixio-runtime-panel skeleton-target">
+        <div class="drixio-runtime-header" id="runtime-toggle-header" role="button" tabindex="0">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-soft" style="font-size: 16px;">tune</span>
-            <span class="supabase-runtime-title">Engine Specifications & Runtime Environment</span>
+            <span class="drixio-runtime-title">Engine Specifications & Runtime Environment</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="supabase-runtime-chip" id="runtime-chip-engine">SQLite</span>
+            <span class="drixio-runtime-chip" id="runtime-chip-engine">Database Engine</span>
             <span class="material-symbols-outlined text-soft" id="runtime-expand-arrow" style="font-size: 16px; transition: transform 0.2s ease;">expand_more</span>
           </div>
         </div>
-        <div class="supabase-runtime-body hidden" id="runtime-details-body">
-          <div class="supabase-runtime-grid">
+        <div class="drixio-runtime-body hidden" id="runtime-details-body">
+          <div class="drixio-runtime-grid">
             <div class="runtime-item">
               <span class="runtime-key">Engine Type</span>
               <span class="runtime-val" id="rt-engine">-</span>
@@ -244,6 +260,25 @@ export async function loadStatusDashboard(container) {
       <div id="feature-prompts-container" class="flex-col gap-4 hidden"></div>
     </div>
   `;
+
+   // GSAP Skeleton Initial Fade In
+   if (window.gsap) {
+      gsap.to('.status-dashboard', {
+         opacity: 1,
+         duration: 0.3,
+         ease: 'power2.out',
+      });
+      // Shimmer animation for skeleton targets
+      gsap.to('.skeleton-target', {
+         opacity: 0.6,
+         yoyo: true,
+         repeat: -1,
+         duration: 1,
+         ease: 'sine.inOut',
+      });
+   } else {
+      document.querySelector('.status-dashboard').style.opacity = '1';
+   }
 
    await fetchAndRenderStatus();
 
@@ -546,7 +581,7 @@ function renderStatusData(data, tableStats = {}, latency = null) {
    if (promptsContainer) {
       if (data.dbType !== 'sqlite') {
          promptsContainer.innerHTML = /* html */ `
-          <div class="feature-prompt">
+          <div class="feature-prompt stagger-in">
             <span class="material-symbols-outlined icon">info</span>
             <div class="feature-prompt-content">
               <div class="prompt-title">Query Performance Profiling</div>
@@ -565,11 +600,83 @@ function renderStatusData(data, tableStats = {}, latency = null) {
          promptsContainer.innerHTML = '';
       }
    }
+
+   const healthLabel = document.getElementById('ribbon-health-label');
+   if (healthLabel) {
+      healthLabel.textContent =
+         data.status === 'connected'
+            ? '100.0% Connection Health'
+            : 'Offline / Disconnected';
+   }
+
+   // Trigger GSAP Entry Animations when first loaded
+   if (window.gsap && !window._statusAnimatedIn) {
+      window._statusAnimatedIn = true;
+      // Stop the skeleton shimmer
+      gsap.killTweensOf('.skeleton-target');
+      gsap.set('.skeleton-target', { clearProps: 'opacity' });
+
+      gsap.fromTo(
+         '.drixio-hero-header',
+         { opacity: 0, x: -20 },
+         { opacity: 1, x: 0, duration: 0.5, ease: 'power2.out' },
+      );
+      gsap.fromTo(
+         '.status-dashboard-status-tile',
+         { opacity: 0, y: 15 },
+         {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            stagger: 0.05,
+            ease: 'back.out(1.2)',
+         },
+      );
+      gsap.to('#primary-db-node', {
+         opacity: 1,
+         duration: 0.5,
+         ease: 'power2.inOut',
+      });
+      gsap.fromTo(
+         '.drixio-action-card',
+         { opacity: 0, y: 10 },
+         {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            stagger: 0.05,
+            ease: 'power2.out',
+            delay: 0.2,
+         },
+      );
+   }
 }
 
 function renderError(msg) {
    const container = document.getElementById('status-cards-container');
    if (container) {
-      container.innerHTML = /* html */ `<div class="text-red-500 p-4">Failed to load database status: ${msg}</div>`;
+      if (window.gsap) gsap.killTweensOf('.skeleton-target');
+
+      const dashboard = document.querySelector('.status-dashboard');
+      if (dashboard) {
+         dashboard.innerHTML = /* html */ `
+         <div class="drixio-empty-analytics" style="margin-top: 60px;">
+             <div class="drixio-empty-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--color-error); width: 56px; height: 56px; border-radius: 50%;">
+                 <span class="material-symbols-outlined" style="font-size: 28px;">error</span>
+             </div>
+             <div class="drixio-empty-title" style="font-size: 18px; margin-top: 16px;">Connection Failed</div>
+             <div class="drixio-empty-desc" style="max-width: 400px; margin-top: 8px;">
+                 Unable to fetch database status. Please check if your database engine is running and accessible.<br><br>
+                 <code style="color: var(--color-error); background: rgba(239,68,68,0.05); padding: 4px 8px; border-radius: 4px;">${msg}</code>
+             </div>
+             <div class="drixio-empty-actions" style="margin-top: 24px;">
+                 <button type="button" class="btn-primary" onclick="window.refreshStatusDashboard && window.refreshStatusDashboard()">
+                     <span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>
+                     <span>Try Again</span>
+                 </button>
+             </div>
+         </div>
+         `;
+      }
    }
 }

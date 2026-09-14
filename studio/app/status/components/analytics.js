@@ -21,13 +21,13 @@ export function renderAnalyticsSplitView(tableStats = {}) {
       distContainer.classList.add('hidden');
       topContainer.style.gridColumn = '1 / -1';
       topContainer.innerHTML = /* html */ `
-         <div class="supabase-empty-analytics">
-            <div class="supabase-empty-icon">
+         <div class="drixio-empty-analytics">
+            <div class="drixio-empty-icon">
                <span class="material-symbols-outlined">table_chart_view</span>
             </div>
-            <div class="supabase-empty-title">No tables found in this database</div>
-            <div class="supabase-empty-desc">Create your first database table or import a SQL script to populate data analytics and track records.</div>
-            <div class="supabase-empty-actions">
+            <div class="drixio-empty-title">No tables found in this database</div>
+            <div class="drixio-empty-desc">Create your first database table or import a SQL script to populate data analytics and track records.</div>
+            <div class="drixio-empty-actions">
                <button type="button" class="btn-primary" onclick="window.openCreateTableModal ? window.openCreateTableModal() : document.getElementById('add-table-btn')?.click()">
                   <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
                   <span>Create Table</span>
@@ -89,7 +89,6 @@ export function renderAnalyticsSplitView(tableStats = {}) {
    topContainer.classList.remove('hidden');
    topContainer.classList.add('block');
 
-   // 2. Render Distribution Donut Chart with Centered Total Rows
    let chartHtml = /* html */ `
     <div class="analytics-panel-header">
       <div class="flex items-center gap-2">
@@ -102,20 +101,39 @@ export function renderAnalyticsSplitView(tableStats = {}) {
   `;
 
    let legendHtml = /* html */ `<div class="distribution-legend">`;
-   let pieStops = [];
-   let currentPct = 0;
 
    if (totalRows > 0) {
       let accountedRows = 0;
+      let cumulativePct = 0;
+      const size = 140;
+      const radius = size / 2;
+
+      // Calculate SVG paths for donut segments
+      let svgHtml = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="distribution-pie" style="transform: rotate(-90deg);">`;
+
+      const renderSlice = (color, pct, name, count) => {
+         // Create donut slice via stroke-dasharray
+         const c = 2 * Math.PI * (radius / 2); // Circumference for stroke at r=35 (radius/2 because stroke grows out from center if r=radius/2 and stroke-width=radius)
+         // Actually, simpler standard SVG donut:
+         const r = 35; // internal radius
+         const strokeWidth = 70; // full width to edge
+         const circ = 2 * Math.PI * r;
+         const strokeLen = (pct / 100) * circ;
+         const dashOffset = -((cumulativePct / 100) * circ);
+
+         svgHtml += `<circle class="donut-slice" data-table="${name}" r="${r}" cx="${size / 2}" cy="${size / 2}" 
+                        fill="transparent" stroke="${color}" stroke-width="${strokeWidth}" 
+                        stroke-dasharray="${strokeLen} ${circ}" stroke-dashoffset="${dashOffset}" 
+                        title="${name}: ${count.toLocaleString()} rows (${pct.toFixed(1)}%)"
+                        style="transition: opacity 0.2s; cursor: pointer;"></circle>`;
+         cumulativePct += pct;
+      };
+
       top5.forEach(([tableName, count], index) => {
          const pct = (count / totalRows) * 100;
          accountedRows += count;
-         const start = currentPct;
-         const end = currentPct + pct;
-         pieStops.push(
-            `${colors[index]} ${start.toFixed(2)}% ${end.toFixed(2)}%`,
-         );
-         currentPct = end;
+
+         renderSlice(colors[index], pct, tableName, count);
 
          legendHtml += /* html */ `
         <div class="legend-item" data-table="${tableName}" onclick="window.navigateToTableData('${tableName}')" style="cursor: pointer;" title="View ${tableName}">
@@ -129,10 +147,7 @@ export function renderAnalyticsSplitView(tableStats = {}) {
       const others = totalRows - accountedRows;
       if (others > 0 && entries.length > 5) {
          const pct = (others / totalRows) * 100;
-         const start = currentPct;
-         const end = currentPct + pct;
-         pieStops.push(`#64748b ${start.toFixed(2)}% ${end.toFixed(2)}%`);
-         currentPct = end;
+         renderSlice('#64748b', pct, 'Others', others);
 
          legendHtml += /* html */ `
         <div class="legend-item">
@@ -143,14 +158,18 @@ export function renderAnalyticsSplitView(tableStats = {}) {
       `;
       }
 
+      // Cover center to make it a donut
+      svgHtml += `<circle r="${radius * 0.74}" cx="${size / 2}" cy="${size / 2}" fill="var(--color-bg-secondary)"></circle>`;
+      svgHtml += `</svg>`;
+
       const totalFormatted =
          totalRows > 999999
             ? (totalRows / 1000000).toFixed(1) + 'M'
             : totalRows.toLocaleString();
 
       chartHtml += /* html */ `
-      <div class="distribution-pie-wrapper">
-        <div class="distribution-pie" style="background: conic-gradient(${pieStops.join(', ')});"></div>
+      <div class="distribution-pie-wrapper stagger-in">
+        ${svgHtml}
         <div class="donut-center-info">
           <span class="donut-total-num">${totalFormatted}</span>
           <span class="donut-total-label">Total Rows</span>
@@ -159,8 +178,11 @@ export function renderAnalyticsSplitView(tableStats = {}) {
     `;
    } else {
       chartHtml += /* html */ `
-      <div class="distribution-pie-wrapper">
-        <div class="distribution-pie" style="background: var(--color-border);"></div>
+      <div class="distribution-pie-wrapper stagger-in">
+        <svg width="140" height="140" viewBox="0 0 140 140" class="distribution-pie">
+            <circle r="35" cx="70" cy="70" fill="transparent" stroke="var(--color-border)" stroke-width="70"></circle>
+            <circle r="51.8" cx="70" cy="70" fill="var(--color-bg-secondary)"></circle>
+        </svg>
         <div class="donut-center-info">
           <span class="donut-total-num">0</span>
           <span class="donut-total-label">No Rows</span>
@@ -176,36 +198,55 @@ export function renderAnalyticsSplitView(tableStats = {}) {
    distContainer.classList.remove('hidden');
    distContainer.classList.add('block');
 
-   // Bind Hover Sync between top-table-item and legend-item
-   topContainer.querySelectorAll('.top-table-item').forEach((item) => {
+   // Bind Hover Sync between top-table-item, legend-item and donut-slice
+   const topItems = topContainer.querySelectorAll('.top-table-item');
+   const legendItems = distContainer.querySelectorAll(
+      '.legend-item[data-table]',
+   );
+   const donutSlices = distContainer.querySelectorAll(
+      '.donut-slice[data-table]',
+   );
+
+   const syncHover = (tbl, isHovering) => {
+      // Top Table item
+      topContainer
+         .querySelector(`.top-table-item[data-table="${tbl}"]`)
+         ?.classList.toggle('is-hovered', isHovering);
+      // Legend item
+      distContainer
+         .querySelector(`.legend-item[data-table="${tbl}"]`)
+         ?.classList.toggle('is-hovered', isHovering);
+
+      // SVG Slices
+      if (donutSlices.length > 0) {
+         if (isHovering) {
+            donutSlices.forEach((slice) => {
+               if (slice.dataset.table === tbl) slice.style.opacity = '1';
+               else slice.style.opacity = '0.3';
+            });
+         } else {
+            donutSlices.forEach((slice) => (slice.style.opacity = '1'));
+         }
+      }
+   };
+
+   topItems.forEach((item) => {
       const tbl = item.dataset.table;
-      item.addEventListener('mouseenter', () => {
-         distContainer
-            .querySelector(`.legend-item[data-table="${tbl}"]`)
-            ?.classList.add('is-hovered');
-      });
-      item.addEventListener('mouseleave', () => {
-         distContainer
-            .querySelector(`.legend-item[data-table="${tbl}"]`)
-            ?.classList.remove('is-hovered');
-      });
+      item.addEventListener('mouseenter', () => syncHover(tbl, true));
+      item.addEventListener('mouseleave', () => syncHover(tbl, false));
    });
 
-   distContainer
-      .querySelectorAll('.legend-item[data-table]')
-      .forEach((item) => {
-         const tbl = item.dataset.table;
-         item.addEventListener('mouseenter', () => {
-            topContainer
-               .querySelector(`.top-table-item[data-table="${tbl}"]`)
-               ?.classList.add('is-hovered');
-         });
-         item.addEventListener('mouseleave', () => {
-            topContainer
-               .querySelector(`.top-table-item[data-table="${tbl}"]`)
-               ?.classList.remove('is-hovered');
-         });
-      });
+   legendItems.forEach((item) => {
+      const tbl = item.dataset.table;
+      item.addEventListener('mouseenter', () => syncHover(tbl, true));
+      item.addEventListener('mouseleave', () => syncHover(tbl, false));
+   });
+
+   donutSlices.forEach((item) => {
+      const tbl = item.dataset.table;
+      item.addEventListener('mouseenter', () => syncHover(tbl, true));
+      item.addEventListener('mouseleave', () => syncHover(tbl, false));
+   });
 
    return totalRows;
 }

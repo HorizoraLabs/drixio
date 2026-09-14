@@ -49,13 +49,13 @@
    }
 }
 
-.supabase-hero-left {
+.drixio-hero-left {
    display: flex;
    flex-direction: column;
    gap: 32px;
 }
 
-.supabase-hero-header {
+.drixio-hero-header {
    display: flex;
    flex-direction: column;
    gap: 12px;
@@ -424,7 +424,7 @@
    gap: 7px;
 }
 
-.supabase-health-dot {
+.drixio-health-dot {
    width: 7px;
    height: 7px;
    border-radius: 50%;
@@ -432,7 +432,7 @@
    box-shadow: 0 0 6px rgba(37, 99, 235, 0.6);
 }
 
-.supabase-health-label {
+.drixio-health-label {
    font-size: 12px;
    font-weight: 600;
    color: var(--color-text);
@@ -444,8 +444,8 @@
    opacity: 0.5;
 }
 
-.supabase-records-stat,
-.supabase-updated-stat {
+.drixio-records-stat,
+.drixio-updated-stat {
    font-size: 12px;
    color: var(--color-text-soft);
 }
@@ -489,19 +489,19 @@
    4. Analytics Split View
    ========================================================================== */
 
-.supabase-analytics-grid {
+.drixio-analytics-grid {
    display: grid;
    grid-template-columns: 1fr;
    gap: 16px;
 }
 
 @media (min-width: 1024px) {
-   .supabase-analytics-grid {
+   .drixio-analytics-grid {
       grid-template-columns: 1fr 1fr;
    }
 }
 
-.supabase-panel {
+.drixio-panel {
    background: var(--color-bg-secondary);
    border: 1px solid var(--color-border);
    border-radius: 8px;
@@ -745,7 +745,7 @@
 }
 
 /* Empty Analytics State */
-.supabase-empty-analytics {
+.drixio-empty-analytics {
    display: flex;
    flex-direction: column;
    align-items: center;
@@ -755,7 +755,7 @@
    gap: 8px;
 }
 
-.supabase-empty-icon {
+.drixio-empty-icon {
    width: 42px;
    height: 42px;
    border-radius: 8px;
@@ -767,31 +767,31 @@
    margin-bottom: 2px;
 }
 
-.supabase-empty-icon .material-symbols-outlined {
+.drixio-empty-icon .material-symbols-outlined {
    font-size: 22px;
 }
 
-.supabase-empty-title {
+.drixio-empty-title {
    font-size: 14px;
    font-weight: 600;
    color: var(--color-text);
 }
 
-.supabase-empty-desc {
+.drixio-empty-desc {
    font-size: 11px;
    color: var(--color-text-secondary);
    max-width: 380px;
    line-height: 1.4;
 }
 
-.supabase-empty-actions {
+.drixio-empty-actions {
    display: flex;
    align-items: center;
    gap: 8px;
    margin-top: 8px;
 }
 
-.supabase-empty-actions button {
+.drixio-empty-actions button {
    display: inline-flex;
    align-items: center;
    gap: 6px;
@@ -806,28 +806,28 @@
    5. Quick Operations Panel
    ========================================================================== */
 
-.supabase-actions-panel {
+.drixio-actions-panel {
    background: var(--color-bg-secondary);
    border: 1px solid var(--color-border);
    border-radius: 8px;
    padding: 16px 20px;
 }
 
-.supabase-panel-header {
+.drixio-panel-header {
    display: flex;
    align-items: center;
    justify-content: space-between;
    margin-bottom: 12px;
 }
 
-.supabase-panel-title {
+.drixio-panel-title {
    font-size: 14px;
    font-weight: 600;
    color: var(--color-text);
    margin: 0;
 }
 
-.supabase-panel-tag {
+.drixio-panel-tag {
    font-size: 10px;
    font-weight: 600;
    font-family: var(--font-mono);
@@ -838,13 +838,13 @@
    border-radius: 4px;
 }
 
-.supabase-actions-grid {
+.drixio-actions-grid {
    display: grid;
    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
    gap: 10px;
 }
 
-.supabase-action-card {
+.drixio-action-card {
    display: flex;
    align-items: center;
    gap: 10px;
@@ -858,13 +858,13 @@
    outline: none;
 }
 
-.supabase-action-card:hover {
+.drixio-action-card:hover {
    border-color: var(--color-primary);
    background: var(--color-bg-secondary-dark);
    transform: translateY(-1px);
 }
 
-.supabase-action-card:active {
+.drixio-action-card:active {
    transform: scale(0.99);
 }
 
@@ -910,14 +910,14 @@
    6. Collapsible Engine Specifications Drawer
    ========================================================================== */
 
-.supabase-runtime-panel {
+.drixio-runtime-panel {
    background: var(--color-bg-secondary);
    border: 1px solid var(--color-border);
    border-radius: 8px;
    overflow: hidden;
 }
 
-.supabase-runtime-header {
+.drixio-runtime-header {
    display: flex;
    align-items: center;
    justify-content: space-between;
@@ -928,17 +928,17 @@
    transition: background 0.15s ease;
 }
 
-.supabase-runtime-header:hover {
+.drixio-runtime-header:hover {
    background: var(--color-bg-primary);
 }
 
-.supabase-runtime-title {
+.drixio-runtime-title {
    font-size: 12px;
    font-weight: 600;
    color: var(--color-text-secondary);
 }
 
-.supabase-runtime-chip {
+.drixio-runtime-chip {
    font-size: 10px;
    font-weight: 600;
    font-family: var(--font-mono);
@@ -949,13 +949,13 @@
    color: var(--color-text-soft);
 }
 
-.supabase-runtime-body {
+.drixio-runtime-body {
    padding: 14px 18px 18px;
    border-top: 1px solid var(--color-border);
    background: var(--color-bg-primary);
 }
 
-.supabase-runtime-grid {
+.drixio-runtime-grid {
    display: grid;
    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
    gap: 12px 16px;

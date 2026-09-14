@@ -48,7 +48,7 @@ export const SideBarHTML = /* html */ `
     </div>
 
     <div class="sidebar-footer-actions">
-      <span class="sidebar-version-tag">v1.1.10</span>
+      <span class="sidebar-version-tag">v1.2.0</span>
     </div>
   </div>
 </aside>

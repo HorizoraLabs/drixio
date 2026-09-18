@@ -150,19 +150,40 @@ export function exportErdAsSql(erdData) {
 
    const lines = [];
    erdData.forEach((schema) => {
+      const pkCols = schema.columns.filter((c) => c.isPk);
+      const isCompositePk = pkCols.length > 1;
+
       const colDefs = schema.columns.map((c) => {
          let def = `  ${quote}${c.name}${quote} ${c.type}`;
-         if (c.isPk) def += ' PRIMARY KEY';
-         if (!c.nullable && !c.isPk) def += ' NOT NULL';
-         if (c.isUnique && !c.isPk) def += ' UNIQUE';
+         if (c.isPk && !isCompositePk) def += ' PRIMARY KEY';
+         if (!c.nullable && (!c.isPk || isCompositePk)) def += ' NOT NULL';
+         if (c.isUnique && (!c.isPk || isCompositePk)) def += ' UNIQUE';
          return def;
       });
 
+      if (isCompositePk) {
+         const pkColsQuoted = pkCols
+            .map((c) => `${quote}${c.name}${quote}`)
+            .join(', ');
+         colDefs.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
+
       schema.columns.forEach((c) => {
          if (c.fkTarget && c.fkTarget.table && c.fkTarget.column) {
-            colDefs.push(
-               `  FOREIGN KEY (${quote}${c.name}${quote}) REFERENCES ${quote}${c.fkTarget.table}${quote}(${quote}${c.fkTarget.column}${quote})`,
-            );
+            let fkDef = `  FOREIGN KEY (${quote}${c.name}${quote}) REFERENCES ${quote}${c.fkTarget.table}${quote}(${quote}${c.fkTarget.column}${quote})`;
+            if (
+               c.fkTarget.onDelete &&
+               c.fkTarget.onDelete.toUpperCase() !== 'NO ACTION'
+            ) {
+               fkDef += ` ON DELETE ${c.fkTarget.onDelete.toUpperCase()}`;
+            }
+            if (
+               c.fkTarget.onUpdate &&
+               c.fkTarget.onUpdate.toUpperCase() !== 'NO ACTION'
+            ) {
+               fkDef += ` ON UPDATE ${c.fkTarget.onUpdate.toUpperCase()}`;
+            }
+            colDefs.push(fkDef);
          }
       });
 

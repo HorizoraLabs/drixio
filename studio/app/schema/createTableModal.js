@@ -237,11 +237,19 @@ export function openCreateTableModal(onSuccess) {
          });
       }
 
+      const pkColumns = columns.filter((c) => !!c.primaryKey);
+      const isCompositePk = pkColumns.length > 1;
+
       columns.forEach((col) => {
          const colName = col.name ? quoteIdent(col.name) : '"column"';
          const tLower = (col.type || 'VARCHAR(255)').toLowerCase();
          let typeStr = col.type || 'VARCHAR(255)';
          const hasEnumValues = col.enumValues && col.enumValues.length > 0;
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
 
          if (dbType === 'sqlite') {
             if (hasEnumValues) {
@@ -270,19 +278,24 @@ export function openCreateTableModal(onSuccess) {
             else if (tLower === 'json') typeStr = 'TEXT';
             else if (tLower === 'uuid') typeStr = 'TEXT';
 
-            if (
-               col.primaryKey &&
-               (tLower.includes('int') || typeStr === 'INTEGER')
-            ) {
-               typeStr = 'INTEGER PRIMARY KEY AUTOINCREMENT';
-            } else if (col.primaryKey) {
-               typeStr += ' PRIMARY KEY';
+            if (col.primaryKey && !isCompositePk) {
+               if (!hasFk && (tLower.includes('int') || typeStr === 'INTEGER')) {
+                  typeStr = 'INTEGER PRIMARY KEY AUTOINCREMENT';
+               } else {
+                  typeStr += ' PRIMARY KEY';
+               }
             } else {
-               if (!col.nullable) typeStr += ' NOT NULL';
-               if (col.isUnique) typeStr += ' UNIQUE';
+               if (!col.nullable || (col.primaryKey && isCompositePk))
+                  typeStr += ' NOT NULL';
+               if (col.isUnique && !col.primaryKey) typeStr += ' UNIQUE';
             }
          } else if (dbType === 'postgres') {
-            if (col.primaryKey && (tLower === 'integer' || tLower === 'int')) {
+            if (
+               col.primaryKey &&
+               !isCompositePk &&
+               !hasFk &&
+               (tLower === 'integer' || tLower === 'int')
+            ) {
                typeStr = 'SERIAL PRIMARY KEY';
             } else {
                if (hasEnumValues || col.isExistingEnum || col.isNewEnum) {
@@ -314,8 +327,9 @@ export function openCreateTableModal(onSuccess) {
                else if (tLower === 'blob') typeStr = 'BYTEA';
                else if (tLower === 'uuid') typeStr = 'UUID';
 
-               if (col.primaryKey) typeStr += ' PRIMARY KEY';
-               if (!col.nullable && !col.primaryKey) typeStr += ' NOT NULL';
+               if (col.primaryKey && !isCompositePk) typeStr += ' PRIMARY KEY';
+               if (!col.nullable || (col.primaryKey && isCompositePk))
+                  typeStr += ' NOT NULL';
                if (col.isUnique && !col.primaryKey) typeStr += ' UNIQUE';
             }
          } else {
@@ -348,16 +362,16 @@ export function openCreateTableModal(onSuccess) {
             else if (tLower === 'blob') typeStr = 'BLOB';
             else if (tLower === 'uuid') typeStr = 'VARCHAR(36)';
 
-            if (
-               col.primaryKey &&
-               (tLower.includes('int') || typeStr === 'INT')
-            ) {
-               typeStr += ' AUTO_INCREMENT PRIMARY KEY';
-            } else if (col.primaryKey) {
-               typeStr += ' PRIMARY KEY';
+            if (col.primaryKey && !isCompositePk) {
+               if (!hasFk && (tLower.includes('int') || typeStr === 'INT')) {
+                  typeStr += ' AUTO_INCREMENT PRIMARY KEY';
+               } else {
+                  typeStr += ' PRIMARY KEY';
+               }
             }
 
-            if (!col.nullable && !col.primaryKey) typeStr += ' NOT NULL';
+            if (!col.nullable || (col.primaryKey && isCompositePk))
+               typeStr += ' NOT NULL';
             if (col.isUnique && !col.primaryKey) typeStr += ' UNIQUE';
          }
 
@@ -370,6 +384,13 @@ export function openCreateTableModal(onSuccess) {
 
          lines.push(`  ${colName} ${typeStr}`);
       });
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => quoteIdent(c.name || 'col'))
+            .join(', ');
+         lines.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
 
       // Foreign Keys
       columns.forEach((col) => {

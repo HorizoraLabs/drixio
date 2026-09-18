@@ -45,6 +45,8 @@ export interface ColumnDiff {
    newDefault?: string;
    oldPk?: boolean;
    newPk?: boolean;
+   oldFk?: ForeignKeyTarget | null;
+   newFk?: ForeignKeyTarget | null;
 }
 
 export interface TableDiff {
@@ -132,6 +134,8 @@ export interface DBAdapter {
    quoteTable?(tableName: string): string;
    /** List user-defined enum types in the database. */
    getCustomEnums?(): Promise<{ name: string; values: string[] }[]>;
+   /** Rename an existing table. */
+   renameTable?(oldName: string, newName: string): Promise<void>;
 }
 
 export interface DBConfig {
@@ -143,6 +147,7 @@ export interface DBConfig {
 export interface TableMutationOptions {
    tableName: string;
    pkColumn?: string;
+   pkColumns?: string[];
    edits?: Record<string, Record<string, any>>; // { [pk]: { col: newVal } }
    inserts?: Record<string, any>[]; // [ { col: val } ]
    deletes?: string[]; // [ pk ]

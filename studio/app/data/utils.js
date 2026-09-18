@@ -144,7 +144,21 @@ export function formatDisplayVal(val, colSchema) {
 
 export function generateRowHtml(row, rowIndex, pkColumn, columns, schema = []) {
    let html = `<td class="row-header" data-row-idx="${rowIndex}">${rowIndex + 1}</td>`;
-   const pkValue = pkColumn ? row[pkColumn] : rowIndex;
+   const pkCols = schema.filter((c) => c.isPk).map((c) => c.name);
+   let pkValue;
+   if (pkCols.length > 1) {
+      const obj = {};
+      for (const col of pkCols) {
+         obj[col] = row[col];
+      }
+      pkValue = JSON.stringify(obj);
+   } else if (pkColumn) {
+      pkValue = row[pkColumn];
+   } else {
+      pkValue = rowIndex;
+   }
+   const safePkValue = String(pkValue !== undefined && pkValue !== null ? pkValue : rowIndex).replace(/"/g, '&quot;');
+
    columns.forEach((col, cIdx) => {
       const colSchema = schema.find((c) => c.name === col);
       let rawVal = row[col];
@@ -168,9 +182,9 @@ export function generateRowHtml(row, rowIndex, pkColumn, columns, schema = []) {
       if (isFk) {
          const fkTable = colSchema.fkTarget.table;
          const fkCol = colSchema.fkTarget.column;
-         html += `<td class="data-cell is-fk-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${pkValue}" data-col="${col}" data-original="${safeValForAttr}" data-fk-table="${fkTable}" data-fk-col="${fkCol}"${titleAttr}><span class="cell-text">${safeValForHtml}</span><button type="button" class="fk-jump-btn" title="View & jump to ${fkTable} (${fkCol} = ${safeValForAttr})" data-fk-table="${fkTable}" data-fk-col="${fkCol}" data-fk-val="${safeValForAttr}"><span class="material-symbols-outlined">open_in_new</span></button></td>`;
+         html += `<td class="data-cell is-fk-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${safePkValue}" data-col="${col}" data-original="${safeValForAttr}" data-fk-table="${fkTable}" data-fk-col="${fkCol}"${titleAttr}><span class="cell-text">${safeValForHtml}</span><button type="button" class="fk-jump-btn" title="View & jump to ${fkTable} (${fkCol} = ${safeValForAttr})" data-fk-table="${fkTable}" data-fk-col="${fkCol}" data-fk-val="${safeValForAttr}"><span class="material-symbols-outlined">open_in_new</span></button></td>`;
       } else {
-         html += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${pkValue}" data-col="${col}" data-original="${safeValForAttr}"${titleAttr}><span class="cell-text">${safeValForHtml}</span></td>`;
+         html += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${safePkValue}" data-col="${col}" data-original="${safeValForAttr}"${titleAttr}><span class="cell-text">${safeValForHtml}</span></td>`;
       }
    });
    return html;

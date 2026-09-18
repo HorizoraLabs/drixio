@@ -7,6 +7,7 @@ import {
 } from '../grid/view.js';
 import { openExportOrmModal } from './ormModal.js';
 import { openSchemaDiffModal } from './diffModal.js';
+import { openRenameTableModal } from './modals.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 
 export { saveSchemaEdits } from './core.js';
@@ -85,6 +86,10 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
             <div class="schema-autocomplete-popover hidden" id="schema-search-popover-${tableName}"></div>
           </div>
           <div class="flex-1"></div>
+          <button type="button" id="btn-rename-table-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Rename Table">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">edit_note</span>
+            <span>Rename Table</span>
+          </button>
           <button type="button" id="btn-export-orm-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Export Prisma / Drizzle ORM Schema">
             <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">bolt</span>
             <span>Export ORM</span>
@@ -835,6 +840,13 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                hideSuggestions();
             }
          });
+
+         const renameTableBtn = document.getElementById(
+            `btn-rename-table-${tableName}`,
+         );
+         if (renameTableBtn) {
+            renameTableBtn.onclick = () => openRenameTableModal(tableName);
+         }
 
          const exportOrmBtn = document.getElementById(
             `btn-export-orm-${tableName}`,

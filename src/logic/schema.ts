@@ -147,100 +147,105 @@ export async function applySchemaChanges(
                let isPk = col.isPk;
                let fkTarget = edits.fkTarget || col.fkTarget;
 
-               const rawPk = (edits as any).isPk;
-               if (edits.fkTarget !== undefined) {
-                  fkTarget = edits.fkTarget;
-               } else if (rawPk !== undefined) {
-                  if (typeof rawPk === 'string') {
-                     isPk = rawPk.includes('PK') || rawPk.includes('PFK');
-                     const fkMatch = rawPk.match(
-                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
-                     );
-                     if (fkMatch) {
-                        const act = fkMatch[3]
-                           ? fkMatch[3].toUpperCase()
-                           : undefined;
-                        fkTarget = {
-                           table: fkMatch[1],
-                           column: fkMatch[2],
-                           onDelete:
-                              act && act !== 'NO ACTION'
-                                 ? act
-                                 : col.fkTarget?.onDelete,
-                           onUpdate: col.fkTarget?.onUpdate,
-                        };
-                     } else {
-                        fkTarget = undefined;
-                     }
-                  } else {
-                     isPk = !!rawPk;
-                  }
-               }
+                const rawPk = (edits as any).isPk;
+                if (edits.fkTarget !== undefined) {
+                   fkTarget = edits.fkTarget;
+                }
+                if (rawPk !== undefined) {
+                   if (typeof rawPk === 'string') {
+                      isPk = rawPk.includes('PK') || rawPk.includes('PFK');
+                      const fkMatch = rawPk.match(
+                         /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
+                      );
+                      if (fkMatch && edits.fkTarget === undefined) {
+                         const act = fkMatch[3]
+                            ? fkMatch[3].toUpperCase()
+                            : undefined;
+                         fkTarget = {
+                            table: fkMatch[1],
+                            column: fkMatch[2],
+                            onDelete:
+                               act && act !== 'NO ACTION'
+                                  ? act
+                                  : col.fkTarget?.onDelete,
+                            onUpdate: col.fkTarget?.onUpdate,
+                         };
+                      } else if (
+                         !fkMatch &&
+                         edits.fkTarget === undefined &&
+                         (rawPk === '' || rawPk === 'PK' || rawPk === '-')
+                      ) {
+                         fkTarget = undefined;
+                      }
+                   } else {
+                      isPk = !!rawPk;
+                   }
+                }
 
-               let nullable =
-                  edits.nullable !== undefined
-                     ? !!edits.nullable
-                     : col.nullable;
-               let defaultValue =
-                  edits.defaultValue !== undefined
-                     ? edits.defaultValue
-                     : col.defaultValue;
-               let isUnique =
-                  edits.isUnique !== undefined
-                     ? !!edits.isUnique
-                     : col.isPk && !isPk
-                       ? false
-                       : !!col.isUnique;
-               let enumValues =
-                  edits.enumValues !== undefined
-                     ? edits.enumValues
-                     : col.enumValues;
+                let nullable =
+                   edits.nullable !== undefined
+                      ? !!edits.nullable
+                      : col.nullable;
+                let defaultValue =
+                   edits.defaultValue !== undefined
+                      ? edits.defaultValue
+                      : col.defaultValue;
+                let isUnique =
+                   edits.isUnique !== undefined
+                      ? !!edits.isUnique
+                      : col.isPk && !isPk
+                        ? false
+                        : !!col.isUnique;
+                let enumValues =
+                   edits.enumValues !== undefined
+                      ? edits.enumValues
+                      : col.enumValues;
 
-               if (edits.name && edits.name !== col.name) {
-                  renames[col.name] = edits.name;
-               }
+                if (edits.name && edits.name !== col.name) {
+                   renames[col.name] = edits.name;
+                }
 
-               updated.push({
-                  name: colName,
-                  type,
-                  isPk,
-                  nullable,
-                  defaultValue,
-                  isUnique,
-                  fkTarget,
-                  enumValues,
-               });
-            }
+                updated.push({
+                   name: colName,
+                   type,
+                   isPk,
+                   nullable,
+                   defaultValue,
+                   isUnique,
+                   fkTarget,
+                   enumValues,
+                });
+             }
 
-            for (const ins of pendingInserts) {
-               if (!ins.name || ins.name.trim() === '') continue;
-               let isPk = false;
-               let fkTarget = ins.fkTarget;
-               const rawInsPk = (ins as any).isPk;
-               if (ins.fkTarget !== undefined) {
-                  fkTarget = ins.fkTarget;
-               } else if (rawInsPk !== undefined) {
-                  if (typeof rawInsPk === 'string') {
-                     isPk = rawInsPk.includes('PK') || rawInsPk.includes('PFK');
-                     const fkMatch = rawInsPk.match(
-                        /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
-                     );
-                     if (fkMatch) {
-                        const act = fkMatch[3]
-                           ? fkMatch[3].toUpperCase()
-                           : undefined;
-                        fkTarget = {
-                           table: fkMatch[1],
-                           column: fkMatch[2],
-                           onDelete:
-                              act && act !== 'NO ACTION' ? act : undefined,
-                        };
-                     }
-                  } else {
-                     isPk = !!rawInsPk;
-                  }
-               }
-               updated.push({
+             for (const ins of pendingInserts) {
+                if (!ins.name || ins.name.trim() === '') continue;
+                let isPk = false;
+                let fkTarget = ins.fkTarget;
+                const rawInsPk = (ins as any).isPk;
+                if (ins.fkTarget !== undefined) {
+                   fkTarget = ins.fkTarget;
+                }
+                if (rawInsPk !== undefined) {
+                   if (typeof rawInsPk === 'string') {
+                      isPk = rawInsPk.includes('PK') || rawInsPk.includes('PFK');
+                      const fkMatch = rawInsPk.match(
+                         /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
+                      );
+                      if (fkMatch && ins.fkTarget === undefined) {
+                         const act = fkMatch[3]
+                            ? fkMatch[3].toUpperCase()
+                            : undefined;
+                         fkTarget = {
+                            table: fkMatch[1],
+                            column: fkMatch[2],
+                            onDelete:
+                               act && act !== 'NO ACTION' ? act : undefined,
+                         };
+                      }
+                   } else {
+                      isPk = !!rawInsPk;
+                   }
+                }updated.push({
                   name: ins.name.trim(),
                   type: ins.type || 'TEXT',
                   isPk,
@@ -442,6 +447,28 @@ export async function applySchemaChanges(
       sqls.push(
          `ALTER TABLE ${quotedTable} ADD COLUMN ${quotedCol} ${type} ${nullStr} ${defStr};`,
       );
+
+      if (ins.fkTarget && ins.fkTarget.table && ins.fkTarget.column) {
+         const fkConstraintName = dialect.quoteIdentifier(
+            `fk_${tableName}_${ins.name.trim()}_${Date.now()}`,
+         );
+         const quotedRefTable = dialect.quoteIdentifier(ins.fkTarget.table);
+         const quotedRefCol = dialect.quoteIdentifier(ins.fkTarget.column);
+         let fkClause = `ALTER TABLE ${quotedTable} ADD CONSTRAINT ${fkConstraintName} FOREIGN KEY (${quotedCol}) REFERENCES ${quotedRefTable}(${quotedRefCol})`;
+         if (
+            ins.fkTarget.onDelete &&
+            ins.fkTarget.onDelete.toUpperCase() !== 'NO ACTION'
+         ) {
+            fkClause += ` ON DELETE ${ins.fkTarget.onDelete.toUpperCase()}`;
+         }
+         if (
+            ins.fkTarget.onUpdate &&
+            ins.fkTarget.onUpdate.toUpperCase() !== 'NO ACTION'
+         ) {
+            fkClause += ` ON UPDATE ${ins.fkTarget.onUpdate.toUpperCase()}`;
+         }
+         sqls.push(`${fkClause};`);
+      }
    }
 
    // 4. Index changes

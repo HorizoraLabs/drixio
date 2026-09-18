@@ -52,12 +52,16 @@ export async function loadTableData(
       const schemaRes = await fetchTableSchema(tableName);
       if (!schemaRes.success) throw new Error(schemaRes.error);
       const schema = schemaRes.data;
-      const pkColumn = schema.find((c) => c.isPk)?.name;
+      const pkColumns = schema.filter((c) => c.isPk).map((c) => c.name);
+      const pkColumn = pkColumns[0];
+      const isCompositePk = pkColumns.length > 1;
 
       if (!preserveState || !window.DataGrid) {
          window.DataGrid = {
             schema,
             pkColumn,
+            pkColumns,
+            isCompositePk,
             pendingEdits: {},
             pendingInserts: [{}],
             pendingDeletes: new Set(),

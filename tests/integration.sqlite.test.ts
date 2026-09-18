@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Hono } from 'hono';
 import {
    createDBAdapter,
    DBAdapter,
@@ -7,7 +8,9 @@ import {
    exportTableToCsv,
    exportTableToJson,
    truncateTable,
+   applySchemaChanges,
 } from '../src/logic/index.js';
+import { registerApiRoutes } from '../src/studio/api.js';
 
 describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
    let adapter: DBAdapter;
@@ -183,5 +186,193 @@ describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
 
       const emptyData = await adapter.getData('test_users', 10, 0);
       expect(emptyData.rows.length).toBe(0);
+   });
+
+   it('9. should rename table successfully', async () => {
+      expect(adapter.renameTable).toBeDefined();
+      await adapter.renameTable!('test_users', 'test_users_renamed');
+      const tables = await adapter.getTables();
+      expect(tables).toContain('test_users_renamed');
+      expect(tables).not.toContain('test_users');
+   });
+
+   it('10. should create and update columns as PFK (Primary Foreign Key)', async () => {
+      // Create parent table 'orders'
+      await adapter.executeSql(`
+         CREATE TABLE test_orders (
+            id INTEGER PRIMARY KEY,
+            title TEXT
+         );
+      `);
+
+      // Create child table 'test_order_items'
+      await adapter.executeSql(`
+         CREATE TABLE test_order_items (
+            order_id INTEGER,
+            item_id INTEGER,
+            amount INTEGER
+         );
+      `);
+
+      // Use applySchemaChanges to configure order_id as PFK (both PK and FK to test_orders.id)
+      const res = await applySchemaChanges(adapter, 'sqlite', {
+         tableName: 'test_order_items',
+         pendingEdits: {
+            order_id: {
+               isPk: 'PFK: test_orders.id' as any,
+               fkTarget: {
+                  table: 'test_orders',
+                  column: 'id',
+               },
+            },
+            item_id: {
+               isPk: true,
+            },
+         },
+      });
+
+      expect(res.success).toBe(true);
+
+      const schema = await adapter.getSchema('test_order_items');
+      const orderIdCol = schema.find((c) => c.name === 'order_id');
+      expect(orderIdCol).toBeDefined();
+      expect(orderIdCol?.isPk).toBe(true);
+      expect(orderIdCol?.fkTarget).toBeDefined();
+      expect(orderIdCol?.fkTarget?.table).toBe('test_orders');
+      expect(orderIdCol?.fkTarget?.column).toBe('id');
+
+      const itemIdCol = schema.find((c) => c.name === 'item_id');
+      expect(itemIdCol?.isPk).toBe(true);
+   });
+
+   it('11. should mutate composite primary key records accurately without touching other rows sharing partial PK', async () => {
+      // Insert parent orders first
+      await adapter.executeSql(`
+         INSERT INTO test_orders (id, title) VALUES (1, 'Order 1'), (2, 'Order 2');
+      `);
+
+      // Insert child rows sharing order_id = 1
+      await adapter.executeSql(`
+         INSERT INTO test_order_items (order_id, item_id, amount) VALUES
+         (1, 10, 100),
+         (1, 20, 200),
+         (2, 10, 300);
+      `);
+
+      const schema = await adapter.getSchema('test_order_items');
+      const pkColumns = ['order_id', 'item_id'];
+
+      // Update only row (1, 10)
+      const updateKey = JSON.stringify({ order_id: 1, item_id: 10 });
+      const updateRes = await batchMutateTableData(adapter, 'sqlite', {
+         tableName: 'test_order_items',
+         pkColumns,
+         edits: {
+            [updateKey]: { amount: 999 },
+         },
+         schema,
+      });
+
+      expect(updateRes.success).toBe(true);
+
+      // Verify row (1, 10) is 999, but (1, 20) is still 200
+      const dataAfterUpdate = await adapter.getData('test_order_items', 10, 0, '', {
+         col: 'order_id',
+         asc: true,
+      });
+
+      expect(dataAfterUpdate.rows).toEqual([
+         { order_id: 1, item_id: 10, amount: 999 },
+         { order_id: 1, item_id: 20, amount: 200 },
+         { order_id: 2, item_id: 10, amount: 300 },
+      ]);
+
+      // Delete only row (1, 10)
+      const deleteKey = JSON.stringify({ order_id: 1, item_id: 10 });
+      const deleteRes = await batchMutateTableData(adapter, 'sqlite', {
+         tableName: 'test_order_items',
+         pkColumns,
+         deletes: [deleteKey],
+         schema,
+      });
+
+      expect(deleteRes.success).toBe(true);
+
+      const dataAfterDelete = await adapter.getData('test_order_items', 10, 0, '', {
+         col: 'order_id',
+         asc: true,
+      });
+
+      expect(dataAfterDelete.rows).toEqual([
+         { order_id: 1, item_id: 20, amount: 200 },
+         { order_id: 2, item_id: 10, amount: 300 },
+      ]);
+   });
+
+   it('12. should handle table rename and records mutation with composite PK via Studio API endpoints', async () => {
+      const app = new Hono();
+      registerApiRoutes(app, {
+         type: 'sqlite',
+         targetUrl: ':memory:',
+         source: 'manual',
+         adapter,
+      } as any);
+
+      // 1. Test POST /api/tables/:name/rename
+      const renameRes = await app.request(
+         '/api/tables/test_users_renamed/rename',
+         {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newName: 'test_users_final' }),
+         },
+      );
+
+      expect(renameRes.status).toBe(200);
+      const renameJson = (await renameRes.json()) as any;
+      expect(renameJson.success).toBe(true);
+
+      const tables = await adapter.getTables();
+      expect(tables).toContain('test_users_final');
+      expect(tables).not.toContain('test_users_renamed');
+
+      // Duplicate rename should return 400
+      const dupRenameRes = await app.request(
+         '/api/tables/test_users_final/rename',
+         {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newName: 'test_orders' }),
+         },
+      );
+      expect(dupRenameRes.status).toBe(400);
+
+      // 2. Test POST /api/tables/:name/records with composite PK
+      const mutateRes = await app.request(
+         '/api/tables/test_order_items/records',
+         {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               pkColumns: ['order_id', 'item_id'],
+               edits: {
+                  [JSON.stringify({ order_id: 1, item_id: 20 })]: {
+                     amount: 888,
+                  },
+               },
+            }),
+         },
+      );
+
+      expect(mutateRes.status).toBe(200);
+      const mutateJson = (await mutateRes.json()) as any;
+      expect(mutateJson.success).toBe(true);
+
+      const data = await adapter.getData('test_order_items', 10, 0, '', {
+         col: 'order_id',
+         asc: true,
+      });
+      const row = data.rows.find((r) => r.order_id === 1 && r.item_id === 20);
+      expect(row?.amount).toBe(888);
    });
 });

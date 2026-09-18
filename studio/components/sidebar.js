@@ -10,6 +10,7 @@ import {
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
 import { openCreateTableModal } from '../app/schema/createTableModal.js';
+import { openRenameTableModal } from '../app/schema/modals.js';
 import { openDropdownPicker } from './dropdownPicker.js';
 
 window.openCreateTableModal = openCreateTableModal;
@@ -113,6 +114,13 @@ export async function initSidebar(isRefresh = false) {
                         if (window.showToast) {
                            window.showToast(`Copied "${tableName}"`, 'success');
                         }
+                     },
+                  },
+                  {
+                     icon: 'edit',
+                     label: 'Rename Table...',
+                     action: () => {
+                        openRenameTableModal(tableName);
                      },
                   },
                   {

@@ -1,5 +1,5 @@
 import { updateSchemaCell } from './core.js';
-import { fetchDatabaseEnums } from '../../lib/api.js';
+import { fetchDatabaseEnums, renameTableApi } from '../../lib/api.js';
 import { openDropdownPicker } from '../../components/dropdownPicker.js';
 
 export function openIndexModal() {
@@ -520,9 +520,8 @@ export async function openPkFkModal(td, currentText) {
       const res = await fetch('/api/tables');
       const json = await res.json();
       if (json.success && json.data) {
-         const currentTable = window.AppState?.currentTable;
-         // Exclude current table so FK cannot reference columns within its own table
-         availableTables = json.data.filter((t) => t !== currentTable);
+         // Allow all tables including current table for self-referencing FKs (e.g. parent_id -> id)
+         availableTables = json.data;
 
          if (currentFkTable && availableTables.includes(currentFkTable)) {
             loadColumnsForTable(currentFkTable, currentFkCol);
@@ -732,10 +731,12 @@ export async function openPkFkModal(td, currentText) {
          if (!window.SchemaGrid.pendingInserts[insertIdx])
             window.SchemaGrid.pendingInserts[insertIdx] = {};
          window.SchemaGrid.pendingInserts[insertIdx].fkTarget = fkObj;
+         window.SchemaGrid.pendingInserts[insertIdx].isPk = pkChecked;
       } else if (colName) {
          if (!window.SchemaGrid.pendingEdits[colName])
             window.SchemaGrid.pendingEdits[colName] = {};
          window.SchemaGrid.pendingEdits[colName].fkTarget = fkObj;
+         window.SchemaGrid.pendingEdits[colName].isPk = pkChecked;
       }
 
       window.SchemaGrid.currentTransaction = [];
@@ -1081,3 +1082,160 @@ export async function openEnumModal(td, origCol) {
       window.showToast?.('Enum column configured!', 'success');
    };
 }
+
+export function openRenameTableModal(tableName) {
+   if (!tableName) return;
+
+   let modal = document.getElementById('rename-table-modal');
+   if (modal) modal.remove();
+
+   modal = document.createElement('div');
+   modal.id = 'rename-table-modal';
+   modal.className = 'modal-overlay';
+   modal.innerHTML = /* html */ `
+     <div class="keys-modal-container" style="max-width: 440px; width: 100%;">
+       <div class="modal-header">
+         <div class="flex items-center gap-2">
+           <span class="material-symbols-outlined text-primary" style="font-size: 20px;">edit_note</span>
+           <h3 class="m-0 text-15 font-semibold">Rename Table</h3>
+         </div>
+         <button id="close-rename-modal" class="modal-close-btn" title="Close">
+           <span class="material-symbols-outlined">close</span>
+         </button>
+       </div>
+
+       <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px;">
+         <div style="font-size: 13px; color: var(--color-text-soft);">
+           Rename table <code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: var(--color-text-main); font-weight: 600;">${tableName}</code> to a new name.
+         </div>
+
+         <div>
+           <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 6px; color: var(--color-text-main);">
+             New Table Name
+           </label>
+           <input
+             type="text"
+             id="input-rename-table"
+             class="key-select"
+             style="width: 100%; height: 36px; padding: 0 12px; font-size: 13px; font-family: monospace; outline: none;"
+             value="${tableName}"
+             placeholder="e.g. new_table_name"
+             autocomplete="off"
+             spellcheck="false"
+           />
+           <div id="rename-table-error" style="color: #ef4444; font-size: 12px; margin-top: 6px; display: none;"></div>
+         </div>
+       </div>
+
+       <div class="modal-footer" style="padding: 12px 20px;">
+         <button id="cancel-rename-btn" class="btn-secondary">Cancel</button>
+         <button id="submit-rename-btn" class="btn-primary flex items-center gap-1.5">
+           <span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+           <span>Rename</span>
+         </button>
+       </div>
+     </div>
+   `;
+
+   document.body.appendChild(modal);
+
+   const input = document.getElementById('input-rename-table');
+   const errorEl = document.getElementById('rename-table-error');
+   const submitBtn = document.getElementById('submit-rename-btn');
+   const closeBtn = document.getElementById('close-rename-modal');
+   const cancelBtn = document.getElementById('cancel-rename-btn');
+
+   const closeFn = () => {
+      document.removeEventListener('keydown', handleKeydown);
+      modal.remove();
+   };
+
+   const handleKeydown = (e) => {
+      if (e.key === 'Escape') closeFn();
+      if (e.key === 'Enter') handleRename();
+   };
+   document.addEventListener('keydown', handleKeydown);
+
+   closeBtn.onclick = closeFn;
+   cancelBtn.onclick = closeFn;
+   modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeFn();
+   });
+
+   const showError = (msg) => {
+      if (errorEl) {
+         errorEl.textContent = msg;
+         errorEl.style.display = 'block';
+      }
+   };
+
+   const handleRename = async () => {
+      const newName = input.value.trim();
+      if (!newName) {
+         showError('Table name cannot be empty');
+         input.focus();
+         return;
+      }
+      if (newName === tableName) {
+         showError('New table name must be different');
+         input.focus();
+         return;
+      }
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
+         showError('Table name must start with a letter or underscore and contain only letters, numbers, and underscores');
+         input.focus();
+         return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="material-symbols-outlined spin" style="font-size:16px;">progress_activity</span><span>Renaming...</span>';
+
+      try {
+         const res = await renameTableApi(tableName, newName);
+         if (res.success) {
+            closeFn();
+            window.showToast?.(`Table "${tableName}" renamed to "${newName}" successfully!`, 'success');
+
+            // Update AppState and cached states
+            if (window.AppState.currentTable === tableName) {
+               window.AppState.currentTable = newName;
+            }
+            if (window.TableStates?.[tableName]) {
+               window.TableStates[newName] = window.TableStates[tableName];
+               delete window.TableStates[tableName];
+            }
+
+            if (window.refreshTableList) {
+               await window.refreshTableList(true);
+               setTimeout(() => {
+                  const newBtn = document.querySelector(`.table-btn[data-table="${newName}"]`);
+                  if (newBtn) {
+                     newBtn.click();
+                  } else {
+                     window.AppState.currentTable = newName;
+                     window.renderCurrentView?.();
+                  }
+               }, 40);
+            }
+         } else {
+            showError(res.error || 'Failed to rename table');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">check</span><span>Rename</span>';
+         }
+      } catch (err) {
+         showError(err.message || 'Network error');
+         submitBtn.disabled = false;
+         submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">check</span><span>Rename</span>';
+      }
+   };
+
+   submitBtn.onclick = handleRename;
+
+   setTimeout(() => {
+      input.focus();
+      input.select();
+   }, 50);
+}
+
+window.openRenameTableModal = openRenameTableModal;
+

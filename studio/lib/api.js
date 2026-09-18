@@ -106,6 +106,20 @@ export async function truncateTableApi(tableName) {
    return await res.json();
 }
 
+export async function renameTableApi(oldName, newName) {
+   const res = await fetch(
+      `/api/tables/${encodeURIComponent(oldName)}/rename`,
+      {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({ newName }),
+      },
+   );
+   return await res.json();
+}
+
 export async function analyzeQueryApi(sql) {
    const res = await fetch('/api/analyze-query', {
       method: 'POST',

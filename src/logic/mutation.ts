@@ -17,6 +17,40 @@ export interface BatchMutateData {
 export type BatchMutateResult = Result<BatchMutateData>;
 export type MutationResult = BatchMutateResult;
 
+function buildPkWhereClause(
+   dialect: any,
+   pkCols: string[],
+   pkVal: string,
+): string {
+   if (pkCols.length > 1) {
+      try {
+         const parsed = JSON.parse(pkVal);
+         if (parsed && typeof parsed === 'object') {
+            const conditions: string[] = [];
+            for (const col of pkCols) {
+               const val = parsed[col] !== undefined ? parsed[col] : '';
+               const quotedCol = dialect.quoteIdentifier(col);
+               if (val === null || val === undefined) {
+                  conditions.push(`${quotedCol} IS NULL`);
+               } else {
+                  conditions.push(
+                     `${quotedCol} = '${dialect.escapeString(String(val))}'`,
+                  );
+               }
+            }
+            if (conditions.length > 0) {
+               return conditions.join(' AND ');
+            }
+         }
+      } catch {
+         // Fallback to single column if not JSON
+      }
+   }
+   const quotedPk = dialect.quoteIdentifier(pkCols[0] || 'id');
+   const escapedPk = dialect.escapeString(String(pkVal));
+   return `${quotedPk} = '${escapedPk}'`;
+}
+
 export async function batchMutateTableData(
    adapter: DBAdapter,
    dbType: string,
@@ -25,6 +59,7 @@ export async function batchMutateTableData(
    const {
       tableName,
       pkColumn,
+      pkColumns,
       edits = {},
       inserts = [],
       deletes = [],
@@ -35,15 +70,23 @@ export async function batchMutateTableData(
       return err('Missing tableName.');
    }
 
+   const effectivePkCols =
+      pkColumns && pkColumns.length > 0
+         ? pkColumns
+         : pkColumn
+           ? [pkColumn]
+           : [];
+
    const hasEditsOrDeletes =
       Object.keys(edits).length > 0 || deletes.length > 0;
-   if (hasEditsOrDeletes && !pkColumn) {
-      return err('Primary key (pkColumn) is required for updates and deletes.');
+   if (hasEditsOrDeletes && effectivePkCols.length === 0) {
+      return err(
+         'Primary key (pkColumn or pkColumns) is required for updates and deletes.',
+      );
    }
 
    const dialect = getDialect(dbType as any);
    const quotedTable = dialect.quoteIdentifier(tableName);
-   const quotedPk = pkColumn ? dialect.quoteIdentifier(pkColumn) : '';
 
    const sqls: string[] = [];
 
@@ -83,9 +126,13 @@ export async function batchMutateTableData(
       }
 
       if (setClauses.length > 0) {
-         const escapedPk = dialect.escapeString(String(pkVal));
+         const whereClause = buildPkWhereClause(
+            dialect,
+            effectivePkCols,
+            String(pkVal),
+         );
          sqls.push(
-            `UPDATE ${quotedTable} SET ${setClauses.join(', ')} WHERE ${quotedPk} = '${escapedPk}';`,
+            `UPDATE ${quotedTable} SET ${setClauses.join(', ')} WHERE ${whereClause};`,
          );
       }
    }
@@ -141,9 +188,13 @@ export async function batchMutateTableData(
    // 3. Process Deletes
    for (const pk of deletes) {
       if (pk === undefined || pk === null) continue;
-      const escapedPk = dialect.escapeString(String(pk));
+      const whereClause = buildPkWhereClause(
+         dialect,
+         effectivePkCols,
+         String(pk),
+      );
       sqls.push(
-         `DELETE FROM ${quotedTable} WHERE ${quotedPk} = '${escapedPk}';`,
+         `DELETE FROM ${quotedTable} WHERE ${whereClause};`,
       );
    }
 

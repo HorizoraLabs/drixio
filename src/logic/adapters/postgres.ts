@@ -563,4 +563,10 @@ export class PostgresAdapter implements DBAdapter {
          return [];
       }
    }
+
+   async renameTable(oldName: string, newName: string): Promise<void> {
+      await this.getPool().query(
+         `ALTER TABLE ${this.quoteTable(oldName)} RENAME TO ${this.quoteIdentifier(newName)};`,
+      );
+   }
 }

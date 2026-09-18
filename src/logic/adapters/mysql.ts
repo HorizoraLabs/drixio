@@ -317,4 +317,10 @@ export class MysqlAdapter implements DBAdapter {
       const quoted = this.quoteIdentifier(tableName);
       await this.executeSql(`TRUNCATE TABLE ${quoted};`);
    }
+
+   async renameTable(oldName: string, newName: string): Promise<void> {
+      await this.executeSql(
+         `RENAME TABLE ${this.quoteIdentifier(oldName)} TO ${this.quoteIdentifier(newName)};`,
+      );
+   }
 }

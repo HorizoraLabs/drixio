@@ -17,6 +17,11 @@ export class SqliteDialect implements Dialect {
    }
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
+      const pkColumns = columns.filter(
+         (c) => !!(c.isPk || (c as any).primaryKey),
+      );
+      const isCompositePk = pkColumns.length > 1;
+
       const lines = columns.map((col) => {
          const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
@@ -38,13 +43,20 @@ export class SqliteDialect implements Dialect {
             typeStr = `TEXT CHECK(${this.quoteIdentifier(col.name)} IN (${col.enumValues.map((v) => `'${this.escapeString(v)}'`).join(', ')}))`;
          }
 
-         if (isPk && (tLower.includes('int') || typeStr === 'INTEGER')) {
-            typeStr = 'INTEGER PRIMARY KEY AUTOINCREMENT';
-         } else if (isPk) {
-            typeStr += ' PRIMARY KEY';
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
+         if (isPk && !isCompositePk) {
+            if (!hasFk && (tLower.includes('int') || typeStr === 'INTEGER')) {
+               typeStr = 'INTEGER PRIMARY KEY AUTOINCREMENT';
+            } else {
+               typeStr += ' PRIMARY KEY';
+            }
          } else {
-            if (!col.nullable) typeStr += ' NOT NULL';
-            if (col.isUnique) typeStr += ' UNIQUE';
+            if (!col.nullable || (isPk && isCompositePk)) typeStr += ' NOT NULL';
+            if (col.isUnique && !isPk) typeStr += ' UNIQUE';
          }
 
          if (
@@ -60,6 +72,13 @@ export class SqliteDialect implements Dialect {
 
          return `  ${this.quoteIdentifier(col.name)} ${typeStr}`;
       });
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => this.quoteIdentifier(c.name))
+            .join(', ');
+         lines.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
 
       const fks = columns
          .filter(
@@ -92,7 +111,6 @@ export class SqliteDialect implements Dialect {
 
 export class PostgresDialect implements Dialect {
    quoteIdentifier(name: string): string {
-      return `"${name}"`;
       return `"${name.replace(/"/g, '""')}"`;
    }
 
@@ -101,11 +119,26 @@ export class PostgresDialect implements Dialect {
    }
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
+      const pkColumns = columns.filter(
+         (c) => !!(c.isPk || (c as any).primaryKey),
+      );
+      const isCompositePk = pkColumns.length > 1;
+
       const lines = columns.map((col) => {
          const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
          let typeStr = col.type;
-         if (isPk && (tLower === 'integer' || tLower === 'int')) {
+         if (
+            isPk &&
+            !isCompositePk &&
+            !hasFk &&
+            (tLower === 'integer' || tLower === 'int')
+         ) {
             typeStr = 'SERIAL PRIMARY KEY';
          } else {
             if (tLower === 'integer' || tLower === 'int') typeStr = 'INTEGER';
@@ -133,8 +166,8 @@ export class PostgresDialect implements Dialect {
                }
             }
 
-            if (isPk) typeStr += ' PRIMARY KEY';
-            if (!col.nullable && !isPk) typeStr += ' NOT NULL';
+            if (isPk && !isCompositePk) typeStr += ' PRIMARY KEY';
+            if (!col.nullable || (isPk && isCompositePk)) typeStr += ' NOT NULL';
             if (col.isUnique && !isPk) typeStr += ' UNIQUE';
          }
 
@@ -151,6 +184,13 @@ export class PostgresDialect implements Dialect {
 
          return `  ${this.quoteIdentifier(col.name)} ${typeStr}`;
       });
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => this.quoteIdentifier(c.name))
+            .join(', ');
+         lines.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
 
       const fks = columns
          .filter(
@@ -183,19 +223,27 @@ export class PostgresDialect implements Dialect {
 
 export class MysqlDialect implements Dialect {
    quoteIdentifier(name: string): string {
-      return `\`${name}\``;
       return `\`${name.replace(/`/g, '``')}\``;
    }
 
    escapeString(val: string): string {
-      return val.replace(/'/g, "''");
       return val.replace(/\\/g, '\\\\').replace(/'/g, "''");
    }
 
    buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
+      const pkColumns = columns.filter(
+         (c) => !!(c.isPk || (c as any).primaryKey),
+      );
+      const isCompositePk = pkColumns.length > 1;
+
       const lines = columns.map((col) => {
          const isPk = !!(col.isPk || (col as any).primaryKey);
          const tLower = col.type.toLowerCase();
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
          let typeStr = col.type;
          if (tLower === 'integer' || tLower === 'int') typeStr = 'INT';
          else if (tLower === 'text' || tLower === 'string')
@@ -210,13 +258,15 @@ export class MysqlDialect implements Dialect {
             typeStr = `ENUM(${col.enumValues.map((v) => `'${this.escapeString(v)}'`).join(', ')})`;
          }
 
-         if (isPk && (tLower.includes('int') || typeStr === 'INT')) {
-            typeStr += ' AUTO_INCREMENT PRIMARY KEY';
-         } else if (isPk) {
-            typeStr += ' PRIMARY KEY';
+         if (isPk && !isCompositePk) {
+            if (!hasFk && (tLower.includes('int') || typeStr === 'INT')) {
+               typeStr += ' AUTO_INCREMENT PRIMARY KEY';
+            } else {
+               typeStr += ' PRIMARY KEY';
+            }
          }
 
-         if (!col.nullable && !isPk) typeStr += ' NOT NULL';
+         if (!col.nullable || (isPk && isCompositePk)) typeStr += ' NOT NULL';
          if (col.isUnique && !isPk) typeStr += ' UNIQUE';
          if (
             col.defaultValue &&
@@ -231,6 +281,13 @@ export class MysqlDialect implements Dialect {
 
          return `  ${this.quoteIdentifier(col.name)} ${typeStr}`;
       });
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => this.quoteIdentifier(c.name))
+            .join(', ');
+         lines.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
 
       const fks = columns
          .filter(

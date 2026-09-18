@@ -277,7 +277,21 @@ export function compareSchemas(
          const tPk = !!tCol.isPk;
          const pkChanged = sPk !== tPk;
 
-         if (typeChanged || nullableChanged || defaultChanged || pkChanged) {
+         const sFkKey = sCol.fkTarget
+            ? `${sCol.fkTarget.table}.${sCol.fkTarget.column}.${sCol.fkTarget.onDelete || ''}.${sCol.fkTarget.onUpdate || ''}`
+            : '';
+         const tFkKey = tCol.fkTarget
+            ? `${tCol.fkTarget.table}.${tCol.fkTarget.column}.${tCol.fkTarget.onDelete || ''}.${tCol.fkTarget.onUpdate || ''}`
+            : '';
+         const fkChanged = sFkKey !== tFkKey;
+
+         if (
+            typeChanged ||
+            nullableChanged ||
+            defaultChanged ||
+            pkChanged ||
+            fkChanged
+         ) {
             modifiedCols.push({
                name: tCol.name,
                oldType: sCol.type,
@@ -288,6 +302,8 @@ export function compareSchemas(
                newDefault: tCol.defaultValue,
                oldPk: sCol.isPk,
                newPk: tCol.isPk,
+               oldFk: sCol.fkTarget,
+               newFk: tCol.fkTarget,
             });
          }
       }

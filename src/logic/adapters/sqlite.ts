@@ -532,4 +532,11 @@ export class SqliteAdapter implements DBAdapter {
          db.exec('PRAGMA foreign_keys = ON;');
       }
    }
+
+   async renameTable(oldName: string, newName: string): Promise<void> {
+      const db = await this.getDb();
+      db.exec(
+         `ALTER TABLE ${this.quoteIdentifier(oldName)} RENAME TO ${this.quoteIdentifier(newName)};`,
+      );
+   }
 }

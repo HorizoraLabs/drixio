@@ -70,6 +70,9 @@ export function generatePrismaSchema(
 
    for (const table of tables) {
       const modelName = toPascalCase(table.tableName) || 'Model';
+      const pkColumns = table.columns.filter((c) => c.isPk);
+      const isCompositePk = pkColumns.length > 1;
+
       out += `model ${modelName} {\n`;
 
       const fieldLines: { name: string; type: string; attributes: string }[] =
@@ -78,6 +81,11 @@ export function generatePrismaSchema(
       for (const col of table.columns) {
          const fieldName = toCamelCase(col.name) || col.name;
          const lowerType = (col.type || 'text').toLowerCase();
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
 
          let prismaType = 'String';
          let isAutoInc = false;
@@ -92,7 +100,11 @@ export function generatePrismaSchema(
             } else {
                prismaType = 'Int';
             }
-            if (col.isPk || lowerType.includes('serial')) {
+            if (
+               (col.isPk || lowerType.includes('serial')) &&
+               !hasFk &&
+               !isCompositePk
+            ) {
                isAutoInc = true;
             }
          } else if (
@@ -126,7 +138,7 @@ export function generatePrismaSchema(
 
          // Attributes
          const attrs: string[] = [];
-         if (col.isPk) {
+         if (col.isPk && !isCompositePk) {
             attrs.push('@id');
             if (isAutoInc && provider !== 'sqlite') {
                attrs.push('@default(autoincrement())');
@@ -187,6 +199,13 @@ export function generatePrismaSchema(
          out += `  ${paddedName}  ${paddedType}${attrStr}\n`;
       }
 
+      if (isCompositePk) {
+         const pkFieldNames = pkColumns
+            .map((c) => toCamelCase(c.name))
+            .join(', ');
+         out += `\n  @@id([${pkFieldNames}])\n`;
+      }
+
       if (modelName.toLowerCase() !== table.tableName.toLowerCase()) {
          out += `\n  @@map("${table.tableName}")\n`;
       }
@@ -217,13 +236,13 @@ export function generateDrizzleSchema(
    out += `// ==========================================\n\n`;
 
    if (dialect === 'sqlite') {
-      out += `import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';\n`;
+      out += `import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';\n`;
       out += `import { sql } from 'drizzle-orm';\n\n`;
    } else if (dialect === 'mysql') {
-      out += `import { mysqlTable, varchar, text, int, serial, boolean, datetime, json } from 'drizzle-orm/mysql-core';\n`;
+      out += `import { mysqlTable, varchar, text, int, serial, boolean, datetime, json, primaryKey } from 'drizzle-orm/mysql-core';\n`;
       out += `import { sql } from 'drizzle-orm';\n\n`;
    } else {
-      out += `import { pgTable, varchar, text, integer, serial, boolean, timestamp, jsonb, doublePrecision } from 'drizzle-orm/pg-core';\n`;
+      out += `import { pgTable, varchar, text, integer, serial, boolean, timestamp, jsonb, doublePrecision, primaryKey } from 'drizzle-orm/pg-core';\n`;
       out += `import { sql } from 'drizzle-orm';\n\n`;
    }
 
@@ -241,18 +260,28 @@ export function generateDrizzleSchema(
               ? 'mysqlTable'
               : 'pgTable';
 
+      const pkColumns = table.columns.filter((c) => c.isPk);
+      const isCompositePk = pkColumns.length > 1;
+
       out += `export const ${varName} = ${tblFn}('${table.tableName}', {\n`;
 
       for (const col of table.columns) {
          const colProp = toCamelCase(col.name) || col.name;
          const lowerType = (col.type || 'text').toLowerCase();
+         const hasFk = !!(
+            col.fkTarget &&
+            col.fkTarget.table &&
+            col.fkTarget.column
+         );
 
          let defChain = '';
 
          if (dialect === 'sqlite') {
             if (lowerType.includes('int')) {
-               if (col.isPk) {
+               if (col.isPk && !isCompositePk && !hasFk) {
                   defChain = `integer('${col.name}').primaryKey({ autoIncrement: true })`;
+               } else if (col.isPk && !isCompositePk) {
+                  defChain = `integer('${col.name}').primaryKey()`;
                } else {
                   defChain = `integer('${col.name}')`;
                }
@@ -263,20 +292,22 @@ export function generateDrizzleSchema(
                lowerType.includes('num')
             ) {
                defChain = `real('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             } else {
                defChain = `text('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             }
          } else if (dialect === 'mysql') {
             if (
                col.isPk &&
+               !isCompositePk &&
+               !hasFk &&
                (lowerType.includes('int') || lowerType.includes('serial'))
             ) {
                defChain = `serial('${col.name}').primaryKey()`;
             } else if (lowerType.includes('int')) {
                defChain = `int('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             } else if (
                lowerType.includes('bool') ||
                lowerType === 'tinyint(1)'
@@ -293,21 +324,23 @@ export function generateDrizzleSchema(
                const lenMatch = lowerType.match(/\((\d+)\)/);
                const len = lenMatch ? lenMatch[1] : '255';
                defChain = `varchar('${col.name}', { length: ${len} })`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             } else {
                defChain = `text('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             }
          } else {
             // Postgres
             if (
                col.isPk &&
+               !isCompositePk &&
+               !hasFk &&
                (lowerType.includes('serial') || lowerType.includes('int'))
             ) {
                defChain = `serial('${col.name}').primaryKey()`;
             } else if (lowerType.includes('int')) {
                defChain = `integer('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             } else if (lowerType.includes('bool')) {
                defChain = `boolean('${col.name}')`;
             } else if (
@@ -327,10 +360,10 @@ export function generateDrizzleSchema(
                const lenMatch = lowerType.match(/\((\d+)\)/);
                const len = lenMatch ? lenMatch[1] : '255';
                defChain = `varchar('${col.name}', { length: ${len} })`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             } else {
                defChain = `text('${col.name}')`;
-               if (col.isPk) defChain += `.primaryKey()`;
+               if (col.isPk && !isCompositePk) defChain += `.primaryKey()`;
             }
          }
 
@@ -370,7 +403,14 @@ export function generateDrizzleSchema(
          out += `  ${colProp}: ${defChain},\n`;
       }
 
-      out += `});\n\n`;
+      if (isCompositePk) {
+         const pkColProps = pkColumns
+            .map((c) => `t.${toCamelCase(c.name)}`)
+            .join(', ');
+         out += `}, (t) => ({\n  pk: primaryKey({ columns: [${pkColProps}] }),\n}));\n\n`;
+      } else {
+         out += `});\n\n`;
+      }
    }
 
    return out.trim() + '\n';

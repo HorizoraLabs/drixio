@@ -40,6 +40,7 @@ import {
    generateExplainQuery,
    parseReplCommand,
    getDatabaseEnums,
+   getDialect,
 } from '../logic/index.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -52,6 +53,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    let currentAdapter: DBAdapter | null = null;
 
    const initAdapter = (cfg: DBConfig): DBAdapter | null => {
+      if ((cfg as any).adapter) return (cfg as any).adapter;
       if (cfg.type === 'unknown' || !cfg.targetUrl) return null;
       try {
          return createDBAdapter(cfg);
@@ -141,6 +143,67 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/tables/:name/rename', async (c) => {
+      const oldName = c.req.param('name');
+      try {
+         const { newName } = await c.req.json().catch(() => ({}));
+         if (!newName || typeof newName !== 'string' || !newName.trim()) {
+            return c.json(
+               { success: false, error: 'New table name is required' },
+               400,
+            );
+         }
+         const trimmedNewName = newName.trim();
+         if (oldName === trimmedNewName) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'New table name must be different from current name',
+               },
+               400,
+            );
+         }
+
+         const adapter = getAdapter();
+         const tables = await adapter.getTables();
+         if (!tables.includes(oldName)) {
+            return c.json(
+               { success: false, error: `Table "${oldName}" does not exist` },
+               404,
+            );
+         }
+         if (tables.includes(trimmedNewName)) {
+            return c.json(
+               {
+                  success: false,
+                  error: `Table "${trimmedNewName}" already exists`,
+               },
+               400,
+            );
+         }
+
+         if (adapter.renameTable) {
+            await adapter.renameTable(oldName, trimmedNewName);
+         } else {
+            const dialect = getDialect(currentDbConfig.type as any);
+            await adapter.executeSql(
+               `ALTER TABLE ${dialect.quoteIdentifier(oldName)} RENAME TO ${dialect.quoteIdentifier(trimmedNewName)};`,
+            );
+         }
+
+         return c.json({
+            success: true,
+            message: `Table "${oldName}" renamed to "${trimmedNewName}" successfully`,
+            data: { oldName, newName: trimmedNewName },
+         });
+      } catch (e: any) {
+         return c.json(
+            { success: false, error: e.message || 'Failed to rename table' },
+            500,
+         );
       }
    });
 
@@ -340,13 +403,14 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       const tableName = c.req.param('name');
       try {
          const body = await c.req.json().catch(() => ({}));
-         const { pkColumn, edits, inserts, deletes, schema } = body;
+         const { pkColumn, pkColumns, edits, inserts, deletes, schema } = body;
          const res = await batchMutateTableData(
             getAdapter(),
             currentDbConfig.type,
             {
                tableName,
                pkColumn,
+               pkColumns,
                edits,
                inserts,
                deletes,
@@ -372,6 +436,71 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          } else {
             return c.json({ success: false, error: res.error }, 400);
          }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/tables/:name/rename', async (c) => {
+      const oldName = c.req.param('name');
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const newName = (body.newName || '').trim();
+
+         if (!newName) {
+            return c.json(
+               { success: false, error: 'New table name is required' },
+               400,
+            );
+         }
+         if (newName === oldName) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'New table name must be different from current name',
+               },
+               400,
+            );
+         }
+         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
+            return c.json(
+               {
+                  success: false,
+                  error:
+                     'Table name must start with a letter or underscore and contain only letters, numbers, and underscores',
+               },
+               400,
+            );
+         }
+
+         const adapter = getAdapter();
+         if (!adapter.renameTable) {
+            return c.json(
+               {
+                  success: false,
+                  error: 'Adapter does not support renameTable operation',
+               },
+               400,
+            );
+         }
+
+         const existingTables = await adapter.getTables();
+         if (
+            existingTables.some(
+               (t) => t.toLowerCase() === newName.toLowerCase(),
+            )
+         ) {
+            return c.json(
+               {
+                  success: false,
+                  error: `Table "${newName}" already exists`,
+               },
+               400,
+            );
+         }
+
+         await adapter.renameTable(oldName, newName);
+         return c.json({ success: true });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

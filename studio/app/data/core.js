@@ -3,11 +3,18 @@ import { formatDisplayVal } from './utils.js';
 
 export async function saveDataGridEdits() {
    if (!window.DataGrid) return;
-   const { pendingEdits, pendingInserts, pendingDeletes, pkColumn, schema } =
+   const { pendingEdits, pendingInserts, pendingDeletes, pkColumn, pkColumns, schema } =
       window.DataGrid;
    const tableName = window.AppState.currentTable;
 
-   if (!tableName || !pkColumn) {
+   const effectivePkCols =
+      pkColumns && pkColumns.length > 0
+         ? pkColumns
+         : pkColumn
+           ? [pkColumn]
+           : [];
+
+   if (!tableName || effectivePkCols.length === 0) {
       alert('Cannot save: No Primary Key detected for this table.');
       return;
    }
@@ -26,7 +33,8 @@ export async function saveDataGridEdits() {
 
    try {
       const res = await mutateTableRecords(tableName, {
-         pkColumn,
+         pkColumn: effectivePkCols[0],
+         pkColumns: effectivePkCols,
          edits: pendingEdits,
          inserts: pendingInserts,
          deletes: deletesArray,

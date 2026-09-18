@@ -19,6 +19,7 @@
    background-color: var(--color-bg-secondary);
    padding: 0 12px 0 6px;
    box-sizing: border-box;
+   gap: 6px;
 }
 
 [data-theme='dark'] .toolbar {
@@ -110,6 +111,12 @@
 .refresh-btn .material-symbols-outlined {
    font-size: 18px;
    margin-bottom: 0.5px;
+   color: #10b981;
+   transition: transform 0.25s ease;
+}
+
+.refresh-btn:hover .material-symbols-outlined {
+   transform: rotate(60deg);
 }
 
 /* ==================== GLOBAL MODERN CUSTOM SCROLLBAR ==================== */

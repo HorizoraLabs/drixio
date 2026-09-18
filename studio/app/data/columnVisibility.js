@@ -54,11 +54,11 @@ export function renderColumnVisibilityButton({
 
    container.innerHTML = /* html */ `
      <div class="col-visibility-wrap relative" style="position: relative;">
-       <button type="button" id="btn-col-visibility-${tableName}" class="col-visibility-btn" title="Toggle column visibility">
-         <span class="material-symbols-outlined" style="font-size: 15px;">view_column</span>
-         <span>Columns</span>
-         <span class="col-vis-badge" id="col-vis-badge-${tableName}">${visibleCount}/${totalCols}</span>
-       </button>
+        <button type="button" id="btn-col-visibility-${tableName}" class="col-visibility-btn" title="Toggle column visibility">
+          <span class="material-symbols-outlined" style="font-size: 15px; color: var(--color-primary);">view_column</span>
+          <span>Columns</span>
+          <span class="col-vis-badge" id="col-vis-badge-${tableName}">${visibleCount}/${totalCols}</span>
+        </button>
        <div id="col-vis-dropdown-${tableName}" class="col-vis-dropdown hidden" role="menu">
          <div class="col-vis-header">
            <input type="text" id="col-vis-search-${tableName}" placeholder="Search columns..." class="col-vis-search-input" autocomplete="off" spellcheck="false" />

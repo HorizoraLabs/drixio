@@ -29,6 +29,7 @@ import {
    diffDatabases,
    diffDatabaseWithSnapshot,
    SchemaSnapshot,
+   TableSchemaInfo,
    loadSnippets,
    saveSnippet,
    updateSnippet,
@@ -42,6 +43,10 @@ import {
    parseReplCommand,
    getDatabaseEnums,
    getDialect,
+   generateSqlFromPrompt,
+   explainAndOptimizeSql,
+   fixSqlError,
+   callOpenAiCompatible,
 } from '../logic/index.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -1646,6 +1651,121 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          return c.json({ success: true, data: result.data });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // ====================== AI ASSISTANT ENDPOINTS ======================
+
+   api.post('/ai/generate', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { prompt, currentTable, config } = body;
+         if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+            return c.json({ success: false, error: 'Prompt is required' }, 400);
+         }
+
+         let tables: TableSchemaInfo[] = [];
+         if (currentAdapter) {
+            try {
+               const sRes = await getTableSchemas(currentAdapter);
+               if (sRes.success) tables = sRes.data;
+            } catch {}
+         }
+
+         const result = await generateSqlFromPrompt({
+            prompt: prompt.trim(),
+            tables,
+            dialect: currentDbConfig.type || 'sqlite',
+            currentTable,
+            config: config || {},
+         });
+
+         return c.json({ success: true, data: result });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/ai/explain', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { sql, currentTable, config } = body;
+         if (!sql || typeof sql !== 'string' || !sql.trim()) {
+            return c.json({ success: false, error: 'SQL query is required' }, 400);
+         }
+
+         let tables: TableSchemaInfo[] = [];
+         if (currentAdapter) {
+            try {
+               const sRes = await getTableSchemas(currentAdapter);
+               if (sRes.success) tables = sRes.data;
+            } catch {}
+         }
+
+         const result = await explainAndOptimizeSql({
+            sql: sql.trim(),
+            tables,
+            dialect: currentDbConfig.type || 'sqlite',
+            currentTable,
+            config: config || {},
+         });
+
+         return c.json({ success: true, data: result });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/ai/fix', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { sql, error, currentTable, config } = body;
+         if (!sql || !error) {
+            return c.json(
+               { success: false, error: 'SQL query and error message are required' },
+               400,
+            );
+         }
+
+         let tables: TableSchemaInfo[] = [];
+         if (currentAdapter) {
+            try {
+               const sRes = await getTableSchemas(currentAdapter);
+               if (sRes.success) tables = sRes.data;
+            } catch {}
+         }
+
+         const result = await fixSqlError({
+            sql: String(sql).trim(),
+            error: String(error).trim(),
+            tables,
+            dialect: currentDbConfig.type || 'sqlite',
+            currentTable,
+            config: config || {},
+         });
+
+         return c.json({ success: true, data: result });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/ai/test', async (c) => {
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const config = body.config || body;
+
+         const res = await callOpenAiCompatible(config, [
+            { role: 'user', content: 'Say "pong" and nothing else.' },
+         ]);
+
+         return c.json({
+            success: true,
+            message: `Successfully connected to ${res.model}`,
+            data: { model: res.model, response: res.content },
+         });
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 400);
       }
    });
 

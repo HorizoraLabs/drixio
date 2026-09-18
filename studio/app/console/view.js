@@ -118,6 +118,13 @@ export function loadSqlConsole(tableName, btnElement, container) {
               <span class="safe-indicator-dot"></span>
             </button>
 
+            <!-- Ask AI Button (Option C) -->
+            <button type="button" id="console-ai-btn" class="console-action-btn secondary console-ai-trigger-btn" title="Ask AI to write SQL (Ctrl+I)">
+              <span class="material-symbols-outlined icon" style="color: var(--primary, #2563eb);">auto_awesome</span>
+              <span>Ask AI</span>
+              <kbd class="console-kbd-hint">Ctrl I</kbd>
+            </button>
+
             <!-- Save Button -->
             <button type="button" id="console-save-snippet-btn" class="console-action-btn secondary" title="Save Query (Ctrl+S)">
               <span class="material-symbols-outlined icon">bookmark_add</span>
@@ -167,6 +174,10 @@ export function loadSqlConsole(tableName, btnElement, container) {
               <button type="button" id="explain-sql-btn" class="status-bar-btn" title="Analyze Query Execution Plan (EXPLAIN)">
                 <span class="material-symbols-outlined" style="font-size: 13px;">psychology</span>
                 <span>Explain</span>
+              </button>
+              <button type="button" id="console-ai-explain-btn" class="status-bar-btn" title="AI Explain & Optimize Query">
+                <span class="material-symbols-outlined" style="font-size: 13px; color: var(--primary, #2563eb);">auto_awesome</span>
+                <span>AI Optimize</span>
               </button>
               <button type="button" id="console-expand-editor-btn" class="status-bar-btn" title="Toggle Fullscreen Editor (Esc to exit)">
                 <span class="material-symbols-outlined" id="console-expand-btn-icon" style="font-size: 13px;">open_in_full</span>

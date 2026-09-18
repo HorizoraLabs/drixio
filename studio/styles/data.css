@@ -1052,6 +1052,10 @@
    font-size: 12px;
 }
 
+.page-size-picker .material-symbols-outlined {
+   color: var(--color-primary);
+}
+
 .page-size-select {
    background: transparent;
    border: none;
@@ -1076,6 +1080,10 @@
    font-weight: 500;
    cursor: pointer;
    transition: all 0.15s ease;
+}
+
+.col-visibility-btn .material-symbols-outlined {
+   color: var(--color-primary);
 }
 
 .col-visibility-btn:hover {

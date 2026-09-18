@@ -126,7 +126,7 @@ export async function loadTableData(
                window.fkNavHistory && window.fkNavHistory.toTable === tableName;
             const backBtnHtml = hasFkNav
                ? `<button type="button" id="btn-fk-back-${tableName}" class="fk-back-btn" title="Back to table '${window.fkNavHistory.fromTable}'">
-               <span class="material-symbols-outlined icon-14">arrow_back</span>
+               <span class="material-symbols-outlined icon-14" style="color: var(--color-primary);">arrow_back</span>
                <span>Back to ${window.fkNavHistory.fromTable}</span>
              </button>`
                : '';
@@ -137,7 +137,7 @@ export async function loadTableData(
             <div id="filter-bar-mount-${tableName}" class="flex-1" style="height: 100%; display: flex; align-items: center; min-width: 0;"></div>
             <div id="col-visibility-mount-${tableName}" class="toolbar-item" style="display: flex; align-items: center;"></div>
             <div class="page-size-picker flex items-center gap-1.5" title="Rows per page">
-              <span class="material-symbols-outlined icon-14 text-secondary">table_rows</span>
+              <span class="material-symbols-outlined icon-14" style="font-size: 15px; color: var(--color-primary);">table_rows</span>
               <select id="select-page-size-${tableName}" class="page-size-select">
                 <option value="25">25 / page</option>
                 <option value="50" selected>50 / page</option>
@@ -146,7 +146,7 @@ export async function loadTableData(
               </select>
             </div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
-              <span class="material-symbols-outlined">refresh</span>
+              <span class="material-symbols-outlined" style="color: #10b981;">refresh</span>
             </button>
           </div>
           <div id="bulk-bar-mount-${tableName}"></div>

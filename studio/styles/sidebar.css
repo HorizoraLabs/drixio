@@ -423,6 +423,7 @@ aside.collapsed .theme-toggle-btn {
    gap: 8px;
    width: 100%;
    box-sizing: border-box;
+   margin-top: 8px;
 }
 
 #search-bar {
@@ -541,7 +542,6 @@ aside.collapsed .theme-toggle-btn {
    overflow-y: auto;
    overflow-x: hidden;
    flex: 1;
-   padding: 2px 0;
    box-sizing: border-box;
 }
 

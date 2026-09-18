@@ -38,6 +38,11 @@
    color: var(--color-text-soft);
    flex-shrink: 0;
    user-select: none;
+   transition: color 0.15s ease;
+}
+
+.filter-bar-input-box:focus-within .filter-bar-search-icon {
+   color: var(--color-primary);
 }
 
 .filter-bar-pills {

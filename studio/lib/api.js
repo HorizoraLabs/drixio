@@ -264,3 +264,40 @@ export async function fetchDatabaseEnums() {
    const res = await fetch('/api/database/enums');
    return await res.json();
 }
+
+export async function generateSqlApi(payload) {
+   const res = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function explainSqlApi(payload) {
+   const res = await fetch('/api/ai/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function fixSqlApi(payload) {
+   const res = await fetch('/api/ai/fix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+   });
+   return await res.json();
+}
+
+export async function testAiApi(config) {
+   const res = await fetch('/api/ai/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config }),
+   });
+   return await res.json();
+}
+

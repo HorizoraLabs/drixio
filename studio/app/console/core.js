@@ -133,12 +133,23 @@ export function renderQueryResultToBody(result, resultsBody) {
       resultsBody.innerHTML = /* html */ `
          <div class="console-result-error">
             <div class="console-result-error-header">
-               <span class="material-symbols-outlined">error</span>
-               <span>Query Execution Failed</span>
+               <div class="console-result-error-title">
+                  <span class="material-symbols-outlined">error</span>
+                  <span>Query Execution Failed</span>
+               </div>
+               <button type="button" class="btn-ai-fix-error" id="btn-fix-with-ai" title="Diagnose error & generate fix with AI">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">auto_fix_high</span>
+                  <span>Fix with AI</span>
+               </button>
             </div>
             <pre class="console-result-error-msg">${result.error}</pre>
          </div>
       `;
+      const fixBtn = resultsBody.querySelector('#btn-fix-with-ai');
+      if (fixBtn) {
+         fixBtn.dataset.sql = result.sql || window.AppState?.lastQuery || '';
+         fixBtn.dataset.error = result.error || '';
+      }
       return;
    }
 

@@ -11,6 +11,8 @@ import { openSaveSnippetModal } from './snippetsModal.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 import { createModal } from '../../components/modal.js';
 import { initQueryHistory } from './history.js';
+import { toggleAiPromptBar, triggerAiFix } from './aiBar.js';
+import { openAiExplainModal } from './aiExplainModal.js';
 
 export const bindConsoleEvents = (editor, resultsBody) => {
    // ==================== TABS STATE MANAGEMENT ====================
@@ -580,8 +582,11 @@ export const bindConsoleEvents = (editor, resultsBody) => {
       if (runBtnText) runBtnText.textContent = 'Run';
    };
 
-   const executeAndReset = async () => {
-      let targetSql = cachedSelectedSql;
+   const executeAndReset = async (overrideSql = null) => {
+      let targetSql =
+         typeof overrideSql === 'string' && overrideSql.trim()
+            ? overrideSql.trim()
+            : cachedSelectedSql;
       if (!targetSql) {
          const start = editor.selectionStart;
          const end = editor.selectionEnd;
@@ -634,6 +639,88 @@ export const bindConsoleEvents = (editor, resultsBody) => {
       }
       updateHighlight();
    };
+
+   // ==================== AI ASSISTANT HELPERS & BUTTONS ====================
+   const handleToggleAiBar = () => {
+      toggleAiPromptBar({
+         editorTextarea: editor,
+         highlightLayer: document.getElementById('sql-highlight-layer'),
+         currentTable: window.AppState?.currentTable,
+         onRunQuery: (sql) => executeAndReset(sql),
+         onInsertSql: (sql) => {
+            editor.value = sql;
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            updateHighlight();
+            updateLineNumbers();
+         },
+      });
+   };
+
+   const aiBtn = document.getElementById('console-ai-btn');
+   if (aiBtn) {
+      aiBtn.onclick = () => handleToggleAiBar();
+   }
+
+   const aiExplainBtn = document.getElementById('console-ai-explain-btn');
+   if (aiExplainBtn) {
+      aiExplainBtn.onclick = () => {
+         let targetSql = cachedSelectedSql;
+         if (!targetSql) {
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            if (
+               typeof start === 'number' &&
+               typeof end === 'number' &&
+               start !== end
+            ) {
+               targetSql = editor.value.substring(start, end).trim();
+            }
+         }
+         if (!targetSql) {
+            const fullText = editor.value.trim();
+            if (fullText) {
+               targetSql =
+                  getStatementAtCursor(editor.value, editor.selectionStart) ||
+                  fullText;
+            }
+         }
+         openAiExplainModal({
+            sql: targetSql,
+            currentTable: window.AppState?.currentTable,
+            onApplyOptimized: (optimizedSql) => {
+               editor.value = optimizedSql;
+               editor.dispatchEvent(new Event('input', { bubbles: true }));
+               updateHighlight();
+               updateLineNumbers();
+            },
+         });
+      };
+   }
+
+   if (resultsBody) {
+      resultsBody.addEventListener('click', (e) => {
+         const fixBtn = e.target.closest('#btn-fix-with-ai');
+         if (fixBtn) {
+            e.preventDefault();
+            const failedSql = fixBtn.dataset.sql || editor.value.trim();
+            const errorMsg = fixBtn.dataset.error || '';
+            triggerAiFix({
+               sql: failedSql,
+               error: errorMsg,
+               editorTextarea: editor,
+               highlightLayer: document.getElementById('sql-highlight-layer'),
+               currentTable: window.AppState?.currentTable,
+               onRunQuery: (sql) => executeAndReset(sql),
+               onInsertSql: (sql) => {
+                  editor.value = sql;
+                  editor.dispatchEvent(new Event('input', { bubbles: true }));
+                  updateHighlight();
+                  updateLineNumbers();
+               },
+            });
+         }
+      });
+   }
 
    // ==================== RUN & EXPLAIN BUTTONS ====================
    const runBtn = document.getElementById('run-sql-btn');
@@ -1235,6 +1322,10 @@ export const bindConsoleEvents = (editor, resultsBody) => {
          body: /* html */ `
             <div class="shortcuts-modal-body" style="padding: 0;">
                <div class="shortcut-row">
+                  <span class="shortcut-row-label">Ask AI Assistant</span>
+                  <div class="shortcut-row-keys"><kbd>Ctrl</kbd> + <kbd>I</kbd></div>
+               </div>
+               <div class="shortcut-row">
                   <span class="shortcut-row-label">Run Query / Run Selection</span>
                   <div class="shortcut-row-keys"><kbd>Ctrl</kbd> + <kbd>↵ Enter</kbd></div>
                </div>
@@ -1353,6 +1444,14 @@ export const bindConsoleEvents = (editor, resultsBody) => {
             closePopup();
             return;
          }
+      }
+
+      // Ask AI: Ctrl/Cmd + I
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+         e.preventDefault();
+         closePopup();
+         handleToggleAiBar();
+         return;
       }
 
       // Run Query: Ctrl/Cmd + Enter

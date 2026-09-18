@@ -21,6 +21,15 @@ export async function fetchConfig() {
    return data;
 }
 
+export async function setReadOnlyApi(readOnly) {
+   const res = await fetch('/api/config/readonly', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readOnly }),
+   });
+   return await res.json();
+}
+
 export async function fetchTableStats() {
    const res = await fetch('/api/tables/stats');
    const data = await res.json();
@@ -91,6 +100,20 @@ export async function mutateTableSchema(tableName, payload) {
             'Content-Type': 'application/json',
          },
          body: JSON.stringify(payload),
+      },
+   );
+   return await res.json();
+}
+
+export async function checkCascadeImpactApi(tableName, colName, newType) {
+   const res = await fetch(
+      `/api/tables/${encodeURIComponent(tableName)}/cascade-check`,
+      {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({ colName, newType }),
       },
    );
    return await res.json();

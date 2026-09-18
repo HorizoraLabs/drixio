@@ -184,6 +184,7 @@ export class MysqlAdapter implements DBAdapter {
                ? {
                     table: fk.REFERENCED_TABLE_NAME,
                     column: fk.REFERENCED_COLUMN_NAME,
+                    constraintName: fk.CONSTRAINT_NAME || undefined,
                     onDelete:
                        fk.DELETE_RULE &&
                        fk.DELETE_RULE.toUpperCase() !== 'NO ACTION'

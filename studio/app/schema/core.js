@@ -1,6 +1,7 @@
-import { mutateTableSchema } from '../../lib/api.js';
+import { mutateTableSchema, checkCascadeImpactApi } from '../../lib/api.js';
+import { openCascadeConfirmModal } from './modals.js';
 
-export async function saveSchemaEdits() {
+export async function saveSchemaEdits(forceOptions = {}) {
    if (!window.SchemaGrid) return;
    const {
       pendingEdits,
@@ -26,6 +27,56 @@ export async function saveSchemaEdits() {
 
    if (!hasColumnChanges && !hasIndexChanges) return;
 
+   // Check if any PK column changed type and prompt for cascade confirmation
+   if (!forceOptions.cascadeConfirmed) {
+      let pkTypeChangeDetected = null;
+      if (pendingEdits && schema) {
+         for (const col of schema) {
+            if (col.isPk && pendingEdits[col.name] && pendingEdits[col.name].type) {
+               const newType = pendingEdits[col.name].type;
+               if (newType.toLowerCase() !== (col.type || '').toLowerCase()) {
+                  pkTypeChangeDetected = {
+                     colName: col.name,
+                     oldType: col.type,
+                     newType,
+                  };
+                  break;
+               }
+            }
+         }
+      }
+
+      if (pkTypeChangeDetected) {
+         try {
+            const checkRes = await checkCascadeImpactApi(
+               tableName,
+               pkTypeChangeDetected.colName,
+               pkTypeChangeDetected.newType,
+            );
+            if (checkRes.success && checkRes.data && checkRes.data.hasDependents) {
+               openCascadeConfirmModal({
+                  tableName,
+                  colName: pkTypeChangeDetected.colName,
+                  oldType: pkTypeChangeDetected.oldType,
+                  newType: pkTypeChangeDetected.newType,
+                  dependents: checkRes.data.dependents,
+                  needsReindexing: checkRes.data.needsReindexing,
+                  onConfirm: () => {
+                     saveSchemaEdits({
+                        cascadeConfirmed: true,
+                        cascadeFkTypes: true,
+                        autoReindex: true,
+                     });
+                  },
+               });
+               return;
+            }
+         } catch (err) {
+            console.error('Failed to check cascade impact:', err);
+         }
+      }
+   }
+
    const deletesArray = pendingDeletes ? Array.from(pendingDeletes) : [];
 
    try {
@@ -35,6 +86,8 @@ export async function saveSchemaEdits() {
          pendingDeletes: deletesArray,
          pendingIndexEdits,
          columns: schema,
+         cascadeFkTypes: forceOptions.cascadeFkTypes ?? true,
+         autoReindex: forceOptions.autoReindex ?? true,
       });
 
       if (res.success) {

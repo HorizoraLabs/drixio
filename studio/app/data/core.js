@@ -97,11 +97,22 @@ export function updateCell(td, newVal, columns, recordHistory = true) {
    const colSchema = schema.find((c) => c.name === colName);
    const displayInfo = formatDisplayVal(newVal, colSchema);
 
+   const isFk = colSchema && colSchema.fkTarget && newVal;
+   let actionBtnHtml = '';
+   if (isFk) {
+      const fkTable = colSchema.fkTarget.table;
+      const fkCol = colSchema.fkTarget.column;
+      const safeVal = String(newVal).replace(/"/g, '&quot;');
+      actionBtnHtml = `<button type="button" class="fk-jump-btn" title="View & jump to ${fkTable} (${fkCol} = ${safeVal})" data-fk-table="${fkTable}" data-fk-col="${fkCol}" data-fk-val="${safeVal}"><span class="material-symbols-outlined">open_in_new</span></button>`;
+   } else if (td.dataset.insertIndex === undefined || newVal) {
+      actionBtnHtml = `<button type="button" class="cell-drawer-trigger-btn" title="Inspect in Cell Drawer"><span class="material-symbols-outlined">open_in_full</span></button>`;
+   }
+
    td.innerHTML = newVal
-      ? `<span class="cell-text">${displayInfo.html}</span>`
+      ? `<span class="cell-text">${displayInfo.html}</span>${actionBtnHtml}`
       : td.dataset.insertIndex !== undefined
         ? ghostPlaceholder
-        : '<em>NULL</em>';
+        : `<em>NULL</em>${actionBtnHtml}`;
    if (displayInfo.title) {
       td.title = displayInfo.title;
    } else {

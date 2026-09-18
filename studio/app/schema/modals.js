@@ -1239,3 +1239,118 @@ export function openRenameTableModal(tableName) {
 
 window.openRenameTableModal = openRenameTableModal;
 
+export function openCascadeConfirmModal({
+   tableName,
+   colName,
+   oldType,
+   newType,
+   dependents = [],
+   needsReindexing = false,
+   onConfirm,
+}) {
+   let modal = document.getElementById('cascade-confirm-modal');
+   if (modal) modal.remove();
+
+   modal = document.createElement('div');
+   modal.id = 'cascade-confirm-modal';
+   modal.className = 'modal-overlay';
+
+   const depsRowsHtml = dependents
+      .map(
+         (d) => `
+      <tr style="border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06)); font-size: 12px;">
+        <td style="padding: 8px 10px; font-family: monospace; font-weight: 600; color: var(--color-text-main);">
+          ${d.table}.${d.column}
+        </td>
+        <td style="padding: 8px 10px; color: var(--color-text-soft);">
+          <span style="font-family: monospace; background: rgba(255,255,255,0.06); padding: 2px 5px; border-radius: 3px;">${d.currentType || 'UNKNOWN'}</span>
+          <span style="margin: 0 4px; color: var(--color-text-subtle);">→</span>
+          <span style="font-family: monospace; background: rgba(99,102,241,0.15); color: #818cf8; padding: 2px 5px; border-radius: 3px; font-weight: 600;">${newType}</span>
+        </td>
+      </tr>
+   `,
+      )
+      .join('');
+
+   const reindexNoticeHtml = needsReindexing
+      ? `
+      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: #fbbf24;">
+        <span class="material-symbols-outlined" style="font-size: 18px; margin-top: 1px; flex-shrink: 0;">swap_vertical_circle</span>
+        <div>
+          <div style="font-weight: 600; margin-bottom: 2px;">Smart Sequential Re-indexing Required</div>
+          <div style="color: var(--color-text-soft); line-height: 1.4;">
+            Existing rows contain non-numeric string values. Drixio will safely map them to sequential IDs (1, 2, 3...) across both <code>${tableName}</code> and all referencing tables in a single transaction before modifying column types.
+          </div>
+        </div>
+      </div>
+   `
+      : '';
+
+   modal.innerHTML = /* html */ `
+     <div class="modal-container" style="max-width: 520px; width: 90vw; background: var(--color-surface, #1e1e24); border-radius: 8px; border: 1px solid var(--color-border, #333); box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column;">
+       <div class="modal-header" style="padding: 14px 20px; border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06)); display: flex; justify-content: space-between; align-items: center;">
+         <div class="flex items-center gap-2">
+           <span class="material-symbols-outlined text-warning" style="font-size: 20px; color: #f59e0b;">sync_alt</span>
+           <h3 class="m-0 text-15 font-semibold">Cascade Foreign Key Type Migration</h3>
+         </div>
+         <button id="close-cascade-modal" class="modal-close-btn" title="Close">
+           <span class="material-symbols-outlined">close</span>
+         </button>
+       </div>
+
+       <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; max-height: 400px; overflow-y: auto;">
+         <div style="font-size: 13px; color: var(--color-text-main); line-height: 1.5;">
+           Changing primary key <code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-weight: 600;">${tableName}.${colName}</code> from 
+           <span style="font-family: monospace; color: #ef4444;">${oldType}</span> to <span style="font-family: monospace; color: #10b981; font-weight: 600;">${newType}</span>
+           will automatically cascade and update foreign keys in <strong>${dependents.length}</strong> referencing table(s):
+         </div>
+
+         <div style="border: 1px solid var(--color-border-subtle, rgba(255,255,255,0.08)); border-radius: 6px; overflow: hidden;">
+           <table style="width: 100%; border-collapse: collapse; text-align: left;">
+             <thead>
+               <tr style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.08)); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-subtle);">
+                 <th style="padding: 8px 10px;">Referencing Foreign Key</th>
+                 <th style="padding: 8px 10px;">Type Update</th>
+               </tr>
+             </thead>
+             <tbody>
+               ${depsRowsHtml}
+             </tbody>
+           </table>
+         </div>
+
+         ${reindexNoticeHtml}
+       </div>
+
+       <div class="modal-footer" style="padding: 12px 20px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06)); background: rgba(0,0,0,0.1);">
+         <button id="cancel-cascade-btn" class="btn-secondary">Cancel</button>
+         <button id="submit-cascade-btn" class="btn-primary flex items-center gap-1.5" style="background: #4f46e5;">
+           <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+           <span>Confirm & Cascade Migration</span>
+         </button>
+       </div>
+     </div>
+   `;
+
+   document.body.appendChild(modal);
+
+   const closeBtn = document.getElementById('close-cascade-modal');
+   const cancelBtn = document.getElementById('cancel-cascade-btn');
+   const submitBtn = document.getElementById('submit-cascade-btn');
+
+   const closeFn = () => modal.remove();
+
+   closeBtn.onclick = closeFn;
+   cancelBtn.onclick = closeFn;
+   modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeFn();
+   });
+
+   submitBtn.onclick = () => {
+      closeFn();
+      if (onConfirm) onConfirm();
+   };
+}
+
+window.openCascadeConfirmModal = openCascadeConfirmModal;
+

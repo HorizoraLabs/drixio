@@ -11,6 +11,7 @@ import {
    generateAndInsertMockData,
    batchMutateTableData,
    applySchemaChanges,
+   checkCascadeImpact,
    truncateTable,
    importDataToTable,
    generatePrismaSchema,
@@ -73,6 +74,21 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       return currentAdapter;
    };
 
+   let isReadOnly: boolean = !!dbConfig.readOnly;
+
+   const checkReadOnly = (c: any) => {
+      if (isReadOnly) {
+         return c.json(
+            {
+               success: false,
+               error: 'Database is in Read-Only protection mode. Modifying operations are blocked.',
+            },
+            403,
+         );
+      }
+      return null;
+   };
+
    const getDbName = () => {
       let dbName = 'database';
       if (currentDbConfig.targetUrl) {
@@ -112,6 +128,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       try {
          const { tableName, columns } = await c.req.json().catch(() => ({}));
          if (!tableName || typeof tableName !== 'string') {
@@ -147,6 +165,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables/:name/rename', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       const oldName = c.req.param('name');
       try {
          const { newName } = await c.req.json().catch(() => ({}));
@@ -255,8 +275,19 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             isRemote: envInfo.isRemote,
             host: envInfo.host,
             badgeLabel: isConnected ? envInfo.badgeLabel : 'DISCONNECTED',
+            readOnly: isReadOnly,
          },
       });
+   });
+
+   api.post('/config/readonly', async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (typeof body.readOnly === 'boolean') {
+         isReadOnly = body.readOnly;
+      } else {
+         isReadOnly = !isReadOnly;
+      }
+      return c.json({ success: true, data: { readOnly: isReadOnly } });
    });
 
    api.get('/status', async (c) => {
@@ -323,6 +354,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables/:name/schema', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       const tableName = c.req.param('name');
       try {
          const body = await c.req.json().catch(() => ({}));
@@ -336,6 +369,34 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          );
          if (res.success) {
             return c.json({ success: true });
+         } else {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   api.post('/tables/:name/cascade-check', async (c) => {
+      const tableName = c.req.param('name');
+      try {
+         const body = await c.req.json().catch(() => ({}));
+         const { colName, newType } = body;
+         if (!colName || !newType) {
+            return c.json(
+               { success: false, error: 'colName and newType are required' },
+               400,
+            );
+         }
+         const res = await checkCascadeImpact(
+            getAdapter(),
+            currentDbConfig.type,
+            tableName,
+            colName,
+            newType,
+         );
+         if (res.success) {
+            return c.json({ success: true, data: res.data });
          } else {
             return c.json({ success: false, error: res.error }, 400);
          }
@@ -400,6 +461,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables/:name/records', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       const tableName = c.req.param('name');
       try {
          const body = await c.req.json().catch(() => ({}));
@@ -428,6 +491,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables/:name/truncate', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       const tableName = c.req.param('name');
       try {
          const res = await truncateTable(getAdapter(), tableName);
@@ -441,72 +506,9 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
    });
 
-   api.post('/tables/:name/rename', async (c) => {
-      const oldName = c.req.param('name');
-      try {
-         const body = await c.req.json().catch(() => ({}));
-         const newName = (body.newName || '').trim();
-
-         if (!newName) {
-            return c.json(
-               { success: false, error: 'New table name is required' },
-               400,
-            );
-         }
-         if (newName === oldName) {
-            return c.json(
-               {
-                  success: false,
-                  error: 'New table name must be different from current name',
-               },
-               400,
-            );
-         }
-         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
-            return c.json(
-               {
-                  success: false,
-                  error:
-                     'Table name must start with a letter or underscore and contain only letters, numbers, and underscores',
-               },
-               400,
-            );
-         }
-
-         const adapter = getAdapter();
-         if (!adapter.renameTable) {
-            return c.json(
-               {
-                  success: false,
-                  error: 'Adapter does not support renameTable operation',
-               },
-               400,
-            );
-         }
-
-         const existingTables = await adapter.getTables();
-         if (
-            existingTables.some(
-               (t) => t.toLowerCase() === newName.toLowerCase(),
-            )
-         ) {
-            return c.json(
-               {
-                  success: false,
-                  error: `Table "${newName}" already exists`,
-               },
-               400,
-            );
-         }
-
-         await adapter.renameTable(oldName, newName);
-         return c.json({ success: true });
-      } catch (e: any) {
-         return c.json({ success: false, error: e.message }, 500);
-      }
-   });
-
    api.post('/tables/:name/import', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       const tableName = c.req.param('name');
       try {
          const body = await c.req.parseBody();
@@ -585,6 +587,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/tables/:name/mock', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       try {
          const tableName = c.req.param('name');
          const body = await c.req.json().catch(() => ({}));
@@ -615,7 +619,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.post('/query', async (c) => {
       try {
-         const { sql } = await c.req.json();
+         const body = await c.req.json().catch(() => ({}));
+         const sql = body.sql || body.query;
          if (!sql || typeof sql !== 'string') {
             return c.json(
                { success: false, error: 'SQL query is required' },
@@ -769,6 +774,23 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                },
                400,
             );
+         }
+
+         if (isReadOnly) {
+            const cleanSql = sql.trim();
+            const isWrite =
+               /^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|REPLACE)\b/i.test(
+                  cleanSql,
+               );
+            if (isWrite) {
+               return c.json(
+                  {
+                     success: false,
+                     error: 'Database is in Read-Only protection mode. Modifying statements are blocked.',
+                  },
+                  403,
+               );
+            }
          }
 
          const result = await currentAdapter.query(sql);
@@ -958,6 +980,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/database/import', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       try {
          const body = await c.req.parseBody();
          const file = body['file'];
@@ -1180,6 +1204,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    });
 
    api.post('/schema/apply-migration', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
       try {
          if (!currentAdapter || currentDbConfig.type === 'unknown') {
             return c.json(

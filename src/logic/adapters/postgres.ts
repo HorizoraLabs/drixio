@@ -211,6 +211,16 @@ export class PostgresAdapter implements DBAdapter {
                  AND tc.table_schema = c.table_schema
                  AND kcu.column_name = c.column_name
                LIMIT 1) as fk_target,
+              (SELECT tc.constraint_name
+               FROM information_schema.table_constraints tc 
+               JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+               WHERE tc.constraint_type = 'FOREIGN KEY' 
+                 AND tc.table_name = c.table_name
+                 AND tc.table_schema = c.table_schema
+                 AND kcu.column_name = c.column_name
+               LIMIT 1) as fk_constraint_name,
               (SELECT rc.delete_rule
                FROM information_schema.table_constraints tc 
                JOIN information_schema.key_column_usage kcu
@@ -318,20 +328,21 @@ export class PostgresAdapter implements DBAdapter {
          let fkTarget;
          if (col.fk_target) {
             const parts = col.fk_target.split('.');
-            fkTarget = {
-               table: parts[0],
-               column: parts[1],
-               onDelete:
-                  col.fk_on_delete &&
-                  col.fk_on_delete.toUpperCase() !== 'NO ACTION'
-                     ? col.fk_on_delete.toUpperCase()
-                     : undefined,
-               onUpdate:
-                  col.fk_on_update &&
-                  col.fk_on_update.toUpperCase() !== 'NO ACTION'
-                     ? col.fk_on_update.toUpperCase()
-                     : undefined,
-            };
+             fkTarget = {
+                table: parts[0],
+                column: parts[1],
+                constraintName: col.fk_constraint_name || undefined,
+                onDelete:
+                   col.fk_on_delete &&
+                   col.fk_on_delete.toUpperCase() !== 'NO ACTION'
+                      ? col.fk_on_delete.toUpperCase()
+                      : undefined,
+                onUpdate:
+                   col.fk_on_update &&
+                   col.fk_on_update.toUpperCase() !== 'NO ACTION'
+                      ? col.fk_on_update.toUpperCase()
+                      : undefined,
+             };
          }
 
          let colType = col.data_type;

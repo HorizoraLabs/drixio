@@ -35,6 +35,7 @@ async function main() {
          snapshot: { type: 'boolean' },
          apply: { type: 'boolean' },
          reverse: { type: 'boolean' },
+         'read-only': { type: 'boolean', short: 'r' },
          help: { type: 'boolean' },
       },
       strict: false,
@@ -136,6 +137,9 @@ async function main() {
          `  --print               Print generated schema directly to terminal`,
       );
       console.log(
+         `  -r, --read-only       Launch Studio in Read-Only protection mode`,
+      );
+      console.log(
          `\nIf you don't provide a command, Drixio will launch the Interactive TUI!`,
       );
       process.exit(0);
@@ -158,6 +162,9 @@ async function main() {
       const { runStudio } = await import('../src/studio/index.js');
       const customTarget = customUrl || positionals[1];
       const dbConfig = await detectDatabase(customTarget);
+      if (values['read-only']) {
+         dbConfig.readOnly = true;
+      }
       await runStudio(dbConfig);
       return;
    }

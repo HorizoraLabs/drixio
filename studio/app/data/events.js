@@ -7,6 +7,15 @@ export function bindCellEditor(tableContainer, schema, columns) {
    tableContainer.addEventListener('dblclick', (e) => {
       const td = e.target.closest('td.data-cell');
       if (!td || td.querySelector('input, select')) return;
+      if (e.target.closest('.cell-drawer-trigger-btn, .fk-jump-btn')) return;
+
+      if (window.AppState?.isReadOnly) {
+         window.showToast?.(
+            'Database is in Read-Only protection mode. Editing is disabled.',
+            'warning',
+         );
+         return;
+      }
 
       const colName = td.dataset.col;
       const colSchema = schema.find((c) => c.name === colName);

@@ -8,7 +8,7 @@ import { loadSqlConsole } from './console/view.js';
 import { loadErd } from './erd/view.js';
 import { loadStatusDashboard, refreshStatusDashboard } from './status/view.js';
 import { loadConnectView } from './connect/view.js';
-import { fetchConfig } from '../lib/api.js';
+import { fetchConfig, setReadOnlyApi } from '../lib/api.js';
 import { initTheme } from '../components/theme.js';
 import { initToast } from '../components/toast.js';
 import { bindGridEvents } from './grid/events.js';
@@ -54,6 +54,32 @@ const headerConnectBtn = document.getElementById('header-connect-btn');
 if (headerConnectBtn) {
    headerConnectBtn.addEventListener('click', () => {
       window.handleSwitchTab('connect-btn');
+   });
+}
+
+// Read-Only Production Shield Button -> Toggles Read-Only mode
+const headerReadOnlyBtn = document.getElementById('header-readonly-btn');
+if (headerReadOnlyBtn) {
+   headerReadOnlyBtn.addEventListener('click', async () => {
+      const nextState = !window.AppState.isReadOnly;
+      try {
+         const res = await setReadOnlyApi(nextState);
+         if (res.success) {
+            window.updateReadOnlyUI(res.data.readOnly);
+            window.showToast?.(
+               res.data.readOnly
+                  ? '🔒 Production Shield Enabled: Database is now in READ-ONLY mode.'
+                  : '🔓 Read-Only Mode Disabled: Database is now EDITABLE.',
+               res.data.readOnly ? 'warning' : 'info',
+            );
+            window.renderCurrentView?.();
+         }
+      } catch (err) {
+         window.showToast?.(
+            err.message || 'Failed to toggle read-only mode',
+            'error',
+         );
+      }
    });
 }
 
@@ -274,6 +300,27 @@ window.AppState = {
    currentTab: 'data-btn',
    currentTableBtnElement: null,
    dbType: null,
+   isReadOnly: false,
+};
+
+window.updateReadOnlyUI = function (isReadOnly) {
+   window.AppState.isReadOnly = !!isReadOnly;
+   const btn = document.getElementById('header-readonly-btn');
+   const icon = document.getElementById('readonly-icon');
+   const label = document.getElementById('readonly-label');
+   if (!btn) return;
+
+   if (isReadOnly) {
+      btn.classList.add('readonly-active');
+      btn.title = 'Production Shield Active: Read-Only Mode (Click to toggle)';
+      if (icon) icon.textContent = 'lock';
+      if (label) label.textContent = 'READ-ONLY';
+   } else {
+      btn.classList.remove('readonly-active');
+      btn.title = 'Protection OFF: Editable Mode (Click to toggle)';
+      if (icon) icon.textContent = 'lock_open';
+      if (label) label.textContent = 'EDITABLE';
+   }
 };
 
 window.setStudioConnectionMode = function (connected) {
@@ -336,6 +383,7 @@ fetchConfig().then((res) => {
       window.AppState.dbType = res.data.dbType;
       window.AppState.isRemote = !!res.data.isRemote;
       window.AppState.badgeLabel = res.data.badgeLabel;
+      window.updateReadOnlyUI(!!res.data.readOnly);
 
       const envBadge = document.getElementById('env-badge');
       if (envBadge) {

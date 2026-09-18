@@ -4,6 +4,14 @@ export interface IndexSchema {
    isUnique: boolean;
 }
 
+export interface ForeignKeyTarget {
+   table: string;
+   column: string;
+   constraintName?: string;
+   onDelete?: string;
+   onUpdate?: string;
+}
+
 export interface ColumnSchema {
    name: string;
    type: string;
@@ -13,12 +21,7 @@ export interface ColumnSchema {
    defaultValue?: string;
    enumValues?: string[];
    isNewEnum?: boolean;
-   fkTarget?: {
-      table: string;
-      column: string;
-      onDelete?: string;
-      onUpdate?: string;
-   };
+   fkTarget?: ForeignKeyTarget;
 }
 
 export interface TableSchemaInfo {
@@ -142,6 +145,7 @@ export interface DBConfig {
    type: 'sqlite' | 'postgres' | 'mysql' | 'unknown';
    targetUrl: string;
    source: '.env' | 'auto-detected' | 'manual';
+   readOnly?: boolean;
 }
 
 export interface TableMutationOptions {
@@ -159,6 +163,26 @@ export interface PendingIndexEdits {
    dropped: string[];
 }
 
+export interface ReferencingForeignKey {
+   table: string;
+   column: string;
+   targetTable: string;
+   targetColumn: string;
+   currentType?: string;
+   constraintName?: string;
+   onDelete?: string;
+   onUpdate?: string;
+   nullable?: boolean;
+}
+
+export interface CascadeImpactResult {
+   hasDependents: boolean;
+   dependents: ReferencingForeignKey[];
+   isNumericOnly: boolean;
+   needsReindexing: boolean;
+   sampleValues: string[];
+}
+
 export interface SchemaChangeOptions {
    tableName: string;
    columns?: ColumnSchema[];
@@ -167,6 +191,8 @@ export interface SchemaChangeOptions {
    pendingInserts?: Partial<ColumnSchema>[];
    pendingDeletes?: string[];
    pendingIndexEdits?: PendingIndexEdits;
+   cascadeFkTypes?: boolean;
+   autoReindex?: boolean;
 }
 
 /**

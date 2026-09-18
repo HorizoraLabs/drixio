@@ -143,7 +143,7 @@ export function formatDisplayVal(val, colSchema) {
 }
 
 export function generateRowHtml(row, rowIndex, pkColumn, columns, schema = []) {
-   let html = `<td class="row-header" data-row-idx="${rowIndex}">${rowIndex + 1}</td>`;
+   let html = `<td class="row-header" data-row-idx="${rowIndex}"><span class="row-num">${rowIndex + 1}</span><input type="checkbox" class="row-select-checkbox" data-row-idx="${rowIndex}" /></td>`;
    const pkCols = schema.filter((c) => c.isPk).map((c) => c.name);
    let pkValue;
    if (pkCols.length > 1) {
@@ -184,7 +184,7 @@ export function generateRowHtml(row, rowIndex, pkColumn, columns, schema = []) {
          const fkCol = colSchema.fkTarget.column;
          html += `<td class="data-cell is-fk-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${safePkValue}" data-col="${col}" data-original="${safeValForAttr}" data-fk-table="${fkTable}" data-fk-col="${fkCol}"${titleAttr}><span class="cell-text">${safeValForHtml}</span><button type="button" class="fk-jump-btn" title="View & jump to ${fkTable} (${fkCol} = ${safeValForAttr})" data-fk-table="${fkTable}" data-fk-col="${fkCol}" data-fk-val="${safeValForAttr}"><span class="material-symbols-outlined">open_in_new</span></button></td>`;
       } else {
-         html += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${safePkValue}" data-col="${col}" data-original="${safeValForAttr}"${titleAttr}><span class="cell-text">${safeValForHtml}</span></td>`;
+         html += `<td class="data-cell" data-row-idx="${rowIndex}" data-col-idx="${cIdx}" data-pk="${safePkValue}" data-col="${col}" data-original="${safeValForAttr}"${titleAttr}><span class="cell-text">${safeValForHtml}</span><button type="button" class="cell-drawer-trigger-btn" title="Inspect in Cell Drawer"><span class="material-symbols-outlined">open_in_full</span></button></td>`;
       }
    });
    return html;

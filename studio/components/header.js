@@ -35,6 +35,10 @@ export const HeaderHTML = /* html */ `
         <span class="material-symbols-outlined connect-icon">settings_ethernet</span>
         <span class="connect-label">Connect</span>
       </button>
+      <button id="header-readonly-btn" class="header-readonly-pill" title="Toggle Read-Only Protection Mode" type="button">
+        <span class="material-symbols-outlined readonly-icon" id="readonly-icon">lock_open</span>
+        <span class="readonly-label" id="readonly-label">EDITABLE</span>
+      </button>
     </div>
   </div>
   

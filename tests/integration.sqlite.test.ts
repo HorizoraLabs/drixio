@@ -14,6 +14,7 @@ import { registerApiRoutes } from '../src/studio/api.js';
 
 describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
    let adapter: DBAdapter;
+   let app: Hono;
 
    beforeAll(() => {
       adapter = createDBAdapter({
@@ -21,6 +22,13 @@ describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
          targetUrl: ':memory:',
          source: 'manual',
       });
+      app = new Hono();
+      registerApiRoutes(app, {
+         type: 'sqlite',
+         targetUrl: ':memory:',
+         source: 'manual',
+         adapter,
+      } as any);
    });
 
    afterAll(async () => {
@@ -310,14 +318,6 @@ describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
    });
 
    it('12. should handle table rename and records mutation with composite PK via Studio API endpoints', async () => {
-      const app = new Hono();
-      registerApiRoutes(app, {
-         type: 'sqlite',
-         targetUrl: ':memory:',
-         source: 'manual',
-         adapter,
-      } as any);
-
       // 1. Test POST /api/tables/:name/rename
       const renameRes = await app.request(
          '/api/tables/test_users_renamed/rename',
@@ -374,5 +374,284 @@ describe('SQLite Integration: Full Database Lifecycle in-memory', () => {
       });
       const row = data.rows.find((r) => r.order_id === 1 && r.item_id === 20);
       expect(row?.amount).toBe(888);
+   });
+
+   test('13. Cascading PK to FK type migration: numeric TEXT -> INTEGER', async () => {
+      await adapter.executeSql(`
+         CREATE TABLE test_authors (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL
+         );
+      `);
+      await adapter.executeSql(`
+         CREATE TABLE test_posts (
+            id INTEGER PRIMARY KEY,
+            author_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            FOREIGN KEY (author_id) REFERENCES test_authors(id)
+         );
+      `);
+
+      await adapter.executeSql(`INSERT INTO test_authors (id, name) VALUES ('101', 'Alice'), ('102', 'Bob');`);
+      await adapter.executeSql(`INSERT INTO test_posts (id, author_id, title) VALUES (1, '101', 'Post 1'), (2, '102', 'Post 2');`);
+
+      // 1. Check cascade impact
+      const checkRes = await app.request('/api/tables/test_authors/cascade-check', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ colName: 'id', newType: 'INTEGER' }),
+      });
+      expect(checkRes.status).toBe(200);
+      const checkJson = (await checkRes.json()) as any;
+      expect(checkJson.success).toBe(true);
+      expect(checkJson.data.hasDependents).toBe(true);
+      expect(checkJson.data.dependents.length).toBe(1);
+      expect(checkJson.data.dependents[0].table).toBe('test_posts');
+      expect(checkJson.data.dependents[0].column).toBe('author_id');
+      expect(checkJson.data.isNumericOnly).toBe(true);
+      expect(checkJson.data.needsReindexing).toBe(false);
+
+      // 2. Apply schema migration with cascading
+      const migrateRes = await app.request('/api/tables/test_authors/schema', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            pendingEdits: { id: { type: 'INTEGER' } },
+            cascadeFkTypes: true,
+         }),
+      });
+      expect(migrateRes.status).toBe(200);
+      const migrateJson = (await migrateRes.json()) as any;
+      expect(migrateJson.success).toBe(true);
+
+      // 3. Verify authors schema
+      const authorsSchema = await adapter.getSchema('test_authors');
+      const authorIdCol = authorsSchema.find((c) => c.name === 'id');
+      expect(authorIdCol?.type).toBe('INTEGER');
+
+      // 4. Verify posts schema cascaded
+      const postsSchema = await adapter.getSchema('test_posts');
+      const postAuthorIdCol = postsSchema.find((c) => c.name === 'author_id');
+      expect(postAuthorIdCol?.type).toBe('INTEGER');
+
+      // 5. Verify data preserved
+      const postsData = await adapter.getData('test_posts', 10, 0);
+      expect(postsData.rows.length).toBe(2);
+      expect(Number(postsData.rows[0].author_id)).toBe(101);
+   });
+
+   test('14. Cascading PK to FK type migration with smart re-indexing: non-numeric TEXT -> INTEGER', async () => {
+      await adapter.executeSql(`
+         CREATE TABLE test_categories (
+            code TEXT PRIMARY KEY,
+            name TEXT NOT NULL
+         );
+      `);
+      await adapter.executeSql(`
+         CREATE TABLE test_products (
+            id INTEGER PRIMARY KEY,
+            cat_code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            FOREIGN KEY (cat_code) REFERENCES test_categories(code)
+         );
+      `);
+
+      await adapter.executeSql(`INSERT INTO test_categories (code, name) VALUES ('electronics', 'Electronics'), ('books', 'Books');`);
+      await adapter.executeSql(`INSERT INTO test_products (id, cat_code, name) VALUES (1, 'electronics', 'Laptop'), (2, 'books', 'Novel'), (3, 'electronics', 'Phone');`);
+
+      // 1. Check cascade impact
+      const checkRes = await app.request('/api/tables/test_categories/cascade-check', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ colName: 'code', newType: 'INTEGER' }),
+      });
+      expect(checkRes.status).toBe(200);
+      const checkJson = (await checkRes.json()) as any;
+      expect(checkJson.success).toBe(true);
+      expect(checkJson.data.hasDependents).toBe(true);
+      expect(checkJson.data.needsReindexing).toBe(true);
+      expect(checkJson.data.isNumericOnly).toBe(false);
+
+      // 2. Attempt migration without autoReindex -> should fail
+      const failRes = await app.request('/api/tables/test_categories/schema', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            pendingEdits: { code: { type: 'INTEGER' } },
+            cascadeFkTypes: true,
+            autoReindex: false,
+         }),
+      });
+      expect(failRes.status).toBe(400);
+
+      // 3. Migrate with autoReindex: true -> should succeed
+      const successRes = await app.request('/api/tables/test_categories/schema', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            pendingEdits: { code: { type: 'INTEGER' } },
+            cascadeFkTypes: true,
+            autoReindex: true,
+         }),
+      });
+      expect(successRes.status).toBe(200);
+      const successJson = (await successRes.json()) as any;
+      expect(successJson.success).toBe(true);
+
+      // 4. Check schemas
+      const catSchema = await adapter.getSchema('test_categories');
+      expect(catSchema.find((c) => c.name === 'code')?.type).toBe('INTEGER');
+
+      const prodSchema = await adapter.getSchema('test_products');
+      expect(prodSchema.find((c) => c.name === 'cat_code')?.type).toBe('INTEGER');
+
+      // 5. Check data reindexed & relational links preserved
+      const catData = await adapter.getData('test_categories', 10, 0);
+      const prodData = await adapter.getData('test_products', 10, 0);
+
+      const elecCat = catData.rows.find((r) => r.name === 'Electronics');
+      const bookCat = catData.rows.find((r) => r.name === 'Books');
+      expect(elecCat).toBeDefined();
+      expect(bookCat).toBeDefined();
+
+      const laptop = prodData.rows.find((r) => r.name === 'Laptop');
+      const phone = prodData.rows.find((r) => r.name === 'Phone');
+      const novel = prodData.rows.find((r) => r.name === 'Novel');
+
+      expect(Number(laptop?.cat_code)).toBe(Number(elecCat?.code));
+      expect(Number(phone?.cat_code)).toBe(Number(elecCat?.code));
+      expect(Number(novel?.cat_code)).toBe(Number(bookCat?.code));
+   });
+
+   test('15. Cascading PK to FK type migration: INTEGER -> TEXT', async () => {
+      await adapter.executeSql(`
+         CREATE TABLE test_depts (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL
+         );
+      `);
+      await adapter.executeSql(`
+         CREATE TABLE test_emps (
+            id INTEGER PRIMARY KEY,
+            dept_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            FOREIGN KEY (dept_id) REFERENCES test_depts(id)
+         );
+      `);
+
+      await adapter.executeSql(`INSERT INTO test_depts (id, title) VALUES (10, 'Engineering');`);
+      await adapter.executeSql(`INSERT INTO test_emps (id, dept_id, name) VALUES (1, 10, 'Alice');`);
+
+      // Apply schema migration INTEGER -> TEXT
+      const migrateRes = await app.request('/api/tables/test_depts/schema', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            pendingEdits: { id: { type: 'TEXT' } },
+            cascadeFkTypes: true,
+         }),
+      });
+      expect(migrateRes.status).toBe(200);
+      const migrateJson = (await migrateRes.json()) as any;
+      expect(migrateJson.success).toBe(true);
+
+      const deptsSchema = await adapter.getSchema('test_depts');
+      expect(deptsSchema.find((c) => c.name === 'id')?.type).toBe('TEXT');
+
+      const empsSchema = await adapter.getSchema('test_emps');
+      expect(empsSchema.find((c) => c.name === 'dept_id')?.type).toBe('TEXT');
+
+      const empsData = await adapter.getData('test_emps', 10, 0);
+      expect(String(empsData.rows[0].dept_id)).toBe('10');
+   });
+
+   test('16. Read-Only Mode config check & dynamic toggle', async () => {
+      // Check initial readOnly config
+      const cfgRes1 = await app.request('/api/config');
+      expect(cfgRes1.status).toBe(200);
+      const cfg1 = (await cfgRes1.json()) as any;
+      expect(cfg1.data.readOnly).toBe(false);
+
+      // Turn on read-only mode
+      const toggleOn = await app.request('/api/config/readonly', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ readOnly: true }),
+      });
+      expect(toggleOn.status).toBe(200);
+      const toggleOnJson = (await toggleOn.json()) as any;
+      expect(toggleOnJson.success).toBe(true);
+      expect(toggleOnJson.data.readOnly).toBe(true);
+
+      // Verify readOnly is true in config
+      const cfgRes2 = await app.request('/api/config');
+      const cfg2 = (await cfgRes2.json()) as any;
+      expect(cfg2.data.readOnly).toBe(true);
+   });
+
+   test('17. Read-Only Mode blocks mutating operations (Production Shield)', async () => {
+      // Ensure read-only mode is active
+      await app.request('/api/config/readonly', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ readOnly: true }),
+      });
+
+      // 1. Block create table
+      const createTableRes = await app.request('/api/tables', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ tableName: 'should_fail', columns: [] }),
+      });
+      expect(createTableRes.status).toBe(403);
+      const ctJson = (await createTableRes.json()) as any;
+      expect(ctJson.success).toBe(false);
+      expect(ctJson.error).toContain('Read-Only protection mode');
+
+      // 2. Block insert/update records
+      const recordRes = await app.request('/api/tables/test_depts/records', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            inserts: [{ id: '99', title: 'Blocked Dept' }],
+         }),
+      });
+      expect(recordRes.status).toBe(403);
+
+      // 3. Block truncate
+      const truncRes = await app.request('/api/tables/test_depts/truncate', {
+         method: 'POST',
+      });
+      expect(truncRes.status).toBe(403);
+
+      // 4. Block mock data generation
+      const mockRes = await app.request('/api/tables/test_depts/mock', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ count: 5 }),
+      });
+      expect(mockRes.status).toBe(403);
+
+      // 5. Block mutating query (DELETE / INSERT)
+      const queryRes = await app.request('/api/query', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ query: 'DELETE FROM test_depts;' }),
+      });
+      expect(queryRes.status).toBe(403);
+
+      // 6. Turn read-only back off and verify operations succeed
+      await app.request('/api/config/readonly', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ readOnly: false }),
+      });
+
+      const selectQueryRes = await app.request('/api/query', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ query: 'SELECT COUNT(*) as cnt FROM test_depts;' }),
+      });
+      expect(selectQueryRes.status).toBe(200);
    });
 });

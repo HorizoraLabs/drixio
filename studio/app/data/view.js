@@ -15,6 +15,18 @@ import { bindFkPreview } from './fkPreview.js';
 import { openMockDataModal } from './modal.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 import { renderFilterBar, clearTableFilters } from './filterBar.js';
+import {
+   renderColumnVisibilityButton,
+   applyColumnVisibility,
+   getHiddenColumns,
+} from './columnVisibility.js';
+import { openCellDrawer } from './cellDrawer.js';
+import {
+   selectAllRows,
+   handleRowCheckboxChange,
+   clearRowSelection,
+} from './bulkBar.js';
+import { updateCell } from './core.js';
 
 export { saveDataGridEdits } from './core.js';
 
@@ -123,10 +135,21 @@ export async function loadTableData(
           <div class="toolbar">
             ${backBtnHtml}
             <div id="filter-bar-mount-${tableName}" class="flex-1" style="height: 100%; display: flex; align-items: center; min-width: 0;"></div>
+            <div id="col-visibility-mount-${tableName}" class="toolbar-item" style="display: flex; align-items: center;"></div>
+            <div class="page-size-picker flex items-center gap-1.5" title="Rows per page">
+              <span class="material-symbols-outlined icon-14 text-secondary">table_rows</span>
+              <select id="select-page-size-${tableName}" class="page-size-select">
+                <option value="25">25 / page</option>
+                <option value="50" selected>50 / page</option>
+                <option value="100">100 / page</option>
+                <option value="200">200 / page</option>
+              </select>
+            </div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
               <span class="material-symbols-outlined">refresh</span>
             </button>
           </div>
+          <div id="bulk-bar-mount-${tableName}"></div>
           <div class="table-container" id="data-grid-container-${tableName}"></div>
         `;
             renderTarget.innerHTML = html;
@@ -149,6 +172,37 @@ export async function loadTableData(
                      );
                   },
                });
+            }
+
+            const colVisMount = document.getElementById(
+               `col-visibility-mount-${tableName}`,
+            );
+            if (colVisMount) {
+               renderColumnVisibilityButton({
+                  container: colVisMount,
+                  tableName,
+                  schema,
+               });
+            }
+
+            const pageSizeSelect = document.getElementById(
+               `select-page-size-${tableName}`,
+            );
+            if (pageSizeSelect) {
+               pageSizeSelect.value = String(window.DataGrid.pagination.limit || 50);
+               pageSizeSelect.onchange = (e) => {
+                  const newLimit = parseInt(e.target.value, 10);
+                  if (newLimit && window.DataGrid) {
+                     window.DataGrid.pagination.limit = newLimit;
+                     window.DataGrid.pagination.offset = 0;
+                     loadTableData(
+                        tableName,
+                        btnElement,
+                        getFilterQuery(tableName),
+                        true,
+                     );
+                  }
+               };
             }
          }
 
@@ -238,7 +292,7 @@ export async function loadTableData(
             }
          } else {
             let tableHtml = `<table class="data-table" id="data-grid-table-${tableName}"><thead><tr>`;
-            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click to select all, right-click for table actions">#</th>`;
+            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click to select all cells, right-click for table actions"><span class="corner-num">#</span><input type="checkbox" id="select-all-rows-${tableName}" class="row-select-checkbox corner-checkbox" title="Select all rows" /></th>`;
             columns.forEach((col) => {
                const colSchema = schema.find((c) => c.name === col);
                let colIcon = '';
@@ -281,19 +335,27 @@ export async function loadTableData(
                });
             }
 
-            tableHtml += `<tr class="ghost-row-tr">`;
-            const ghostIdx = rows ? rows.length : 0;
-            tableHtml += `<td class="row-header" data-row-idx="${ghostIdx}">*</td>`;
-            columns.forEach((col, cIdx) => {
-               const cellHint =
-                  cIdx === 0
-                     ? `<span class="ghost-cell-hint">+ Add Row</span>`
-                     : '';
-               tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col="${col}">${cellHint}</td>`;
-            });
-            tableHtml += `</tr></tbody></table>`;
+            if (!window.AppState?.isReadOnly) {
+               tableHtml += `<tr class="ghost-row-tr">`;
+               const ghostIdx = rows ? rows.length : 0;
+               tableHtml += `<td class="row-header" data-row-idx="${ghostIdx}">*</td>`;
+               columns.forEach((col, cIdx) => {
+                  const cellHint =
+                     cIdx === 0
+                        ? `<span class="ghost-cell-hint">+ Add Row</span>`
+                        : '';
+                  tableHtml += `<td class="data-cell ghost-row" data-row-idx="${ghostIdx}" data-col-idx="${cIdx}" data-insert-index="0" data-col="${col}">${cellHint}</td>`;
+               });
+               tableHtml += `</tr>`;
+            }
+            tableHtml += `</tbody></table>`;
 
             tableContainer.innerHTML = tableHtml;
+
+            const hiddenColsInit = getHiddenColumns(tableName);
+            if (hiddenColsInit.size > 0) {
+               applyColumnVisibility(tableName, hiddenColsInit);
+            }
 
             tableContainer.querySelectorAll('th.sortable').forEach((th) => {
                const col = th.dataset.col;
@@ -647,8 +709,9 @@ export async function loadTableData(
                   ]);
                };
 
-               // Left-click selects all cells in the table
+               // Left-click selects all cells in the table (unless checkbox was clicked)
                cornerHeader.addEventListener('click', (e) => {
+                  if (e.target.closest('.row-select-checkbox')) return;
                   e.preventDefault();
                   e.stopPropagation();
                   selectAllGridCells(
@@ -660,7 +723,131 @@ export async function loadTableData(
 
                // Right-click opens the context menu
                cornerHeader.addEventListener('contextmenu', handleCornerMenu);
+
+               const selectAllCb = document.getElementById(
+                  `select-all-rows-${tableName}`,
+               );
+               if (selectAllCb) {
+                  selectAllCb.onclick = (e) => {
+                     e.stopPropagation();
+                     selectAllRows(tableName, selectAllCb.checked);
+                  };
+               }
             }
+
+            // Row Checkbox Selection Events
+            tableContainer.addEventListener('change', (e) => {
+               const cb = e.target.closest('.row-select-checkbox');
+               if (cb && cb.dataset.rowIdx !== undefined) {
+                  const rowIdx = parseInt(cb.dataset.rowIdx, 10);
+                  handleRowCheckboxChange(
+                     tableName,
+                     rowIdx,
+                     cb.checked,
+                     e.shiftKey || window.DataGrid?._lastShiftKey,
+                  );
+               }
+            });
+
+            tableContainer.addEventListener('click', (e) => {
+               const cb = e.target.closest('.row-select-checkbox');
+               if (cb && cb.dataset.rowIdx !== undefined) {
+                  if (window.DataGrid) {
+                     window.DataGrid._lastShiftKey = e.shiftKey;
+                  }
+               }
+            });
+
+            // Cell Drawer Trigger Button Event
+            tableContainer.addEventListener('click', (e) => {
+               const trigger = e.target.closest('.cell-drawer-trigger-btn');
+               if (trigger) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const td = trigger.closest('td.data-cell');
+                  if (td) {
+                     const colName = td.dataset.col;
+                     const colSchema = schema.find((c) => c.name === colName);
+                     openCellDrawer(td, colSchema);
+                  }
+               }
+            });
+
+            // Right-click on Data Cell Context Menu
+            tableContainer.addEventListener('contextmenu', (e) => {
+               const td = e.target.closest('td.data-cell');
+               if (!td) return;
+               e.preventDefault();
+               e.stopPropagation();
+
+               const colName = td.dataset.col;
+               const colSchema = schema.find((c) => c.name === colName);
+               let currentVal =
+                  td.dataset.original !== undefined
+                     ? td.dataset.original
+                     : td.querySelector('.cell-text')?.textContent.trim() || '';
+               if (currentVal === 'null') currentVal = '';
+
+               showContextMenu(e, [
+                  {
+                     icon: 'open_in_full',
+                     label: 'Inspect in Cell Drawer',
+                     action: () => openCellDrawer(td, colSchema),
+                  },
+                  'divider',
+                  {
+                     icon: 'content_copy',
+                     label: 'Copy Cell Value',
+                     action: async () => {
+                        try {
+                           await navigator.clipboard.writeText(currentVal);
+                        } catch {
+                           const ta = document.createElement('textarea');
+                           ta.value = currentVal;
+                           document.body.appendChild(ta);
+                           ta.select();
+                           document.execCommand('copy');
+                           ta.remove();
+                        }
+                        window.showToast?.('Copied cell value to clipboard', 'info');
+                     },
+                  },
+                  {
+                     icon: 'filter_alt',
+                     label: `Filter by "${currentVal.length > 20 ? currentVal.slice(0, 20) + '...' : currentVal}"`,
+                     action: () => {
+                        const filterInput = document.getElementById(
+                           `filter-bar-input-${tableName}`,
+                        );
+                        if (filterInput) {
+                           filterInput.value = `${colName} = '${currentVal.replace(/'/g, "''")}'`;
+                           filterInput.dispatchEvent(
+                              new Event('input', { bubbles: true }),
+                           );
+                        }
+                     },
+                  },
+                  'divider',
+                  {
+                     icon: 'block',
+                     label: 'Set to NULL',
+                     danger: true,
+                     disabled:
+                        window.AppState?.isReadOnly || (colSchema && colSchema.isPk),
+                     action: () => {
+                        if (window.AppState?.isReadOnly) return;
+                        window.DataGrid.currentTransaction = [];
+                        updateCell(td, '', columns);
+                        if (window.DataGrid.currentTransaction.length > 0) {
+                           window.DataGrid.history.push(
+                              window.DataGrid.currentTransaction,
+                           );
+                        }
+                        window.DataGrid.currentTransaction = null;
+                     },
+                  },
+               ]);
+            });
          }
 
          // Bind FK back button if present
@@ -711,6 +898,7 @@ export async function loadTableData(
                window.DataGrid.pendingDeletes = new Set();
                window.DataGrid.history = [];
                window.DataGrid.currentTransaction = null;
+               clearRowSelection(tableName);
                window.updateSidebarDirtyState?.();
 
                if (window.DataGrid) window.DataGrid.pagination.offset = 0;
@@ -798,6 +986,11 @@ export async function loadTableData(
                         );
                         currentIdx++;
                      });
+
+                     const hiddenColsAfterMore = getHiddenColumns(tableName);
+                     if (hiddenColsAfterMore.size > 0) {
+                        applyColumnVisibility(tableName, hiddenColsAfterMore);
+                     }
                   }
                } catch (e) {
                   window.DataGrid.pagination.isLoading = false;

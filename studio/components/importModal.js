@@ -6,6 +6,9 @@
  * 3. Database Restore (.sql / .json)
  */
 
+import { openImportWizardModal } from '../app/data/importWizardModal.js';
+import { fetchTableSchema } from '../lib/api.js';
+
 let modalOverlay = null;
 let currentType = 'records'; // 'records' | 'erd' | 'database'
 let currentFile = null;
@@ -158,43 +161,31 @@ async function executeImport() {
             return;
          }
 
-         const ext = currentFile.name.split('.').pop()?.toLowerCase();
-         const format = ext === 'json' ? 'json' : 'csv';
-
-         const formData = new FormData();
-         formData.append('file', currentFile);
-         formData.append('format', format);
-
-         window.showToast?.(
-            `Importing ${currentFile.name} into '${tableName}'...`,
-            'success',
-         );
-
-         const res = await fetch(
-            `/api/tables/${encodeURIComponent(tableName)}/import`,
-            {
-               method: 'POST',
-               body: formData,
-            },
-         );
-         const result = await res.json();
-
-         if (result.success) {
-            window.showToast?.(
-               result.message || 'Import completed successfully',
-               'success',
-            );
-            // Refresh table view if open
-            if (window.AppState?.currentTab === 'data-btn') {
-               const viewId = `view-data-btn-${tableName}`;
-               const container = document.getElementById(viewId);
-               if (container) container.innerHTML = '';
-               window.renderCurrentView?.('', true);
-            }
-            closeImportModal();
-         } else {
-            window.showToast?.(result.error || 'Import failed', 'error');
+         let schema =
+            window.TableStates?.[tableName]?.dataGrid?.schema ||
+            window.DataGrid?.schema;
+         if (!schema || schema.length === 0) {
+            const sRes = await fetchTableSchema(tableName);
+            if (sRes.success) schema = sRes.data;
          }
+
+         const chosenFile = currentFile;
+         closeImportModal();
+
+         openImportWizardModal({
+            tableName,
+            schema: schema || [],
+            file: chosenFile,
+            onComplete: () => {
+               if (window.AppState?.currentTab === 'data-btn') {
+                  const viewId = `view-data-btn-${tableName}`;
+                  const container = document.getElementById(viewId);
+                  if (container) container.innerHTML = '';
+                  window.renderCurrentView?.('', true);
+               }
+            },
+         });
+         return;
       } else if (currentType === 'erd') {
          const text = await currentFile.text();
          const parsed = JSON.parse(text);

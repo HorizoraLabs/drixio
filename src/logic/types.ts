@@ -139,6 +139,8 @@ export interface DBAdapter {
    getCustomEnums?(): Promise<{ name: string; values: string[] }[]>;
    /** Rename an existing table. */
    renameTable?(oldName: string, newName: string): Promise<void>;
+   /** Discover soft-deleted trash tables. */
+   getTrashTables?(): Promise<string[]>;
 }
 
 export interface DBConfig {

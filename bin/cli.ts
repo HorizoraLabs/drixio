@@ -15,7 +15,11 @@ async function main() {
       (args[0].startsWith('postgres://') ||
          args[0].startsWith('postgresql://') ||
          args[0].startsWith('mysql://') ||
-         args[0].startsWith('file:'))
+         args[0].startsWith('file:') ||
+         args[0].startsWith('sqlite:') ||
+         args[0].endsWith('.db') ||
+         args[0].endsWith('.sqlite') ||
+         args[0].endsWith('.sqlite3'))
    ) {
       customUrl = args[0];
    }
@@ -36,6 +40,8 @@ async function main() {
          apply: { type: 'boolean' },
          reverse: { type: 'boolean' },
          'read-only': { type: 'boolean', short: 'r' },
+         app: { type: 'boolean' },
+         dir: { type: 'string' },
          help: { type: 'boolean' },
       },
       strict: false,
@@ -112,9 +118,13 @@ async function main() {
       console.log(
          `  ${pc.green('drop-db')} [db_type]     Drop a local database`,
       );
+      console.log(
+         `  ${pc.green('install-app')}           Create a 1-click desktop app shortcut (alias: shortcut)`,
+      );
       console.log(`\n${pc.bold('Options:')}`);
       console.log(`  -v, --version         Show drixio version`);
       console.log(`  --help                Show this help message`);
+      console.log(`  --app                 Launch Studio in standalone frameless app mode`);
       console.log(`  --json                Output results as JSON`);
       console.log(`  --format <type>       Specify export format (csv|json)`);
       console.log(`  --schema-only         Export schema without data`);
@@ -165,7 +175,7 @@ async function main() {
       if (values['read-only']) {
          dbConfig.readOnly = true;
       }
-      await runStudio(dbConfig);
+      await runStudio(dbConfig, Boolean(values.app));
       return;
    }
 

@@ -16,3 +16,7 @@ export * from './version.js';
 export * from './serialization.js';
 export * from './repl.js';
 export * from './ai.js';
+export * from './trash.js';
+export * from './anonymizer.js';
+export * from './health.js';
+export * from './launcher.js';

@@ -32,11 +32,11 @@ export function openImportWizardModal({ tableName, schema, file, onComplete }) {
             }
          } else {
             // Parse CSV
-            const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
-            if (lines.length > 0) {
-               headers = parseCsvLine(lines[0]);
-               totalRows = lines.length - 1;
-               sampleRows = lines.slice(1, 4).map((l) => parseCsvLine(l));
+            const rows = parseCsv(text);
+            if (rows.length > 0) {
+               headers = rows[0];
+               totalRows = rows.length - 1;
+               sampleRows = rows.slice(1, 4);
             }
          }
       } catch (err) {
@@ -67,28 +67,60 @@ export function openImportWizardModal({ tableName, schema, file, onComplete }) {
    reader.readAsText(file);
 }
 
-function parseCsvLine(line) {
-   const result = [];
-   let current = '';
+function parseCsv(content) {
+   const rows = [];
+   let currentRow = [];
+   let currentField = '';
    let inQuotes = false;
-   for (let i = 0; i < line.length; i++) {
-      const char = line[i];
+   let i = 0;
+
+   while (i < content.length) {
+      const char = content[i];
+
       if (char === '"') {
-         if (inQuotes && line[i + 1] === '"') {
-            current += '"';
-            i++;
-         } else {
-            inQuotes = !inQuotes;
+         if (inQuotes && content[i + 1] === '"') {
+            currentField += '"';
+            i += 2;
+            continue;
          }
-      } else if (char === ',' && !inQuotes) {
-         result.push(current.trim());
-         current = '';
-      } else {
-         current += char;
+         inQuotes = !inQuotes;
+         i++;
+         continue;
+      }
+
+      if (char === ',' && !inQuotes) {
+         currentRow.push(currentField.trim());
+         currentField = '';
+         i++;
+         continue;
+      }
+
+      if ((char === '\r' || char === '\n') && !inQuotes) {
+         if (char === '\r' && content[i + 1] === '\n') {
+            i++;
+         }
+         currentRow.push(currentField.trim());
+         currentField = '';
+         if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
+            rows.push(currentRow);
+         }
+         currentRow = [];
+         i++;
+         continue;
+      }
+
+      currentField += char;
+      i++;
+   }
+
+   if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField.trim());
+      if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
+         rows.push(currentRow);
       }
    }
-   result.push(current.trim());
-   return result;
+
+   return rows;
 }
 
 function renderWizardContent(
@@ -250,18 +282,20 @@ function renderWizardContent(
                return row;
             });
          } else {
-            const lines = rawText.split(/\r?\n/).filter((l) => l.trim() !== '');
-            const fileHeaders = parseCsvLine(lines[0]);
-            for (let i = 1; i < lines.length; i++) {
-               const vals = parseCsvLine(lines[i]);
-               const row = {};
-               fileHeaders.forEach((srcH, hIdx) => {
-                  const targetCol = mapping[srcH];
-                  if (targetCol) {
-                     row[targetCol] = vals[hIdx];
-                  }
-               });
-               transformedData.push(row);
+            const rows = parseCsv(rawText);
+            if (rows.length > 0) {
+               const fileHeaders = rows[0];
+               for (let i = 1; i < rows.length; i++) {
+                  const vals = rows[i];
+                  const row = {};
+                  fileHeaders.forEach((srcH, hIdx) => {
+                     const targetCol = mapping[srcH];
+                     if (targetCol && vals[hIdx] !== undefined) {
+                        row[targetCol] = vals[hIdx];
+                     }
+                  });
+                  transformedData.push(row);
+               }
             }
          }
 

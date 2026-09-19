@@ -179,6 +179,10 @@ export function updateBulkBar(tableName) {
            <span class="material-symbols-outlined icon-16">data_object</span>
            <span>Export JSON</span>
          </button>
+         <button type="button" class="bulk-bar-btn" id="bulk-export-masked-${tableName}" title="Export selected rows with PII Data Masking">
+           <span class="material-symbols-outlined icon-16" style="color: #10b981;">enhanced_encryption</span>
+           <span>Masked CSV</span>
+         </button>
          
          <div class="bulk-bar-divider"></div>
 
@@ -210,6 +214,14 @@ export function updateBulkBar(tableName) {
       jsonBtn.onclick = () => {
          const dataRows = selected.map((s) => s.data);
          exportSelectedRows(tableName, dataRows, 'json');
+      };
+   }
+
+   const maskedBtn = document.getElementById(`bulk-export-masked-${tableName}`);
+   if (maskedBtn) {
+      maskedBtn.onclick = () => {
+         const dataRows = selected.map((s) => s.data);
+         exportSelectedRows(tableName, dataRows, 'csv', true);
       };
    }
 
@@ -284,20 +296,23 @@ export function updateBulkBar(tableName) {
    }
 }
 
-function exportSelectedRows(tableName, rows, format) {
+function exportSelectedRows(tableName, rows, format, mask = false) {
    if (!rows || rows.length === 0) return;
+   const processedRows = mask ? anonymizeSelectedRows(rows) : rows;
    let content = '';
    let mime = 'text/plain';
    let ext = 'txt';
 
    if (format === 'json') {
-      content = JSON.stringify(rows, null, 2);
+      content = JSON.stringify(processedRows, null, 2);
       mime = 'application/json';
       ext = 'json';
    } else {
-      const headers = Object.keys(rows[0]);
-      const csvRows = [headers.join(',')];
-      for (const row of rows) {
+      const headers = Object.keys(processedRows[0]);
+      const csvRows = [
+         headers.map((h) => `"${String(h).replace(/"/g, '""')}"`).join(','),
+      ];
+      for (const row of processedRows) {
          const values = headers.map((h) => {
             const v = row[h];
             if (v === null || v === undefined) return '';
@@ -315,8 +330,46 @@ function exportSelectedRows(tableName, rows, format) {
    const url = URL.createObjectURL(blob);
    const a = document.createElement('a');
    a.href = url;
-   a.download = `${tableName}_selected_${Date.now()}.${ext}`;
+   a.download = `${tableName}_selected_${mask ? 'masked_' : ''}${Date.now()}.${ext}`;
    a.click();
    URL.revokeObjectURL(url);
-   window.showToast?.(`Exported ${rows.length} rows as ${ext.toUpperCase()}`, 'success');
+   window.showToast?.(
+      `Exported ${processedRows.length} ${mask ? 'masked ' : ''}rows as ${ext.toUpperCase()}`,
+      'success',
+   );
+}
+
+function anonymizeSelectedRows(rows) {
+   if (!rows || rows.length === 0) return rows;
+   const EMAIL_RE = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+   const PHONE_RE = /^(\+?\d{1,4}[-.\s]?)?(\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}$/;
+   const IP_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
+   const SENSITIVE_COLS = /password|secret|token|hash|salt|api_key|credit_card|card_num|ssn/i;
+
+   function hashStr(str) {
+      let hash = 5381;
+      for (let i = 0; i < str.length; i++) {
+         hash = ((hash << 5) + hash) + str.charCodeAt(i);
+         hash = hash & hash;
+      }
+      return Math.abs(hash).toString(36);
+   }
+
+   return rows.map((r) => {
+      const cloned = { ...r };
+      for (const [k, v] of Object.entries(cloned)) {
+         if (v === null || v === undefined) continue;
+         const s = String(v).trim();
+         if (SENSITIVE_COLS.test(k)) {
+            cloned[k] = '[PROTECTED]';
+         } else if (EMAIL_RE.test(s)) {
+            cloned[k] = `user_${hashStr(s).slice(0, 6)}@example.test`;
+         } else if (IP_RE.test(s)) {
+            cloned[k] = `10.0.${parseInt(hashStr(s).slice(0, 2) || '0', 36) % 255}.${parseInt(hashStr(s).slice(2, 4) || '0', 36) % 255}`;
+         } else if (PHONE_RE.test(s) && s.length >= 7) {
+            cloned[k] = `+1-555-${hashStr(s).slice(0, 4)}`;
+         }
+      }
+      return cloned;
+   });
 }

@@ -172,7 +172,20 @@ export class PostgresAdapter implements DBAdapter {
       SELECT tablename 
       FROM pg_catalog.pg_tables 
       WHERE schemaname = $1
+        AND tablename NOT LIKE '_drixio_trash_%'
       ORDER BY tablename;
+    `;
+      const res = await this.getPool().query(query, [this.currentSchema]);
+      return res.rows.map((row) => row.tablename);
+   }
+
+   async getTrashTables(): Promise<string[]> {
+      const query = `
+      SELECT tablename 
+      FROM pg_catalog.pg_tables 
+      WHERE schemaname = $1
+        AND tablename LIKE '_drixio_trash_%'
+      ORDER BY tablename DESC;
     `;
       const res = await this.getPool().query(query, [this.currentSchema]);
       return res.rows.map((row) => row.tablename);

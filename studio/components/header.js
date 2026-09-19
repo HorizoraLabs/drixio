@@ -98,6 +98,21 @@ export const HeaderHTML = /* html */ `
                 <span class="dropdown-badge" style="color: var(--color-primary); border-color: rgba(59, 130, 246, 0.3);">JSON</span>
               </button>
             </li>
+            <li class="dropdown-divider" style="height: 1px; background: var(--color-border); margin: 4px 0;"></li>
+            <li>
+              <button id="export-data-masked-csv-btn" class="dropdown-item" style="color: #10b981;">
+                <span class="material-symbols-outlined" style="color: #10b981;">enhanced_encryption</span>
+                <span class="dropdown-item-label">Masked (PII Shield)</span>
+                <span class="dropdown-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">CSV</span>
+              </button>
+            </li>
+            <li>
+              <button id="export-data-masked-json-btn" class="dropdown-item" style="color: #10b981;">
+                <span class="material-symbols-outlined" style="color: #10b981;">enhanced_encryption</span>
+                <span class="dropdown-item-label">Masked (PII Shield)</span>
+                <span class="dropdown-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">JSON</span>
+              </button>
+            </li>
           </ul>
         </li>
 
@@ -151,6 +166,21 @@ export const HeaderHTML = /* html */ `
                 <span class="material-symbols-outlined">data_object</span>
                 <span class="dropdown-item-label">Query Result</span>
                 <span class="dropdown-badge">JSON</span>
+              </button>
+            </li>
+            <li class="dropdown-divider" style="height: 1px; background: var(--color-border); margin: 4px 0;"></li>
+            <li>
+              <button id="export-console-masked-csv-btn" class="dropdown-item" style="color: #10b981;">
+                <span class="material-symbols-outlined" style="color: #10b981;">enhanced_encryption</span>
+                <span class="dropdown-item-label">Masked Query Result</span>
+                <span class="dropdown-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">CSV</span>
+              </button>
+            </li>
+            <li>
+              <button id="export-console-masked-json-btn" class="dropdown-item" style="color: #10b981;">
+                <span class="material-symbols-outlined" style="color: #10b981;">enhanced_encryption</span>
+                <span class="dropdown-item-label">Masked Query Result</span>
+                <span class="dropdown-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">JSON</span>
               </button>
             </li>
           </ul>

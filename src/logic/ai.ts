@@ -109,6 +109,7 @@ export async function callOpenAiCompatible(
          temperature,
          stream: false,
       }),
+      signal: AbortSignal.timeout(45000),
    });
 
    if (!res.ok) {
@@ -167,8 +168,9 @@ export async function generateSqlFromPrompt(options: {
    dialect: string;
    currentTable?: string;
    config: AiConfig;
+   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<{ sql: string; explanation: string; model: string }> {
-   const { prompt, tables, dialect, currentTable, config } = options;
+   const { prompt, tables, dialect, currentTable, config, history = [] } = options;
    const schemaContext = buildSchemaContext(tables, dialect, currentTable);
 
    const systemPrompt = `You are a database and SQL expert assistant integrated into Drixio Database Studio.
@@ -186,10 +188,21 @@ GUIDELINES:
 
    const userPrompt = `Generate a ${dialect.toUpperCase()} SQL query for: ${prompt}`;
 
-   const res = await callOpenAiCompatible(config, [
+   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-   ]);
+   ];
+
+   if (Array.isArray(history) && history.length > 0) {
+      for (const h of history.slice(-6)) {
+         if (h.role === 'user' || h.role === 'assistant') {
+            messages.push({ role: h.role, content: h.content });
+         }
+      }
+   }
+
+   messages.push({ role: 'user', content: userPrompt });
+
+   const res = await callOpenAiCompatible(config, messages);
 
    const { sql, explanation } = extractSqlFromResponse(res.content);
    return {

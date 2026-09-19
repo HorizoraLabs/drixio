@@ -22,7 +22,7 @@ export const AI_PRESETS = {
       baseUrl: 'http://localhost:11434/v1',
       model: 'llama3',
       placeholderKey: 'ollama (no key needed)',
-      badge: '100% Free & Local',
+      badge: '100% Free',
    },
    openai: {
       name: 'OpenAI',
@@ -67,7 +67,8 @@ export function openAiConfigModal(onSaved) {
       icon: 'smart_toy',
       iconColor: 'primary',
       title: 'AI Assistant Settings',
-      subtitle: 'Configure AI models for Text-to-SQL, query explain, and auto-repair',
+      subtitle:
+         'Configure AI models for Text-to-SQL, query explain, and auto-repair',
       badge: 'OPT-IN',
       width: '560px',
       body: /* html */ `
@@ -167,7 +168,9 @@ export function openAiConfigModal(onSaved) {
    if (modalOverlay) {
       modalOverlay.querySelectorAll('.ai-provider-card').forEach((card) => {
          card.onclick = () => {
-            modalOverlay.querySelectorAll('.ai-provider-card').forEach((c) => c.classList.remove('selected'));
+            modalOverlay
+               .querySelectorAll('.ai-provider-card')
+               .forEach((c) => c.classList.remove('selected'));
             card.classList.add('selected');
             selectedProvider = card.dataset.provider;
 
@@ -197,13 +200,15 @@ export function openAiConfigModal(onSaved) {
          };
 
          testBtn.disabled = true;
-         testBtn.innerHTML = '<span class="material-symbols-outlined animate-spin" style="font-size: 15px;">progress_activity</span><span>Testing...</span>';
+         testBtn.innerHTML =
+            '<span class="material-symbols-outlined animate-spin" style="font-size: 15px;">progress_activity</span><span>Testing...</span>';
          if (testStatus) testStatus.className = 'ai-test-status hidden';
 
          try {
             const res = await testAiApi(cfg);
             testBtn.disabled = false;
-            testBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 15px;">wifi_tethering</span><span>Test Connection</span>';
+            testBtn.innerHTML =
+               '<span class="material-symbols-outlined" style="font-size: 15px;">wifi_tethering</span><span>Test Connection</span>';
 
             if (testStatus) {
                testStatus.classList.remove('hidden');
@@ -217,7 +222,8 @@ export function openAiConfigModal(onSaved) {
             }
          } catch (err) {
             testBtn.disabled = false;
-            testBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 15px;">wifi_tethering</span><span>Test Connection</span>';
+            testBtn.innerHTML =
+               '<span class="material-symbols-outlined" style="font-size: 15px;">wifi_tethering</span><span>Test Connection</span>';
             if (testStatus) {
                testStatus.classList.remove('hidden');
                testStatus.className = 'ai-test-status error';

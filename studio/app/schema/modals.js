@@ -536,7 +536,7 @@ export async function openPkFkModal(td, currentText) {
       const colDisplay = document.getElementById('modal-fk-col-display');
       if (colDisplay) colDisplay.textContent = 'Loading columns...';
       try {
-         const res = await fetch(`/api/tables/${tName}/schema`);
+         const res = await fetch(`/api/tables/${encodeURIComponent(tName)}/schema`);
          const json = await res.json();
          if (json.success && json.data) {
             const currentTable = window.AppState?.currentTable;

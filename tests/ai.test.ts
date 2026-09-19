@@ -147,6 +147,53 @@ describe('AI: End-to-End Handlers with mocked fetch', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
    });
 
+   it('should include conversation history in messages when provided', async () => {
+      let capturedBody: any = null;
+      const mockFetch = vi.fn().mockImplementation(async (_url, opts) => {
+         capturedBody = JSON.parse(opts.body);
+         return {
+            ok: true,
+            json: async () => ({
+               choices: [
+                  {
+                     message: {
+                        role: 'assistant',
+                        content: "```sql\nSELECT * FROM users ORDER BY id DESC LIMIT 5;\n```\nUpdated query with ordering and limit.",
+                     },
+                  },
+               ],
+               model: 'deepseek-chat',
+            }),
+         };
+      });
+
+      // @ts-expect-error mock global fetch
+      globalThis.fetch = mockFetch;
+
+      const result = await generateSqlFromPrompt({
+         prompt: 'also sort by id desc and limit 5',
+         tables: sampleTables,
+         dialect: 'sqlite',
+         history: [
+            { role: 'user', content: 'find users' },
+            { role: 'assistant', content: 'SELECT * FROM users;' },
+         ],
+         config: {
+            provider: 'deepseek',
+            baseUrl: 'https://api.deepseek.com/v1',
+            apiKey: 'mock-key',
+            model: 'deepseek-chat',
+         },
+      });
+
+      expect(result.sql).toBe('SELECT * FROM users ORDER BY id DESC LIMIT 5;');
+      expect(capturedBody).toBeDefined();
+      expect(capturedBody.messages.length).toBe(4); // system, user(turn1), assistant(turn1), user(turn2)
+      expect(capturedBody.messages[1].content).toBe('find users');
+      expect(capturedBody.messages[2].content).toBe('SELECT * FROM users;');
+      expect(capturedBody.messages[3].content).toContain('also sort by id desc');
+   });
+
    it('should execute explainAndOptimizeSql and parse tips and optimized SQL', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
          ok: true,

@@ -11,7 +11,29 @@ import { registerApiRoutes } from './api.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function runStudio(dbConfig: DBConfig) {
+export async function runStudio(dbConfig: DBConfig, isAppMode: boolean = false) {
+   // Use PORT environment variable if provided, otherwise default to 51213
+   const defaultPort = process.env.PORT
+      ? parseInt(process.env.PORT, 10)
+      : 51213;
+
+   // If already running on defaultPort, focus/open window directly without duplicate server
+   try {
+      const ping = await fetch(`http://localhost:${defaultPort}/api/health`, {
+         signal: AbortSignal.timeout(600),
+      });
+      if (ping.ok) {
+         console.log(
+            pc.green(`\n✓ Drixio Studio is already running on http://localhost:${defaultPort}`),
+         );
+         const { openBrowserApp } = await import('../logic/launcher.js');
+         await openBrowserApp(`http://localhost:${defaultPort}`, isAppMode);
+         return;
+      }
+   } catch {
+      // Server not running yet, proceed with startup
+   }
+
    const app = new Hono();
 
    // Register API routes
@@ -51,10 +73,6 @@ export async function runStudio(dbConfig: DBConfig) {
       }
    });
 
-   // Use PORT environment variable if provided, otherwise default to 51213
-   const defaultPort = process.env.PORT
-      ? parseInt(process.env.PORT, 10)
-      : 51213;
    const port = await getAvailablePort(defaultPort);
 
    console.log(
@@ -74,12 +92,23 @@ export async function runStudio(dbConfig: DBConfig) {
    }
    console.log(pc.dim(`Press Ctrl+C to stop the server.\n`));
 
+   const hostname = process.env.HOST || 'localhost';
+
    serve({
       fetch: app.fetch,
       port,
+      hostname,
    });
 
-   await open(`http://localhost:${port}`);
+   try {
+      const { openBrowserApp } = await import('../logic/launcher.js');
+      await openBrowserApp(
+         `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`,
+         isAppMode,
+      );
+   } catch {
+      // In headless environments, Docker or SSH, opening a browser may fail safely
+   }
 }
 
 async function getAvailablePort(startPort: number): Promise<number> {

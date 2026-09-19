@@ -130,26 +130,77 @@ export function renderQueryResultToBody(result, resultsBody) {
          metaCount.innerHTML = `<span style="color: var(--color-error);">Error &middot; ${result.ms || 0}ms</span>`;
       }
       if (exportWrapper) exportWrapper.style.display = 'none';
+
+      const isConnError = /database.*not found|no database connected|failed to find.*database|connection lost|connect.*failed|sqlite_error.*no such file/i.test(result.error || '');
+
+      let actionsHtml = '';
+      if (isConnError) {
+         actionsHtml = /* html */ `
+            <div style="display: flex; align-items: center; gap: 8px;">
+               <button type="button" class="btn-ai-fix-error" id="btn-console-switch-db" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);" title="Open Connection Switcher">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">dns</span>
+                  <span>Connect / Switch DB</span>
+               </button>
+               <button type="button" class="btn-ai-fix-error" id="btn-console-retry-query" style="background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); color: var(--color-text);" title="Retry executing current query">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">refresh</span>
+                  <span>Retry</span>
+               </button>
+            </div>
+         `;
+      } else {
+         actionsHtml = /* html */ `
+            <button type="button" class="btn-ai-fix-error" id="btn-fix-with-ai" title="Diagnose error & generate fix with AI">
+               <span class="material-symbols-outlined" style="font-size: 14px;">auto_fix_high</span>
+               <span>Fix with AI</span>
+            </button>
+         `;
+      }
+
       resultsBody.innerHTML = /* html */ `
          <div class="console-result-error">
             <div class="console-result-error-header">
                <div class="console-result-error-title">
-                  <span class="material-symbols-outlined">error</span>
-                  <span>Query Execution Failed</span>
+                  <span class="material-symbols-outlined">${isConnError ? 'database_off' : 'error'}</span>
+                  <span>${isConnError ? 'Database Connection Error' : 'Query Execution Failed'}</span>
                </div>
-               <button type="button" class="btn-ai-fix-error" id="btn-fix-with-ai" title="Diagnose error & generate fix with AI">
-                  <span class="material-symbols-outlined" style="font-size: 14px;">auto_fix_high</span>
-                  <span>Fix with AI</span>
-               </button>
+               ${actionsHtml}
             </div>
             <pre class="console-result-error-msg">${result.error}</pre>
+            ${isConnError ? `
+               <div class="console-result-error-hint" style="margin-top: 10px; font-size: 12px; color: var(--color-text-soft); display: flex; align-items: center; gap: 6px;">
+                  <span class="material-symbols-outlined" style="font-size: 15px; color: #f59e0b;">info</span>
+                  <span>The query syntax is valid, but the database file or server was unreachable. Please verify connection credentials or file path.</span>
+               </div>
+            ` : ''}
          </div>
       `;
+
       const fixBtn = resultsBody.querySelector('#btn-fix-with-ai');
       if (fixBtn) {
          fixBtn.dataset.sql = result.sql || window.AppState?.lastQuery || '';
          fixBtn.dataset.error = result.error || '';
       }
+
+      const switchDbBtn = resultsBody.querySelector('#btn-console-switch-db');
+      if (switchDbBtn) {
+         switchDbBtn.onclick = () => {
+            if (window.handleSwitchTab) {
+               window.handleSwitchTab('connect-btn');
+            } else {
+               const cBtn = document.getElementById('connect-btn') || document.getElementById('header-connect-btn');
+               if (cBtn) cBtn.click();
+            }
+         };
+      }
+
+      const retryBtn = resultsBody.querySelector('#btn-console-retry-query');
+      if (retryBtn) {
+         retryBtn.onclick = () => {
+            const runBtn = document.getElementById('run-sql-btn');
+            if (runBtn) runBtn.click();
+         };
+      }
+
       return;
    }
 

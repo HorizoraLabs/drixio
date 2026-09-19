@@ -660,7 +660,7 @@ function renderError(msg) {
       const dashboard = document.querySelector('.status-dashboard');
       if (dashboard) {
          dashboard.innerHTML = /* html */ `
-         <div class="drixio-empty-analytics" style="margin-top: 60px;">
+         <div class="drixio-empty-analytics" style="margin: auto; text-align: center; padding: 40px;">
              <div class="drixio-empty-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--color-error); width: 56px; height: 56px; border-radius: 50%;">
                  <span class="material-symbols-outlined" style="font-size: 28px;">error</span>
              </div>

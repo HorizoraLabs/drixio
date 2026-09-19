@@ -42,13 +42,27 @@ export const SideBarHTML = /* html */ `
   </div>
 
   <div id="sidebar-footer">
-    <div class="sidebar-db-status" title="Database Connection Status">
-      <span class="status-indicator-dot" id="sidebar-db-status-dot"></span>
-      <span id="brand-db-type">CONNECTING...</span>
+    <div class="sidebar-footer-top">
+      <div class="sidebar-db-status" title="Database Connection Status">
+        <span class="status-indicator-dot" id="sidebar-db-status-dot"></span>
+        <span id="brand-db-type">CONNECTING...</span>
+      </div>
+      <span class="sidebar-version-tag">v1.2.0</span>
     </div>
 
     <div class="sidebar-footer-actions">
-      <span class="sidebar-version-tag">v1.2.0</span>
+      <button type="button" id="sidebar-app-btn" class="sidebar-footer-btn" title="Install Desktop App Shortcut" aria-label="Install Desktop App Shortcut">
+        <span class="material-symbols-outlined" style="font-size: 15px;">install_desktop</span>
+        <span class="sidebar-footer-btn-label">App</span>
+      </button>
+      <button type="button" id="sidebar-health-btn" class="sidebar-footer-btn" title="Schema Health Doctor" aria-label="Schema Health Doctor">
+        <span class="material-symbols-outlined" style="font-size: 15px;">health_and_safety</span>
+        <span id="sidebar-health-badge" class="sidebar-footer-btn-label">Doctor</span>
+      </button>
+      <button type="button" id="sidebar-trash-btn" class="sidebar-trash-btn hidden" title="Table Recycle Bin" aria-label="Table Recycle Bin">
+        <span class="material-symbols-outlined" style="font-size: 15px;">delete</span>
+        <span id="sidebar-trash-count">0</span>
+      </button>
     </div>
   </div>
 </aside>

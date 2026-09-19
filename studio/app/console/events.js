@@ -656,6 +656,20 @@ export const bindConsoleEvents = (editor, resultsBody) => {
       });
    };
 
+   // Expose global query runner for Command Palette / Quick run
+   window.runQueryInConsole = (sql, autoExecute = true) => {
+      if (window.handleSwitchTab) {
+         window.handleSwitchTab('sql-btn');
+      }
+      openOrLoadQuery('Console Query', sql, false);
+      if (autoExecute) {
+         setTimeout(() => {
+            executeAndReset(sql);
+         }, 100);
+      }
+   };
+   window.toggleConsoleAiBar = handleToggleAiBar;
+
    const aiBtn = document.getElementById('console-ai-btn');
    if (aiBtn) {
       aiBtn.onclick = () => handleToggleAiBar();
@@ -1710,30 +1724,44 @@ export const bindConsoleEvents = (editor, resultsBody) => {
       {
          title: 'Select all users',
          sql: 'SELECT * FROM user LIMIT 50;',
+         icon: 'group',
+         color: '#3b82f6',
       },
       {
          title: 'Count rows in table',
          sql: 'SELECT count(*) AS total_rows FROM user;',
+         icon: 'tag',
+         color: '#10b981',
       },
       {
          title: 'Show database tables',
          sql: "SELECT * FROM sqlite_master WHERE type='table';",
+         icon: 'table_chart',
+         color: '#8b5cf6',
       },
       {
          title: 'Create table blueprint',
          sql: `CREATE TABLE example (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`,
+         icon: 'add_box',
+         color: '#ec4899',
       },
       {
          title: 'Inspect table schema',
          sql: "PRAGMA table_info('user');",
+         icon: 'account_tree',
+         color: '#06b6d4',
       },
       {
          title: 'Check index coverage',
          sql: "PRAGMA index_list('user');",
+         icon: 'bolt',
+         color: '#f59e0b',
       },
       {
          title: 'Ping / Health check',
          sql: 'SELECT 1 + 1 AS ping;',
+         icon: 'vital_signs',
+         color: '#10b981',
       },
    ];
 
@@ -1764,7 +1792,7 @@ export const bindConsoleEvents = (editor, resultsBody) => {
             (tpl) => `
          <button type="button" class="table-btn query-item-btn template-item" data-title="${tpl.title}" title="${tpl.title}">
            <div class="table-btn-label">
-             <i class="material-symbols-outlined table-item-icon" style="color: #f59e0b;">lightbulb</i>
+             <i class="material-symbols-outlined table-item-icon" style="color: ${tpl.color || '#f59e0b'};">${tpl.icon || 'lightbulb'}</i>
              <span class="table-name-text">${tpl.title}</span>
            </div>
          </button>
@@ -1829,9 +1857,13 @@ export const bindConsoleEvents = (editor, resultsBody) => {
          const deltaY = e.clientY - startY;
          let newHeight = startHeight + deltaY;
 
-         const minH = 120;
-         const maxH = Math.max(minH, window.innerHeight * 0.75);
-         newHeight = Math.max(minH, Math.min(newHeight, maxH));
+         const minEditorH = 250;
+         const minResultsH = 250;
+
+         const containerH = editorPane.parentElement.clientHeight;
+         const maxEditorH = containerH - minResultsH;
+
+         newHeight = Math.max(minEditorH, Math.min(newHeight, maxEditorH));
 
          editorPane.style.height = `${newHeight}px`;
       };

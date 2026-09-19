@@ -87,9 +87,9 @@ export function loadSqlConsole(tableName, btnElement, container) {
             <span class="status-indicator-dot status-connected" id="console-db-status-dot"></span>
             <span id="console-db-type">CONNECTED</span>
           </div>
-          <button type="button" id="console-clear-results-btn" class="console-sidebar-clear-btn" title="Clear current results">
-            <span class="material-symbols-outlined" style="font-size: 14px;">cleaning_services</span>
-            <span>Clear</span>
+          <button type="button" id="console-clear-history-footer-btn" class="console-sidebar-clear-btn" title="Clear recent query execution history">
+            <span class="material-symbols-outlined" style="font-size: 14px;">delete_sweep</span>
+            <span>Clear History</span>
           </button>
         </div>
       </aside>
@@ -206,6 +206,10 @@ export function loadSqlConsole(tableName, btnElement, container) {
             </div>
             <div class="console-results-meta" id="console-results-meta">
               <span class="results-meta-text" id="results-meta-count">Ready to run query</span>
+              <button type="button" id="console-clear-results-btn" class="console-action-btn secondary" style="height: 24px; padding: 0 8px; font-size: 11px; gap: 4px;" title="Clear results pane">
+                <span class="material-symbols-outlined" style="font-size: 13px;">cleaning_services</span>
+                <span>Clear</span>
+              </button>
               <div class="results-export-wrapper" id="results-export-wrapper" style="display: none;">
                 <button type="button" id="console-export-btn" class="console-export-btn" title="Export Results">
                   <span class="material-symbols-outlined" style="font-size: 14px;">download</span>

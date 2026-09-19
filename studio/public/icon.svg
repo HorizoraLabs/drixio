@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- App Background Rounded Rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#38bdf8" stroke-width="4" stroke-opacity="0.3" />
+
+  <!-- Glowing Aura -->
+  <ellipse cx="256" cy="256" rx="160" ry="140" fill="#3b82f6" opacity="0.15" filter="url(#glow)" />
+
+  <!-- Database Tier 1 (Top) -->
+  <ellipse cx="256" cy="155" rx="135" ry="48" fill="url(#primaryGrad)" />
+  <ellipse cx="256" cy="155" rx="120" ry="38" fill="#1e293b" />
+  <ellipse cx="256" cy="155" rx="110" ry="32" fill="#0f172a" />
+
+  <!-- Database Tier 2 (Middle) -->
+  <path d="M 121 155 V 255 C 121 295, 391 295, 391 255 V 155" fill="none" stroke="url(#primaryGrad)" stroke-width="26" stroke-linejoin="round" />
+  
+  <!-- Database Tier 3 (Bottom) -->
+  <path d="M 121 255 V 355 C 121 395, 391 395, 391 355 V 255" fill="none" stroke="url(#primaryGrad)" stroke-width="26" stroke-linejoin="round" />
+
+  <!-- Energy Pulse / Lightning Bolt (Speed & AI) -->
+  <path d="M 270 190 L 210 280 L 260 280 L 235 370 L 320 260 L 270 260 Z" fill="url(#accentGrad)" filter="url(#glow)" />
+</svg>
+

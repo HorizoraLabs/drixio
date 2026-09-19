@@ -47,20 +47,20 @@ export async function fetchTableWithName(tableName, options = {}) {
       params.append('orderAsc', orderAsc !== false ? 'true' : 'false');
    }
 
-   const url = `/api/tables/${tableName}/data?${params.toString()}`;
+   const url = `/api/tables/${encodeURIComponent(tableName)}/data?${params.toString()}`;
    const res = await fetch(url);
    const data = await res.json();
    return data;
 }
 
 export async function fetchTableSchema(tableName) {
-   const res = await fetch(`/api/tables/${tableName}/schema`);
+   const res = await fetch(`/api/tables/${encodeURIComponent(tableName)}/schema`);
    const data = await res.json();
    return data;
 }
 
 export async function fetchTableIndexes(tableName) {
-   const res = await fetch(`/api/tables/${tableName}/indexes`);
+   const res = await fetch(`/api/tables/${encodeURIComponent(tableName)}/indexes`);
    const data = await res.json();
    return data;
 }
@@ -300,4 +300,108 @@ export async function testAiApi(config) {
    });
    return await res.json();
 }
+
+export async function deleteTableApi(tableName, soft = true) {
+   const res = await fetch(
+      `/api/tables/${encodeURIComponent(tableName)}?soft=${soft}`,
+      { method: 'DELETE' },
+   );
+   return await res.json();
+}
+
+export async function fetchTrashListApi() {
+   const res = await fetch('/api/trash');
+   return await res.json();
+}
+
+export async function restoreTrashApi(trashId, customName) {
+   const res = await fetch(`/api/trash/${encodeURIComponent(trashId)}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customName }),
+   });
+   return await res.json();
+}
+
+export async function purgeTrashApi(trashId) {
+   const res = await fetch(`/api/trash/${encodeURIComponent(trashId)}`, {
+      method: 'DELETE',
+   });
+   return await res.json();
+}
+
+export async function purgeAllTrashApi() {
+   const res = await fetch('/api/trash/purge-all', {
+      method: 'POST',
+   });
+   return await res.json();
+}
+
+export async function fetchSchemaHealthApi() {
+   const res = await fetch('/api/health');
+   return await res.json();
+}
+
+export async function createDesktopShortcutApi() {
+   try {
+      const res = await fetch('/api/app/create-shortcut', {
+         method: 'POST',
+      });
+
+      const text = await res.text();
+      let data = null;
+      try {
+         data = JSON.parse(text);
+      } catch {
+         // Non-JSON response
+      }
+
+      if (res.ok && data?.success) {
+         return data;
+      }
+
+      // If backend returned 404 (e.g. backend server was started prior to this route and needs restart)
+      if (res.status === 404 || !data) {
+         downloadFallbackLauncher();
+         return {
+            success: true,
+            fallbackDownloaded: true,
+            data: { path: 'Downloads (drixio-launcher.bat)' },
+            message:
+               'Launcher script downloaded to Downloads! To enable direct 1-click desktop shortcut placement, please restart your terminal backend (Ctrl+C and re-run), or run "npx drixio install-app" in your terminal.',
+         };
+      }
+
+      return data || { success: false, error: `Server error (${res.status})` };
+   } catch (e) {
+      return { success: false, error: e.message };
+   }
+}
+
+export function downloadDesktopAppLauncher() {
+   const a = document.createElement('a');
+   a.href = '/api/app/download-launcher';
+   a.download = 'Drixio-Studio.bat';
+   document.body.appendChild(a);
+   a.click();
+   a.remove();
+}
+
+export async function installDesktopApp() {
+   // 1. Trigger browser file download (shows in browser's Downloads menu!)
+   downloadDesktopAppLauncher();
+
+   // 2. Also tell backend to place the shortcut on Desktop
+   try {
+      await fetch('/api/app/create-shortcut', { method: 'POST' });
+   } catch {
+      // Background placement attempt
+   }
+
+   return {
+      success: true,
+      message: '✓ Drixio App Launcher downloaded to your browser! Click it in your browser downloads to launch.',
+   };
+}
+
 

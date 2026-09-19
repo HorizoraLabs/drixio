@@ -160,19 +160,30 @@ aside.collapsed .table-btn.active::before {
 
 /* Footer & Theme Toggle in collapsed mode */
 aside.collapsed #sidebar-footer {
-   padding: 12px 0;
+   padding: 10px 4px;
    justify-content: center;
+   align-items: center;
    width: 100%;
 }
 
-aside.collapsed .theme-toggle-btn {
-   width: 44px;
-   height: 44px;
-   padding: 0 !important;
-   justify-content: center !important;
-   align-items: center !important;
-   border-radius: 9px;
-   margin: 0 auto !important;
+aside.collapsed .sidebar-footer-top {
+   justify-content: center;
+}
+
+aside.collapsed .sidebar-footer-actions {
+   flex-direction: column;
+   gap: 6px;
+}
+
+aside.collapsed .sidebar-footer-btn-label {
+   display: none;
+}
+
+aside.collapsed .sidebar-footer-btn {
+   width: 32px;
+   height: 32px;
+   padding: 0;
+   flex: none;
 }
 
 /* ==================== EXPANDED SIDEBAR STYLES ==================== */
@@ -767,7 +778,7 @@ aside.collapsed .dirty-indicator-dot {
    flex-direction: column;
    justify-content: center;
    align-items: center;
-   padding-bottom: 36px;
+   padding: 24px 12px;
    gap: 8px;
    text-align: center;
    font-size: 12px;
@@ -775,17 +786,46 @@ aside.collapsed .dirty-indicator-dot {
    margin: auto;
 }
 
+.sidebar-empty-cta-btn {
+   display: inline-flex;
+   align-items: center;
+   gap: 4px;
+   margin-top: 4px;
+   padding: 4px 10px;
+   border-radius: 6px;
+   border: 1px dashed var(--color-border);
+   background: transparent;
+   color: var(--color-primary);
+   font-size: 11px;
+   font-weight: 600;
+   cursor: pointer;
+   transition: all 0.15s ease;
+}
+
+.sidebar-empty-cta-btn:hover {
+   border-style: solid;
+   background: rgba(59, 130, 246, 0.08);
+   border-color: var(--color-primary);
+   transform: translateY(-1px);
+}
+
 /* Sidebar Footer */
 #sidebar-footer {
    display: flex;
-   align-items: center;
-   justify-content: space-between;
+   flex-direction: column;
    padding: 10px 12px;
    border-top: 1px solid var(--color-border);
    background-color: var(--color-bg-secondary);
    box-sizing: border-box;
    flex-shrink: 0;
    gap: 8px;
+}
+
+.sidebar-footer-top {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   width: 100%;
 }
 
 .sidebar-db-status {
@@ -807,44 +847,92 @@ aside.collapsed .dirty-indicator-dot {
    box-sizing: border-box;
 }
 
+.sidebar-version-tag {
+   font-size: 11px;
+   font-family: var(--font-mono);
+   color: var(--color-text-soft);
+}
+
 .sidebar-footer-actions {
    display: flex;
    align-items: center;
-   gap: 8px;
+   gap: 6px;
+   width: 100%;
 }
 
-.theme-toggle-btn {
-   display: flex;
+.sidebar-footer-btn {
+   flex: 1;
+   display: inline-flex;
    align-items: center;
-   gap: 6px;
-   background: transparent;
+   justify-content: center;
+   gap: 5px;
+   background: var(--color-bg-primary);
    border: 1px solid var(--color-border);
    color: var(--color-text-secondary);
    padding: 4px 8px;
    border-radius: 6px;
    cursor: pointer;
    font-size: 11px;
-   font-weight: 600;
+   font-weight: 500;
    transition: all 0.15s ease;
-   background-color: var(--color-bg-primary);
+   box-sizing: border-box;
+   height: 26px;
 }
 
-.theme-toggle-btn:hover {
+.sidebar-footer-btn:hover {
    color: var(--color-text);
    border-color: var(--color-text-soft);
-   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+   background: var(--color-bg-secondary);
+   transform: translateY(-1px);
 }
 
-.theme-toggle-btn:active {
-   transform: scale(0.96);
+.sidebar-footer-btn:active {
+   transform: scale(0.97);
 }
 
-#theme-icon {
-   font-size: 15px;
+[data-theme='dark'] .sidebar-footer-btn {
+   background: #151821;
+   border-color: rgba(255, 255, 255, 0.08);
+   color: #94a3b8;
 }
 
-.sidebar-version-tag {
+[data-theme='dark'] .sidebar-footer-btn:hover {
+   background: #1c212d;
+   border-color: rgba(255, 255, 255, 0.16);
+   color: #f1f5f9;
+}
+
+.sidebar-footer-btn-label {
    font-size: 11px;
    font-family: var(--font-mono);
-   color: var(--color-text-soft);
+   font-weight: 600;
+}
+
+.sidebar-trash-btn {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   gap: 4px;
+   background: rgba(239, 68, 68, 0.08);
+   border: 1px solid rgba(239, 68, 68, 0.2);
+   color: #ef4444;
+   padding: 4px 8px;
+   border-radius: 6px;
+   cursor: pointer;
+   font-size: 11px;
+   font-family: var(--font-mono);
+   font-weight: 600;
+   transition: all 0.15s ease;
+   height: 26px;
+   box-sizing: border-box;
+}
+
+.sidebar-trash-btn:hover {
+   background: rgba(239, 68, 68, 0.16);
+   border-color: rgba(239, 68, 68, 0.35);
+   transform: translateY(-1px);
+}
+
+.sidebar-trash-btn:active {
+   transform: scale(0.96);
 }

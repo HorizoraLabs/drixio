@@ -22,7 +22,7 @@ export function initCommandPalette() {
                type="text" 
                class="command-palette-input" 
                id="command-palette-input" 
-               placeholder="Search tables, views, or commands..." 
+               placeholder="Search tables, commands, or type SQL to run directly..." 
                autocomplete="off"
                spellcheck="false"
             />
@@ -120,12 +120,12 @@ export function closeCommandPalette() {
    if (window.gsap && modalEl) {
       gsap.to(modalEl, {
          opacity: 0,
-         scale: 0.96,
+         scale: 0.95,
          y: -10,
          duration: 0.15,
          ease: 'power2.in',
          onComplete: () => {
-            paletteContainer.classList.remove('is-open');
+            paletteContainer?.classList.remove('is-open');
          },
       });
    } else {
@@ -210,7 +210,86 @@ function getAvailableActions() {
       },
    );
 
-   // 3. Quick Actions
+   // 3. AI & Safety Tools
+   actions.push(
+      {
+         group: 'AI & Safety',
+         id: 'action-ask-ai',
+         icon: 'auto_awesome',
+         title: 'Ask AI SQL Assistant',
+         desc: 'Open AI Copilot right panel to write or optimize SQL queries',
+         badge: 'Ctrl+I',
+         action: () => {
+            if (window.handleSwitchTab) window.handleSwitchTab('sql-btn');
+            setTimeout(() => {
+               if (window.toggleConsoleAiBar) {
+                  window.toggleConsoleAiBar();
+               } else {
+                  document.getElementById('console-ai-btn')?.click();
+               }
+            }, 80);
+         },
+      },
+      {
+         group: 'AI & Safety',
+         id: 'action-ai-config',
+         icon: 'tune',
+         title: 'AI Configuration & Models',
+         desc: 'Configure DeepSeek, Ollama, OpenAI API keys and provider presets',
+         badge: 'AI Config',
+         action: () => {
+            import('./aiConfigModal.js').then((m) => m.openAiConfigModal());
+         },
+      },
+      {
+         group: 'AI & Safety',
+         id: 'action-safe-mode',
+         icon: 'security',
+         title: 'Toggle Safe Mode (Production Guard)',
+         desc: 'Protect against accidental UPDATE/DELETE/DROP queries without confirmation',
+         badge: 'Safe Mode',
+         action: () => {
+            import('../app/console/safeModal.js')
+               .then(({ isSafeModeEnabled, setSafeModeEnabled }) => {
+                  const current = isSafeModeEnabled();
+                  setSafeModeEnabled(!current);
+                  window.showToast?.(
+                     !current
+                        ? 'Safe Mode enabled (Destructive query guard ON)'
+                        : 'Safe Mode disabled (Guard OFF)',
+                     !current ? 'success' : 'info',
+                  );
+               })
+               .catch(() => {
+                  document.getElementById('console-safe-toggle-btn')?.click();
+               });
+         },
+      },
+      {
+         group: 'AI & Safety',
+         id: 'action-health-doctor',
+         icon: 'health_and_safety',
+         title: 'Run Schema Health Doctor',
+         desc: 'Audit tables for missing PKs, unindexed foreign keys, and antipatterns',
+         badge: 'Health Check',
+         action: () => {
+            import('./healthModal.js').then((m) => m.openHealthModal());
+         },
+      },
+      {
+         group: 'AI & Safety',
+         id: 'action-recycle-bin',
+         icon: 'delete',
+         title: 'Open Table Recycle Bin',
+         desc: 'View, restore, or purge soft-deleted database tables',
+         badge: 'Recycle Bin',
+         action: () => {
+            import('./recycleBinModal.js').then((m) => m.openRecycleBinModal());
+         },
+      },
+   );
+
+   // 4. Quick Actions
    actions.push(
       {
          group: 'Actions',
@@ -238,6 +317,23 @@ function getAvailableActions() {
          desc: 'Download complete SQL schema & data dump',
          badge: '.sql',
          action: () => window.open('/api/database/export', '_blank'),
+      },
+      {
+         group: 'Actions',
+         id: 'action-create-app-launcher',
+         icon: 'install_desktop',
+         title: 'Install Desktop App Shortcut',
+         desc: 'Create a 1-click desktop shortcut to launch Drixio directly without terminal commands',
+         badge: 'Desktop App',
+         action: async () => {
+            const { installDesktopApp } = await import('../lib/api.js');
+            const res = await installDesktopApp();
+            if (res.success) {
+               window.showToast?.(res.message, 'success');
+            } else {
+               window.showToast?.(`Failed: ${res.error}`, 'error');
+            }
+         },
       },
       {
          group: 'Actions',
@@ -283,10 +379,11 @@ function getAvailableActions() {
 }
 
 function renderResults(query) {
-   const q = query.toLowerCase();
+   const trimmed = (query || '').trim();
+   const q = trimmed.toLowerCase();
    const allActions = getAvailableActions();
 
-   currentItems = q
+   let matched = q
       ? allActions.filter(
            (item) =>
               item.title.toLowerCase().includes(q) ||
@@ -295,6 +392,40 @@ function renderResults(query) {
               item.group.toLowerCase().includes(q),
         )
       : allActions;
+
+   // Direct SQL Command execution if input looks like SQL or starts with >
+   const isSqlPattern =
+      /^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|PRAGMA|EXPLAIN|SHOW)\b/i.test(trimmed) ||
+      trimmed.startsWith('>');
+
+   if (isSqlPattern) {
+      const cleanSql = trimmed.replace(/^>\s*/, '');
+      const directSqlAction = {
+         group: 'Direct SQL Command',
+         id: 'action-direct-sql-exec',
+         icon: 'play_circle',
+         title: `Execute SQL: "${cleanSql.length > 45 ? cleanSql.slice(0, 45) + '...' : cleanSql}"`,
+         desc: 'Switch to SQL Editor and execute query immediately',
+         badge: '↵ Run Query',
+         action: () => {
+            if (typeof window.runQueryInConsole === 'function') {
+               window.runQueryInConsole(cleanSql, true);
+            } else {
+               if (window.handleSwitchTab) {
+                  window.handleSwitchTab('sql-btn');
+               }
+               setTimeout(() => {
+                  if (typeof window.runQueryInConsole === 'function') {
+                     window.runQueryInConsole(cleanSql, true);
+                  }
+               }, 150);
+            }
+         },
+      };
+      matched = [directSqlAction, ...matched];
+   }
+
+   currentItems = matched;
 
    selectedIndex = Math.min(
       selectedIndex,

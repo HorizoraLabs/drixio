@@ -4,7 +4,9 @@ import {
    exportRowsToCsv,
    exportQueryResult,
    getRestoreCandidates,
+   importDataToTable,
 } from '../src/logic/transfer.js';
+import { SqliteAdapter } from '../src/logic/adapters/sqlite.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -69,5 +71,25 @@ describe('transfer: getRestoreCandidates', () => {
       } finally {
          await fs.rm(tempDir, { recursive: true, force: true });
       }
+   });
+
+   it('should import CSV with multi-line quoted fields without splitting rows', async () => {
+      const adapter = new SqliteAdapter(':memory:');
+      await adapter.executeSql('CREATE TABLE notes (id INT, content TEXT);');
+
+      const csvContent = `id,content\n1,"First line\nSecond line"\n2,"Simple text"`;
+      const res = await importDataToTable(adapter, 'notes', 'csv', csvContent);
+
+      expect(res.success).toBe(true);
+      if (res.success) {
+         expect(res.data.count).toBe(2);
+      }
+
+      const rowsRes = await adapter.getData('notes');
+      expect(rowsRes.rows.length).toBe(2);
+      expect(rowsRes.rows[0].content).toBe('First line\nSecond line');
+      expect(rowsRes.rows[1].content).toBe('Simple text');
+
+      await adapter.close();
    });
 });

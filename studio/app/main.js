@@ -138,7 +138,7 @@ if (exportBtn && exportDropdown) {
       }
    });
 
-   const triggerExport = (endpoint, format, useQueries = false) => {
+   const triggerExport = (endpoint, format, useQueries = false, mask = false) => {
       exportDropdown.classList.add('hidden');
       exportBtn.classList.remove('is-open');
       if (endpoint === '/api/query/export') {
@@ -155,10 +155,10 @@ if (exportBtn && exportDropdown) {
             return;
          }
 
-         fetch(`/api/query/export?format=${format}`, {
+         fetch(`/api/query/export?format=${format}${mask ? '&mask=true' : ''}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sql }),
+            body: JSON.stringify({ sql, mask }),
          })
             .then((res) => {
                if (!res.ok)
@@ -171,7 +171,7 @@ if (exportBtn && exportDropdown) {
                const url = URL.createObjectURL(blob);
                const a = document.createElement('a');
                a.href = url;
-               a.download = `query_result_${new Date().getTime()}.${format}`;
+               a.download = `query_result_${mask ? 'masked_' : ''}${new Date().getTime()}.${format}`;
                document.body.appendChild(a);
                a.click();
                a.remove();
@@ -181,6 +181,9 @@ if (exportBtn && exportDropdown) {
       }
 
       let url = `${endpoint}?format=${format}`;
+      if (mask) {
+         url += '&mask=true';
+      }
       if (useQueries && window.DataGrid) {
          const whereClause = getFilterQuery ? getFilterQuery() : '';
          const orderCol = window.DataGrid.sortState?.col || '';
@@ -195,7 +198,7 @@ if (exportBtn && exportDropdown) {
       ?.addEventListener('click', () => {
          if (window.AppState.currentTable)
             triggerExport(
-               `/api/tables/${window.AppState.currentTable}/export`,
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
                'csv',
             );
       });
@@ -205,7 +208,7 @@ if (exportBtn && exportDropdown) {
       ?.addEventListener('click', () => {
          if (window.AppState.currentTable)
             triggerExport(
-               `/api/tables/${window.AppState.currentTable}/export`,
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
                'json',
             );
       });
@@ -215,7 +218,7 @@ if (exportBtn && exportDropdown) {
       ?.addEventListener('click', () => {
          if (window.AppState.currentTable)
             triggerExport(
-               `/api/tables/${window.AppState.currentTable}/export`,
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
                'csv',
                true,
             );
@@ -226,8 +229,32 @@ if (exportBtn && exportDropdown) {
       ?.addEventListener('click', () => {
          if (window.AppState.currentTable)
             triggerExport(
-               `/api/tables/${window.AppState.currentTable}/export`,
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
                'json',
+               true,
+            );
+      });
+
+   document
+      .getElementById('export-data-masked-csv-btn')
+      ?.addEventListener('click', () => {
+         if (window.AppState.currentTable)
+            triggerExport(
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
+               'csv',
+               false,
+               true,
+            );
+      });
+
+   document
+      .getElementById('export-data-masked-json-btn')
+      ?.addEventListener('click', () => {
+         if (window.AppState.currentTable)
+            triggerExport(
+               `/api/tables/${encodeURIComponent(window.AppState.currentTable)}/export`,
+               'json',
+               false,
                true,
             );
       });
@@ -266,6 +293,18 @@ if (exportBtn && exportDropdown) {
       .getElementById('export-console-json-btn')
       ?.addEventListener('click', () => {
          triggerExport(`/api/query/export`, 'json');
+      });
+
+   document
+      .getElementById('export-console-masked-csv-btn')
+      ?.addEventListener('click', () => {
+         triggerExport(`/api/query/export`, 'csv', false, true);
+      });
+
+   document
+      .getElementById('export-console-masked-json-btn')
+      ?.addEventListener('click', () => {
+         triggerExport(`/api/query/export`, 'json', false, true);
       });
 
    document

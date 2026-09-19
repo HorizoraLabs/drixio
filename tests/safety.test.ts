@@ -63,5 +63,16 @@ describe('safety: analyzeDangerousQuery', () => {
       const res3 = analyzeDangerousQuery("UPDATE users SET name = 'Alice' WHERE id = 1;");
       expect(res3.isDangerous).toBe(false);
    });
+
+   it('should detect dangerous queries hidden behind comments', () => {
+      const res = analyzeDangerousQuery('/* comment */ DELETE FROM users;');
+      expect(res.isDangerous).toBe(true);
+   });
+
+   it('should detect dangerous queries in multi-statement batches', () => {
+      const res = analyzeDangerousQuery('SELECT 1; DROP TABLE users;');
+      expect(res.isDangerous).toBe(true);
+      expect(res.type).toBe('DROP TABLE');
+   });
 });
 

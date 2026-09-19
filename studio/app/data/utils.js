@@ -137,7 +137,10 @@ export function formatDisplayVal(val, colSchema) {
    }
 
    return {
-      html: strVal.replace(/</g, '&lt;'),
+      html: strVal
+         .replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;'),
       title: '',
    };
 }

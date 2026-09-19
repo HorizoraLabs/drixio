@@ -45,28 +45,37 @@ export class MysqlAdapter implements DBAdapter {
          const dbName = (dbRow as any[])[0]?.db;
          const version = (dbRow as any[])[0]?.version;
 
-         const [statusRows] = await pool.query(
-            "SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected', 'Queries', 'Uptime')",
-         );
          let activeConnections = 0;
          let queries = 0;
          let uptime = 0;
-         for (const row of statusRows as any[]) {
-            if (row.Variable_name === 'Threads_connected')
-               activeConnections = parseInt(row.Value, 10);
-            if (row.Variable_name === 'Queries')
-               queries = parseInt(row.Value, 10);
-            if (row.Variable_name === 'Uptime')
-               uptime = parseInt(row.Value, 10);
+
+         try {
+            const [statusRows] = await pool.query(
+               "SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected', 'Queries', 'Uptime')",
+            );
+            for (const row of statusRows as any[]) {
+               if (row.Variable_name === 'Threads_connected')
+                  activeConnections = parseInt(row.Value, 10);
+               if (row.Variable_name === 'Queries')
+                  queries = parseInt(row.Value, 10);
+               if (row.Variable_name === 'Uptime')
+                  uptime = parseInt(row.Value, 10);
+            }
+         } catch {
+            // SHOW GLOBAL STATUS might fail if user lacks PROCESS privilege
          }
 
          let sizeBytes = 0;
          if (dbName) {
-            const [sizeRow] = await pool.query(
-               'SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?',
-               [dbName],
-            );
-            sizeBytes = parseInt((sizeRow as any[])[0]?.size || '0', 10);
+            try {
+               const [sizeRow] = await pool.query(
+                  'SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?',
+                  [dbName],
+               );
+               sizeBytes = parseInt((sizeRow as any[])[0]?.size || '0', 10);
+            } catch {
+               // information_schema access might be restricted
+            }
          }
 
          return {
@@ -93,8 +102,19 @@ export class MysqlAdapter implements DBAdapter {
          "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'",
       );
       // SHOW FULL TABLES returns objects with table name and Table_type columns
-      // Extract the first value (table name) of each row object
-      return (rows as any[]).map((row) => Object.values(row)[0] as string);
+      return (rows as any[])
+         .map((row) => Object.values(row)[0] as string)
+         .filter((name) => !name.startsWith('_drixio_trash_'));
+   }
+
+   async getTrashTables(): Promise<string[]> {
+      const pool = await this.getPool();
+      const [rows] = await pool.query(
+         "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'",
+      );
+      return (rows as any[])
+         .map((row) => Object.values(row)[0] as string)
+         .filter((name) => name.startsWith('_drixio_trash_'));
    }
 
    async getSchema(tableName: string): Promise<ColumnSchema[]> {

@@ -24,7 +24,7 @@ export class SqliteAdapter implements DBAdapter {
             const fs = await import(modFs);
             if (!fs.existsSync(this.dbPath)) {
                throw new Error(
-                  `Failed to found database file at: ${this.dbPath}`,
+                  `Database file not found at: ${this.dbPath}`,
                );
             }
          }
@@ -82,7 +82,17 @@ export class SqliteAdapter implements DBAdapter {
       const db = await this.getDb();
       const results = db
          .prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;",
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_drixio_trash_%' ORDER BY name;",
+         )
+         .all() as { name: string }[];
+      return results.map((row) => row.name);
+   }
+
+   async getTrashTables(): Promise<string[]> {
+      const db = await this.getDb();
+      const results = db
+         .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '_drixio_trash_%' ORDER BY name DESC;",
          )
          .all() as { name: string }[];
       return results.map((row) => row.name);
@@ -268,7 +278,11 @@ export class SqliteAdapter implements DBAdapter {
       if (orderBy) {
          sql += ` ORDER BY ${this.quoteIdentifier(orderBy.col)} ${orderBy.asc ? 'ASC' : 'DESC'}`;
       }
-      sql += ` LIMIT ${limit} OFFSET ${offset}`;
+      const safeLimit =
+         typeof limit === 'number' && !isNaN(limit) && limit > 0 ? limit : 50;
+      const safeOffset =
+         typeof offset === 'number' && !isNaN(offset) && offset >= 0 ? offset : 0;
+      sql += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
       const dataQuery = db.prepare(sql);
       const rows = dataQuery.all() as Record<string, any>[];

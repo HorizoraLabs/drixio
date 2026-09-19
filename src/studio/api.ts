@@ -20,6 +20,7 @@ import {
    getTablesWithRowCount,
    generateDataDictionary,
    analyzeDangerousQuery,
+   stripSqlComments,
    generateDatabaseSqlDumpStream,
    exportDatabaseSchemaDdl,
    exportQueryResult,
@@ -47,6 +48,14 @@ import {
    explainAndOptimizeSql,
    fixSqlError,
    callOpenAiCompatible,
+   dropTable,
+   moveToTrash,
+   getTrashList,
+   restoreFromTrash,
+   purgeTrashItem,
+   purgeAllTrash,
+   runSchemaHealthCheck,
+   createDesktopLauncher,
 } from '../logic/index.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -229,6 +238,262 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             { success: false, error: e.message || 'Failed to rename table' },
             500,
          );
+      }
+   });
+
+   // Move table to Recycle Bin (Soft Delete) or Hard Drop
+   api.delete('/tables/:name', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
+      const tableName = c.req.param('name');
+      const soft = c.req.query('soft') !== 'false';
+      try {
+         const adapter = getAdapter();
+         if (soft) {
+            const res = await moveToTrash(
+               adapter,
+               currentDbConfig.type,
+               tableName,
+               process.cwd(),
+            );
+            if (res.success) {
+               return c.json({
+                  success: true,
+                  message: `Table "${tableName}" moved to Recycle Bin`,
+                  data: res.data,
+               });
+            } else {
+               return c.json({ success: false, error: res.error }, 400);
+            }
+         } else {
+            const res = await dropTable(
+               adapter,
+               currentDbConfig.type,
+               tableName,
+            );
+            if (res.success) {
+               return c.json({
+                  success: true,
+                  message: `Table "${tableName}" permanently deleted`,
+               });
+            } else {
+               return c.json({ success: false, error: res.error }, 400);
+            }
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // List all items in the Recycle Bin
+   api.get('/trash', async (c) => {
+      try {
+         const adapter = currentAdapter;
+         if (!adapter) {
+            return c.json({ success: true, data: [] });
+         }
+         const res = await getTrashList(adapter, process.cwd());
+         if (res.success) {
+            return c.json({ success: true, data: res.data });
+         } else {
+            return c.json({ success: false, error: res.error }, 500);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Restore a table from Recycle Bin
+   api.post('/trash/:id/restore', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
+      const trashId = c.req.param('id');
+      try {
+         const { customName } = await c.req.json().catch(() => ({}));
+         const adapter = getAdapter();
+         const res = await restoreFromTrash(
+            adapter,
+            currentDbConfig.type,
+            trashId,
+            customName,
+         );
+         if (res.success) {
+            return c.json({
+               success: true,
+               message: `Table "${res.data.restoredTable}" restored successfully`,
+               data: res.data,
+            });
+         } else {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Permanently purge a single table from Recycle Bin
+   api.delete('/trash/:id', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
+      const trashId = c.req.param('id');
+      try {
+         const adapter = getAdapter();
+         const res = await purgeTrashItem(
+            adapter,
+            currentDbConfig.type,
+            trashId,
+         );
+         if (res.success) {
+            return c.json({
+               success: true,
+               message: `Table "${trashId}" permanently purged`,
+            });
+         } else {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Empty the entire Recycle Bin
+   api.post('/trash/purge-all', async (c) => {
+      const roErr = checkReadOnly(c);
+      if (roErr) return roErr;
+      try {
+         const adapter = getAdapter();
+         const res = await purgeAllTrash(
+            adapter,
+            currentDbConfig.type,
+            process.cwd(),
+         );
+         if (res.success) {
+            return c.json({
+               success: true,
+               message: `Recycle Bin emptied (${res.data.purgedCount} tables purged)`,
+               data: res.data,
+            });
+         } else {
+            return c.json({ success: false, error: res.error }, 400);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Schema Health Doctor diagnostic check
+   api.get('/health', async (c) => {
+      try {
+         const adapter = currentAdapter;
+         if (!adapter || currentDbConfig.type === 'unknown') {
+            return c.json({
+               success: true,
+               data: {
+                  score: 100,
+                  grade: 'A',
+                  statusText: 'No database connected',
+                  analyzedTablesCount: 0,
+                  issuesCount: { critical: 0, warning: 0, suggestion: 0, total: 0 },
+                  issues: [],
+               },
+            });
+         }
+         const res = await runSchemaHealthCheck(adapter, currentDbConfig.type);
+         if (res.success) {
+            return c.json({ success: true, data: res.data });
+         } else {
+            return c.json({ success: false, error: res.error }, 500);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Create 1-click desktop app shortcut
+   api.post('/app/create-shortcut', async (c) => {
+      try {
+         const res = await createDesktopLauncher({ workingDir: process.cwd() });
+         if (res.success) {
+            return c.json({ success: true, data: res.data });
+         } else {
+            return c.json({ success: false, error: res.error }, 500);
+         }
+      } catch (e: any) {
+         return c.json({ success: false, error: e.message }, 500);
+      }
+   });
+
+   // Download 1-click Desktop App Launcher via Browser
+   api.get('/app/download-launcher', async () => {
+      const platform = process.platform;
+      const workingDir = process.cwd();
+
+      if (platform === 'win32') {
+         const escapedWorkingDir = workingDir.replace(/"/g, '""');
+         const batScript = [
+            '@echo off',
+            'title Drixio Studio Launcher',
+            'echo ====================================================',
+            'echo   Launching Drixio Studio App...',
+            'echo ====================================================',
+            '',
+            ':: 1. Ensure silent background VBS launcher exists',
+            'if not exist "%USERPROFILE%\\.drixio" mkdir "%USERPROFILE%\\.drixio" >nul 2>&1',
+            '(',
+            'echo Set WshShell = CreateObject^("WScript.Shell"^)',
+            `echo WshShell.CurrentDirectory = "${escapedWorkingDir}"`,
+            'echo WshShell.Run "cmd /c npx drixio studio --app", 0, False',
+            ') > "%USERPROFILE%\\.drixio\\drixio-launcher.vbs"',
+            '',
+            ':: 2. Auto create Desktop shortcut',
+            `powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\\Drixio Studio.lnk'); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"' + $env:USERPROFILE + '\\.drixio\\drixio-launcher.vbs\"'; $sc.WorkingDirectory = '${escapedWorkingDir}'; $sc.Description = 'Drixio Studio Database Manager'; $sc.IconLocation = 'shell32.dll,277'; $sc.Save()" >nul 2>&1`,
+            '',
+            ':: 3. Launch App window immediately in standalone mode',
+            'start "" msedge --app=http://localhost:51213 2>nul || start "" chrome --app=http://localhost:51213 2>nul || start http://localhost:51213',
+            'exit',
+         ].join('\r\n');
+
+         return new Response(batScript, {
+            status: 200,
+            headers: {
+               'Content-Type': 'application/x-bat',
+               'Content-Disposition': 'attachment; filename="Drixio-Studio.bat"',
+            },
+         });
+      } else if (platform === 'darwin') {
+         const shScript = [
+            '#!/bin/bash',
+            `cd "${workingDir}" || exit`,
+            'nohup npx drixio studio --app >/dev/null 2>&1 &',
+            'exit 0',
+         ].join('\n');
+
+         return new Response(shScript, {
+            status: 200,
+            headers: {
+               'Content-Type': 'application/x-sh',
+               'Content-Disposition': 'attachment; filename="Drixio-Studio.command"',
+            },
+         });
+      } else {
+         const desktopContent = [
+            '[Desktop Entry]',
+            'Version=1.0',
+            'Type=Application',
+            'Name=Drixio Studio',
+            'Comment=Database Manager for SQLite, PostgreSQL & MySQL',
+            `Exec=bash -c "cd '${workingDir}' && npx drixio studio --app"`,
+            'Terminal=false',
+            'Categories=Development;Database;',
+         ].join('\n');
+
+         return new Response(desktopContent, {
+            status: 200,
+            headers: {
+               'Content-Type': 'application/x-desktop',
+               'Content-Disposition': 'attachment; filename="drixio-studio.desktop"',
+            },
+         });
       }
    });
 
@@ -553,8 +818,11 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
    api.get('/tables/:name/data', async (c) => {
       const tableName = c.req.param('name');
-      const limit = parseInt(c.req.query('limit') || '50', 10);
-      const offset = parseInt(c.req.query('offset') || '0', 10);
+      const rawLimit = parseInt(c.req.query('limit') || '50', 10);
+      const rawOffset = parseInt(c.req.query('offset') || '0', 10);
+      const limit =
+         isNaN(rawLimit) || rawLimit <= 0 ? 50 : Math.min(rawLimit, 1000);
+      const offset = isNaN(rawOffset) || rawOffset < 0 ? 0 : rawOffset;
       const whereClause = c.req.query('where') || '';
       const orderCol = c.req.query('orderCol');
       const orderAscStr = c.req.query('orderAsc');
@@ -707,9 +975,8 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                (currentDbConfig.type === 'postgres' ||
                   currentDbConfig.type === 'mysql')
             ) {
-               const quote = currentDbConfig.type === 'mysql' ? '`' : '"';
                await currentAdapter.executeSql(
-                  `CREATE DATABASE ${quote}${dbName}${quote};`,
+                  `CREATE DATABASE ${currentAdapter.quoteIdentifier(dbName)};`,
                );
                return c.json({
                   success: true,
@@ -782,11 +1049,24 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          }
 
          if (isReadOnly) {
-            const cleanSql = sql.trim();
-            const isWrite =
-               /^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|REPLACE)\b/i.test(
-                  cleanSql,
+            const stripped = stripSqlComments(sql);
+            const statements = stripped
+               .split(/;(?=(?:[^'"]*['"][^'"]*['"])*[^'"]*$)/)
+               .map((s) => s.trim())
+               .filter(Boolean);
+
+            const isWrite = statements.some((stmt) => {
+               const normalized = stmt.replace(/\s+/g, ' ');
+               return (
+                  /^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|REPLACE|GRANT|REVOKE)\b/i.test(
+                     normalized,
+                  ) ||
+                  /\b(INSERT\s+INTO|UPDATE\s+[`"'\w]+\s+SET|DELETE\s+FROM|DROP\s+(TABLE|DATABASE|INDEX|VIEW|TRIGGER)|ALTER\s+(TABLE|DATABASE|SCHEMA)|TRUNCATE\s+(TABLE)?)\b/i.test(
+                     normalized,
+                  )
                );
+            });
+
             if (isWrite) {
                return c.json(
                   {
@@ -871,9 +1151,10 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
          const format = (c.req.query('format') || 'csv').toLowerCase() as
             | 'csv'
             | 'json';
+         const maskPii = c.req.query('mask') === 'true' || body.mask === true;
          const timestamp = getDatetimeStr();
          const exportFilename = `query_result_${timestamp}`;
-         const content = exportQueryResult(rows, format);
+         const content = exportQueryResult(rows, format, maskPii);
 
          c.header(
             'Content-Disposition',
@@ -892,6 +1173,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.get('/tables/:name/export', async (c) => {
       const tableName = c.req.param('name');
       const format = (c.req.query('format') || 'csv') as 'csv' | 'json';
+      const maskPii = c.req.query('mask') === 'true';
       const whereClause = c.req.query('where') || '';
       const orderCol = c.req.query('orderCol');
       const orderAscStr = c.req.query('orderAsc');
@@ -906,6 +1188,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             format,
             whereClause,
             orderBy,
+            maskPii,
          });
 
          if (!res.success) {
@@ -1470,16 +1753,21 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                }
                const tempConfig = await detectDatabase(fullPath);
                const tempAdapter = createDBAdapter(tempConfig);
-               const tables = await tempAdapter.getTables();
-               await tempAdapter.close();
+               let tablesCount = 0;
+               try {
+                  const tables = await tempAdapter.getTables();
+                  tablesCount = tables.length;
+               } finally {
+                  await tempAdapter.close();
+               }
                const latencyMs = Date.now() - startTime;
                return c.json({
                   success: true,
                   data: {
                      latencyMs,
-                     message: `SQLite database file verified (${tables.length} table${tables.length === 1 ? '' : 's'} found).`,
+                     message: `SQLite database file verified (${tablesCount} table${tablesCount === 1 ? '' : 's'} found).`,
                      fullPath,
-                     tablesCount: tables.length,
+                     tablesCount,
                   },
                });
             }
@@ -1502,13 +1790,16 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
 
          const testConfig = await detectDatabase(targetUrl);
          const testAdapter = createDBAdapter(testConfig);
-         await testAdapter.query('SELECT 1 as connected;');
          let tablesCount = 0;
          try {
-            const tables = await testAdapter.getTables();
-            tablesCount = tables.length;
-         } catch {}
-         await testAdapter.close();
+            await testAdapter.query('SELECT 1 as connected;');
+            try {
+               const tables = await testAdapter.getTables();
+               tablesCount = tables.length;
+            } catch {}
+         } finally {
+            await testAdapter.close();
+         }
 
          const latencyMs = Date.now() - startTime;
          return c.json({
@@ -1659,7 +1950,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    api.post('/ai/generate', async (c) => {
       try {
          const body = await c.req.json().catch(() => ({}));
-         const { prompt, currentTable, config } = body;
+         const { prompt, currentTable, config, history } = body;
          if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
             return c.json({ success: false, error: 'Prompt is required' }, 400);
          }
@@ -1678,6 +1969,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             dialect: currentDbConfig.type || 'sqlite',
             currentTable,
             config: config || {},
+            history: Array.isArray(history) ? history : undefined,
          });
 
          return c.json({ success: true, data: result });

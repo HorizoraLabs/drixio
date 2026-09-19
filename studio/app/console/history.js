@@ -58,15 +58,16 @@ export function initQueryHistory(onSelectQuery) {
    window.AppState.queryHistory = getStoredHistory();
 
    const clearBtn = document.getElementById('console-clear-history-btn');
-   if (clearBtn) {
-      clearBtn.onclick = () => {
-         if (confirm('Clear all recent query history?')) {
-            window.AppState.queryHistory = [];
-            saveHistory([]);
-            renderQueryHistory();
-         }
-      };
-   }
+   const footerClearBtn = document.getElementById('console-clear-history-footer-btn');
+   const handleClearHistory = () => {
+      if (confirm('Clear all recent query history?')) {
+         window.AppState.queryHistory = [];
+         saveHistory([]);
+         renderQueryHistory();
+      }
+   };
+   if (clearBtn) clearBtn.onclick = handleClearHistory;
+   if (footerClearBtn) footerClearBtn.onclick = handleClearHistory;
 
    // Automatically persist and re-render when a query finishes execution
    window.removeEventListener('query-history-updated', onHistoryUpdated);

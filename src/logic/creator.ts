@@ -94,7 +94,6 @@ export async function createDatabase(
          });
 
          try {
-            await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
             const quotedDbName = dbName.replace(/`/g, '``');
             await conn.query(
                `CREATE DATABASE IF NOT EXISTS \`${quotedDbName}\``,
@@ -131,7 +130,6 @@ export async function createDatabase(
                [dbName],
             );
             if (res.rowCount === 0) {
-               await conn.query(`CREATE DATABASE "${dbName}"`);
                const quotedDbName = dbName.replace(/"/g, '""');
                await conn.query(`CREATE DATABASE "${quotedDbName}"`);
             }
@@ -230,7 +228,6 @@ export async function dropDatabase(
          });
 
          try {
-            await conn.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
             const quotedDbName = dbName.replace(/`/g, '``');
             await conn.query(`DROP DATABASE IF EXISTS \`${quotedDbName}\``);
          } finally {
@@ -262,7 +259,6 @@ export async function dropDatabase(
 
          await conn.connect();
          try {
-            await conn.query(`DROP DATABASE IF EXISTS "${dbName}"`);
             const quotedDbName = dbName.replace(/"/g, '""');
             await conn.query(`DROP DATABASE IF EXISTS "${quotedDbName}"`);
          } finally {

@@ -4,6 +4,8 @@ import {
    fetchConfig,
    fetchTableSchema,
    truncateTableApi,
+   deleteTableApi,
+   fetchTrashListApi,
    fetchSchemas,
    switchSchemaApi,
 } from '../lib/api.js';
@@ -11,10 +13,13 @@ import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
 import { openCreateTableModal } from '../app/schema/createTableModal.js';
 import { openRenameTableModal } from '../app/schema/modals.js';
+import { openRecycleBinModal } from './recycleBinModal.js';
+import { openHealthModal } from './healthModal.js';
 import { openDropdownPicker } from './dropdownPicker.js';
 
 window.openCreateTableModal = openCreateTableModal;
 window.refreshTableList = initSidebar;
+window.openHealthModal = openHealthModal;
 
 let isEventsBound = false;
 
@@ -158,7 +163,7 @@ export async function initSidebar(isRefresh = false) {
                      label: 'Export as CSV',
                      action: () => {
                         window.open(
-                           `/api/tables/${tableName}/export?format=csv`,
+                           `/api/tables/${encodeURIComponent(tableName)}/export?format=csv`,
                            '_blank',
                         );
                      },
@@ -168,7 +173,7 @@ export async function initSidebar(isRefresh = false) {
                      label: 'Export as JSON',
                      action: () => {
                         window.open(
-                           `/api/tables/${tableName}/export?format=json`,
+                           `/api/tables/${encodeURIComponent(tableName)}/export?format=json`,
                            '_blank',
                         );
                      },
@@ -198,6 +203,34 @@ export async function initSidebar(isRefresh = false) {
                            } else {
                               alert(`Failed to clear table: ${res.error}`);
                            }
+                        }
+                     },
+                  },
+                  {
+                     icon: 'delete',
+                     label: 'Move to Recycle Bin',
+                     danger: true,
+                     action: async () => {
+                        const isConfirmed = confirm(
+                           `Move table "${tableName}" to Recycle Bin?\n\n• The table will be soft-deleted and safely preserved in the Recycle Bin.\n• A local backup snapshot will be saved in .drixio/backups/.\n• You can restore it anytime in 1 click.\n\nClick OK to confirm, or Cancel to abort.`,
+                        );
+                        if (!isConfirmed) return;
+
+                        const res = await deleteTableApi(tableName, true);
+                        if (res.success) {
+                           if (window.showToast) {
+                              window.showToast(
+                                 `Table "${tableName}" moved to Recycle Bin`,
+                                 'success',
+                              );
+                           }
+                           if (window.AppState.currentTable === tableName) {
+                              window.AppState.currentTable = null;
+                           }
+                           await initSidebar(true);
+                           refreshTrashBadge();
+                        } else {
+                           alert(`Failed to delete table: ${res.error}`);
                         }
                      },
                   },
@@ -243,11 +276,21 @@ export async function initSidebar(isRefresh = false) {
          const countBadge = document.getElementById('table-count-badge');
          if (countBadge) countBadge.textContent = '0';
          tableNav.innerHTML = /* html */ `
-        <div id="not-found-msg">
-          <span class="material-symbols-outlined icon-20 text-soft">inventory_2</span>
+        <div id="not-found-msg" class="sidebar-empty-state">
+          <span class="material-symbols-outlined icon-24 text-soft" style="font-size: 24px;">inventory_2</span>
           <span>No Tables Found</span>
+          <button type="button" class="sidebar-empty-cta-btn" id="sidebar-empty-create-btn">
+            <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+            <span>New Table</span>
+          </button>
         </div>
       `;
+         const createBtn = document.getElementById('sidebar-empty-create-btn');
+         if (createBtn) {
+            createBtn.onclick = () => {
+               window.openCreateTableModal?.();
+            };
+         }
          if (!isRefresh) {
             if (window.AppState.dbType === 'none') {
                window.handleSwitchTab('connect-btn');
@@ -256,6 +299,9 @@ export async function initSidebar(isRefresh = false) {
             }
          }
       }
+
+      // Check and update recycle bin badge count
+      refreshTrashBadge();
 
       if (!isEventsBound) {
          bindSidebarEvents();
@@ -266,11 +312,21 @@ export async function initSidebar(isRefresh = false) {
       const tableNav = document.getElementById('table-nav');
       if (tableNav) {
          tableNav.innerHTML = /* html */ `
-        <div id="not-found-msg" class="text-error">
-          <span class="material-symbols-outlined icon-20">warning</span>
+        <div id="not-found-msg" class="sidebar-empty-state text-error">
+          <span class="material-symbols-outlined icon-24" style="font-size: 24px;">warning</span>
           <span>Failed to load tables</span>
+          <button type="button" class="sidebar-empty-cta-btn" id="sidebar-empty-retry-btn">
+            <span class="material-symbols-outlined" style="font-size: 14px;">refresh</span>
+            <span>Retry</span>
+          </button>
         </div>
       `;
+         const retryBtn = document.getElementById('sidebar-empty-retry-btn');
+         if (retryBtn) {
+            retryBtn.onclick = () => {
+               initSidebar(true);
+            };
+         }
       }
       // Mark status as error
       const dot = document.getElementById('sidebar-db-status-dot');
@@ -301,6 +357,31 @@ export async function loadTableStats() {
    }
 }
 window.loadTableStats = loadTableStats;
+
+export async function refreshTrashBadge() {
+   try {
+      const res = await fetchTrashListApi();
+      const count = res.success && Array.isArray(res.data) ? res.data.length : 0;
+      updateSidebarTrashBadge(count);
+   } catch {
+      // Ignore network errors on badge refresh
+   }
+}
+window.refreshTrashBadge = refreshTrashBadge;
+
+export function updateSidebarTrashBadge(count) {
+   const trashBtn = document.getElementById('sidebar-trash-btn');
+   const trashCount = document.getElementById('sidebar-trash-count');
+   if (trashBtn && trashCount) {
+      trashCount.textContent = count.toString();
+      if (count > 0) {
+         trashBtn.classList.remove('hidden');
+      } else {
+         trashBtn.classList.add('hidden');
+      }
+   }
+}
+window.updateSidebarTrashBadge = updateSidebarTrashBadge;
 
 export function updateSidebarActiveTable(tableName) {
    const targetName = tableName || window.AppState?.currentTable;
@@ -555,6 +636,36 @@ function bindSidebarEvents() {
             if (window.showToast)
                window.showToast('Tables refreshed', 'success');
          }, 300);
+      });
+   }
+
+   // Install desktop app shortcut button in footer
+   const appBtn = document.getElementById('sidebar-app-btn');
+   if (appBtn) {
+      appBtn.addEventListener('click', async () => {
+         const { installDesktopApp } = await import('../lib/api.js');
+         const res = await installDesktopApp();
+         if (res.success) {
+            window.showToast?.(res.message, 'success');
+         } else {
+            window.showToast?.(`Failed: ${res.error}`, 'error');
+         }
+      });
+   }
+
+   // Health doctor button in footer
+   const healthBtn = document.getElementById('sidebar-health-btn');
+   if (healthBtn) {
+      healthBtn.addEventListener('click', () => {
+         openHealthModal();
+      });
+   }
+
+   // Recycle bin button in footer
+   const trashBtn = document.getElementById('sidebar-trash-btn');
+   if (trashBtn) {
+      trashBtn.addEventListener('click', () => {
+         openRecycleBinModal();
       });
    }
 

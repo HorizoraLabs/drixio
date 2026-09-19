@@ -16,6 +16,7 @@ import { runTablesCommand } from './tables.js';
 import { runDescribeCommand } from './describe.js';
 import { runDiffCommand } from './diff.js';
 import { runSnippetsCommand, runRunCommand } from './snippets.js';
+import { runInstallAppCommand } from './installApp.js';
 
 export {
    runQueryCommand,
@@ -36,6 +37,7 @@ export {
    runDiffCommand,
    runSnippetsCommand,
    runRunCommand,
+   runInstallAppCommand,
 };
 
 export async function runQuickCommand(
@@ -108,6 +110,13 @@ export async function runQuickCommand(
          return true;
       case 'run':
          await runRunCommand(dbConfig, args, options);
+         return true;
+      case 'install-app':
+      case 'create-shortcut':
+      case 'shortcut':
+      case 'app':
+      case 'desktop':
+         await runInstallAppCommand(options);
          return true;
       default:
          return false;

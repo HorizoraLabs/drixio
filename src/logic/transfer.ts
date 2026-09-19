@@ -8,6 +8,7 @@ import {
    err,
 } from './types.js';
 import { createTable } from './schema.js';
+import { anonymizeRows } from './anonymizer.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -76,11 +77,13 @@ export function exportRowsToCsv(rows: Record<string, any>[]): string {
 export function exportQueryResult(
    rows: Record<string, any>[],
    format: 'csv' | 'json' = 'csv',
+   maskPii: boolean = false,
 ): string {
+   const processed = maskPii ? anonymizeRows(rows) : rows;
    if (format === 'json') {
-      return JSON.stringify(rows, null, 2);
+      return JSON.stringify(processed, null, 2);
    }
-   return exportRowsToCsv(rows);
+   return exportRowsToCsv(processed);
 }
 
 export async function exportTableToCsv(
@@ -182,6 +185,7 @@ export interface UnifiedExportOptions {
    whereClause?: string;
    orderBy?: { col: string; asc: boolean };
    batchSize?: number;
+   maskPii?: boolean;
 }
 
 /**
@@ -194,7 +198,7 @@ export async function exportTable(
    options: UnifiedExportOptions,
 ): Promise<Result<string>> {
    try {
-      const { format, schemaOnly, whereClause, orderBy, batchSize } = options;
+      const { format, schemaOnly, whereClause, orderBy, batchSize, maskPii } = options;
 
       if (schemaOnly) {
          const schema = await adapter.getSchema(tableName);
@@ -213,7 +217,21 @@ export async function exportTable(
          if (!rowsRes.success) {
             return rowsRes;
          }
-         return ok(JSON.stringify(rowsRes.data, null, 2));
+         const rows = maskPii ? anonymizeRows(rowsRes.data) : rowsRes.data;
+         return ok(JSON.stringify(rows, null, 2));
+      }
+
+      if (maskPii) {
+         const rowsRes = await exportTableToJson(adapter, tableName, {
+            whereClause,
+            orderBy,
+            batchSize,
+         });
+         if (!rowsRes.success) {
+            return rowsRes;
+         }
+         const masked = anonymizeRows(rowsRes.data);
+         return ok(exportRowsToCsv(masked));
       }
 
       return await exportTableToCsv(adapter, tableName, {
@@ -239,38 +257,55 @@ export async function importDataToTable(
          const parsed = JSON.parse(content);
          rows = Array.isArray(parsed) ? parsed : [parsed];
       } else {
-         // Parse CSV
-         const lines = content
-            .split(/\r?\n/)
-            .filter((l) => l.trim().length > 0);
-         if (lines.length < 2) return ok({ count: 0 });
+         // Parse CSV with RFC-4180 multi-line quoted field support
+         const csvRows: string[][] = [];
+         let currentRow: string[] = [];
+         let currentField = '';
+         let inQuotes = false;
+         let i = 0;
 
-         // Simple CSV line parser handling quotes
-         const parseCsvLine = (line: string): string[] => {
-            const result: string[] = [];
-            let cur = '';
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-               const char = line[i];
-               if (char === '"' && line[i + 1] === '"') {
-                  cur += '"';
-                  i++;
-               } else if (char === '"') {
-                  inQuotes = !inQuotes;
-               } else if (char === ',' && !inQuotes) {
-                  result.push(cur);
-                  cur = '';
-               } else {
-                  cur += char;
+         while (i < content.length) {
+            const char = content[i];
+            if (char === '"') {
+               if (inQuotes && content[i + 1] === '"') {
+                  currentField += '"';
+                  i += 2;
+                  continue;
                }
+               inQuotes = !inQuotes;
+               i++;
+            } else if (char === ',' && !inQuotes) {
+               currentRow.push(currentField);
+               currentField = '';
+               i++;
+            } else if ((char === '\r' || char === '\n') && !inQuotes) {
+               if (char === '\r' && content[i + 1] === '\n') {
+                  i++;
+               }
+               currentRow.push(currentField);
+               currentField = '';
+               if (currentRow.length > 0 && currentRow.some((f) => f.trim() !== '')) {
+                  csvRows.push(currentRow);
+               }
+               currentRow = [];
+               i++;
+            } else {
+               currentField += char;
+               i++;
             }
-            result.push(cur);
-            return result;
-         };
+         }
+         if (currentField !== '' || currentRow.length > 0) {
+            currentRow.push(currentField);
+            if (currentRow.some((f) => f.trim() !== '')) {
+               csvRows.push(currentRow);
+            }
+         }
 
-         const headers = parseCsvLine(lines[0]);
-         for (let i = 1; i < lines.length; i++) {
-            const vals = parseCsvLine(lines[i]);
+         if (csvRows.length < 2) return ok({ count: 0 });
+
+         const headers = csvRows[0].map((h) => h.trim());
+         for (let rIdx = 1; rIdx < csvRows.length; rIdx++) {
+            const vals = csvRows[rIdx];
             const row: Record<string, any> = {};
             headers.forEach((h, idx) => {
                row[h] = vals[idx] !== undefined ? vals[idx] : null;

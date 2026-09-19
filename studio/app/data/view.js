@@ -80,7 +80,7 @@ export async function loadTableData(
             selectedCell: null,
             history: [],
             currentTransaction: null,
-            sortState: { col: pkColumn || schema[0].name, asc: true },
+            sortState: { col: pkColumn || schema[0]?.name || '', asc: true },
             pagination: {
                limit: 50,
                offset: 0,
@@ -1012,9 +1012,57 @@ export async function loadTableData(
             }, 50);
          }
       } else {
-         renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Error: ${res.error}</div>`;
+         renderDataErrorState(renderTarget, res.error || 'Unknown error occurred', tableName, btnElement, whereClause);
       }
    } catch (err) {
-      renderTarget.innerHTML = /* html */ `<div class="p-6 text-error">Failed to load data: ${err.message}</div>`;
+      renderDataErrorState(renderTarget, err.message || 'Failed to load table data', tableName, btnElement, whereClause);
    }
 }
+
+function renderDataErrorState(renderTarget, errorMessage, tableName, btnElement, whereClause) {
+   const isNotFound = /not found|failed to find/i.test(errorMessage);
+   const iconName = isNotFound ? 'database_off' : 'error_outline';
+   const titleText = isNotFound ? 'Database File Not Found' : 'Failed to Load Data';
+
+   renderTarget.innerHTML = /* html */ `
+      <div class="data-error-container">
+         <div class="data-error-card">
+            <div class="data-error-icon-wrap">
+               <span class="material-symbols-outlined data-error-icon">${iconName}</span>
+            </div>
+            <h3 class="data-error-title">${titleText}</h3>
+            <p class="data-error-desc">${errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+            <div class="data-error-actions">
+               <button type="button" class="data-error-btn-primary" id="btn-data-error-retry">
+                  <span class="material-symbols-outlined icon-16" style="font-size: 16px;">refresh</span>
+                  <span>Retry Connection</span>
+               </button>
+               <button type="button" class="data-error-btn-secondary" id="btn-data-error-switch-db">
+                  <span class="material-symbols-outlined icon-16" style="font-size: 16px;">dns</span>
+                  <span>Connect / Switch Database</span>
+               </button>
+            </div>
+         </div>
+      </div>
+   `;
+
+   const retryBtn = renderTarget.querySelector('#btn-data-error-retry');
+   if (retryBtn) {
+      retryBtn.onclick = () => {
+         loadTableData(tableName, btnElement, whereClause, false, renderTarget);
+      };
+   }
+
+   const switchBtn = renderTarget.querySelector('#btn-data-error-switch-db');
+   if (switchBtn) {
+      switchBtn.onclick = () => {
+         if (window.handleSwitchTab) {
+            window.handleSwitchTab('connect-btn');
+         } else {
+            const connectBtn = document.getElementById('connect-btn') || document.getElementById('header-connect-btn');
+            if (connectBtn) connectBtn.click();
+         }
+      };
+   }
+}
+

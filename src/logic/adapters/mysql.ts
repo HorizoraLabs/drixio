@@ -143,7 +143,6 @@ export class MysqlAdapter implements DBAdapter {
 
       const enumMap = new Map<string, string[]>();
       try {
-         const pool = await this.getPool();
          const [createResult] = (await pool.query(
             `SHOW CREATE TABLE ${this.quoteIdentifier(tableName)}`,
          )) as any[];
@@ -290,7 +289,7 @@ export class MysqlAdapter implements DBAdapter {
          data = rows as Record<string, any>[];
       } else {
          // It's a mutation query (INSERT/UPDATE/DELETE)
-         columns = ['Result'];
+         columns = ['Result', 'AffectedRows'];
          const count = (rows as any).affectedRows ?? 0;
          affectedRows = count;
          data = [{ Result: 'Success', AffectedRows: count }];

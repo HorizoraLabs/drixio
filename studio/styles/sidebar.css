@@ -206,6 +206,11 @@ aside.collapsed .sidebar-footer-btn {
    border-bottom-color: #222222;
 }
 
+#drixio-logo {
+   height: 32px;
+   width: 32px;
+}
+
 .sidebar-header-title {
    display: flex;
    align-items: center;

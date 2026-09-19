@@ -2,9 +2,7 @@ export const HeaderHTML = /* html */ `
 <header>
   <div class="header-left">
     <div class="header-brand">
-      <div class="header-brand-icon">
-        <span class="material-symbols-outlined">database</span>
-      </div>
+      <img src="/icon.svg" id="drixio-logo" />
       <div class="header-brand-info">
         <div class="header-brand-text">
           <span class="header-brand-title">DRIXIO</span>

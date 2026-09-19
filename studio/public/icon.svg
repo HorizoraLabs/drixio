@@ -1,43 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    Drixio App Icon — 512×512
+    D-mark: a proper D letterform (flat left spine, curved right),
+    filled with three horizontal data-row bands in brand colors.
+
+    D shape: spine at x=76, base at x=196, curve peaks at (436, 256).
+    Centered in 512×512: horizontal margin = 76, vertical margin = 90.
+  -->
+
+  <!-- Dark navy background -->
+  <rect width="512" height="512" rx="110" fill="transparent"/>
+
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#020617" />
-    </linearGradient>
-    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#6366f1" />
-    </linearGradient>
-    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34d399" />
-      <stop offset="100%" stop-color="#059669" />
-    </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="16" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
+    <clipPath id="d">
+      <!--
+        Solid D letterform path:
+          - Left spine: x=76, from y=90 to y=422
+          - Base right to x=196
+          - Smooth bezier curve forming the right bow of the D,
+            peaking at x=436, y=256
+          - Returns to top at x=196, y=90
+      -->
+      <path d="
+        M 76 90
+        L 76 422
+        L 196 422
+        C 400 422 436 356 436 256
+        C 436 156 400 90 196 90
+        Z
+      "/>
+    </clipPath>
   </defs>
 
-  <!-- App Background Rounded Rect -->
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
-  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#38bdf8" stroke-width="4" stroke-opacity="0.3" />
+  <!--
+    Three horizontal color bands, all clipped to the D shape.
+    Gaps between bands are transparent → show the dark background through.
+    Band heights are equal; gap is 20px between each band.
 
-  <!-- Glowing Aura -->
-  <ellipse cx="256" cy="256" rx="160" ry="140" fill="#3b82f6" opacity="0.15" filter="url(#glow)" />
+    Top    y= 90 – 190  (h=100)  sky blue  #38bdf8
+    Gap    y=190 – 210  transparent
+    Middle y=210 – 302  (h= 92)  blue      #3b82f6  (split in two halves)
+    Gap    y=302 – 322  transparent
+    Bottom y=322 – 422  (h=100)  indigo    #6366f1
+  -->
 
-  <!-- Database Tier 1 (Top) -->
-  <ellipse cx="256" cy="155" rx="135" ry="48" fill="url(#primaryGrad)" />
-  <ellipse cx="256" cy="155" rx="120" ry="38" fill="#1e293b" />
-  <ellipse cx="256" cy="155" rx="110" ry="32" fill="#0f172a" />
+  <!-- Top band: sky blue -->
+  <rect x="0" y="90"  width="512" height="100" fill="#38bdf8" clip-path="url(#d)"/>
 
-  <!-- Database Tier 2 (Middle) -->
-  <path d="M 121 155 V 255 C 121 295, 391 295, 391 255 V 155" fill="none" stroke="url(#primaryGrad)" stroke-width="26" stroke-linejoin="round" />
-  
-  <!-- Database Tier 3 (Bottom) -->
-  <path d="M 121 255 V 355 C 121 395, 391 395, 391 355 V 255" fill="none" stroke="url(#primaryGrad)" stroke-width="26" stroke-linejoin="round" />
+  <!-- Middle left half: blue -->
+  <rect x="0"   y="210" width="230" height="92"  fill="#3b82f6" clip-path="url(#d)"/>
 
-  <!-- Energy Pulse / Lightning Bolt (Speed & AI) -->
-  <path d="M 270 190 L 210 280 L 260 280 L 235 370 L 320 260 L 270 260 Z" fill="url(#accentGrad)" filter="url(#glow)" />
+  <!-- Middle right half: blue (gap from x=230 to x=260 is transparent) -->
+  <rect x="260" y="210" width="252" height="92"  fill="#3b82f6" clip-path="url(#d)"/>
+
+  <!-- Bottom band: indigo -->
+  <rect x="0" y="322" width="512" height="100" fill="#6366f1" clip-path="url(#d)"/>
+
+  <!--
+    Emerald accent dot — sits in the vertical gap between the two middle halves.
+    Gap center: x=(230+260)/2=245, y=(210+302)/2=256
+    Not clipped so it renders cleanly on top of the color bands.
+  -->
+  <circle cx="245" cy="256" r="22" fill="#34d399"/>
 </svg>
-

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 64" fill="none">
+  <!--
+    Drixio horizontal logo — 200×64 viewBox, transparent background.
+    Place on any surface matching the app's dark navy (#0f172a).
+
+    Layout:
+      [D-mark icon 6–58px wide, 2–62px tall]  [gap]  [wordmark "drixio"]
+
+    D shape: spine at x=6, base right at x=20, bezier peak at (58, 32).
+    Total mark: ~52×60px, vertically centered in 64px height (2px top/bottom).
+  -->
+
+  <defs>
+    <clipPath id="dLogo">
+      <!--
+        D letterform:
+          - Left spine: x=6, y=2 → y=62
+          - Base: right to x=20
+          - Bezier bow: (20,62) → peak (58,32) → (20,2)
+          - Close back to spine top (6,2)
+      -->
+      <path d="
+        M 6 2
+        L 6 62
+        L 20 62
+        C 52 62 58 48 58 32
+        C 58 16 52  2 20  2
+        Z
+      "/>
+    </clipPath>
+  </defs>
+
+  <!--
+    Three horizontal bands clipped to the D shape.
+    Transparent gaps between bands show the surface behind the SVG.
+
+    Top    y= 2 – 20  (h=18)  sky blue  #38bdf8
+    Gap    y=20 – 25  transparent
+    Middle y=25 – 39  (h=14)  blue      #3b82f6  (split: left x<27, right x>33)
+    Gap    y=39 – 44  transparent
+    Bottom y=44 – 62  (h=18)  indigo    #6366f1
+  -->
+
+  <!-- Top band: sky blue -->
+  <rect x="0"  y="2"  width="60" height="18" fill="#38bdf8" clip-path="url(#dLogo)"/>
+
+  <!-- Middle left half: blue -->
+  <rect x="0"  y="25" width="27" height="14" fill="#3b82f6" clip-path="url(#dLogo)"/>
+
+  <!-- Middle right half: blue (vertical gap x=27–33 is transparent) -->
+  <rect x="33" y="25" width="27" height="14" fill="#3b82f6" clip-path="url(#dLogo)"/>
+
+  <!-- Bottom band: indigo -->
+  <rect x="0"  y="44" width="60" height="18" fill="#6366f1" clip-path="url(#dLogo)"/>
+
+  <!--
+    Emerald accent dot — centered in the vertical gap (x=27–33) at mid-row (y=32).
+    Drawn outside clip-path so it renders on top cleanly.
+  -->
+  <circle cx="30" cy="32" r="4" fill="#34d399"/>
+
+  <!-- ── Wordmark ────────────────────────────────────────────── -->
+  <text
+    x="72"
+    y="32"
+    dominant-baseline="central"
+    font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="28"
+    font-weight="600"
+    letter-spacing="0.3"
+    fill="#ffffff">drixio</text>
+</svg>

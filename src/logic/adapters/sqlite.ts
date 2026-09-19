@@ -526,8 +526,9 @@ export class SqliteAdapter implements DBAdapter {
             if (!idx.sql) continue;
             let idxSql = idx.sql;
             for (const [oldName, newName] of Object.entries(renames)) {
+               const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                idxSql = idxSql.replace(
-                  new RegExp(`\\b${oldName}\\b`, 'g'),
+                  new RegExp(`\\b${escaped}\\b`, 'g'),
                   newName,
                );
             }

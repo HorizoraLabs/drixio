@@ -1,4 +1,4 @@
-import { MongoClient, Db, ObjectId } from 'mongodb';
+import type { MongoClient, Db, ObjectId } from 'mongodb';
 import {
    DBAdapter,
    ColumnSchema,
@@ -14,6 +14,7 @@ import {
 export class MongoAdapter implements DBAdapter {
    private client: MongoClient | null = null;
    private db: Db | null = null;
+   private objectIdClass: typeof ObjectId | null = null;
    private targetUrl: string;
    private dbName: string;
 
@@ -42,12 +43,22 @@ export class MongoAdapter implements DBAdapter {
       return 'test';
    }
 
+   private async getObjectIdClass(): Promise<typeof ObjectId> {
+      if (!this.objectIdClass) {
+         const mongo = await import('mongodb');
+         this.objectIdClass = mongo.ObjectId;
+      }
+      return this.objectIdClass;
+   }
+
    /**
     * Lazy connection helper
     */
    private async getDb(): Promise<Db> {
       if (!this.client) {
-         this.client = new MongoClient(this.targetUrl, {
+         const mongo = await import('mongodb');
+         this.objectIdClass = mongo.ObjectId;
+         this.client = new mongo.MongoClient(this.targetUrl, {
             serverSelectionTimeoutMS: 8000,
             connectTimeoutMS: 8000,
          });
@@ -140,7 +151,7 @@ export class MongoAdapter implements DBAdapter {
     */
    private inferBsonType(val: any): string {
       if (val === null || val === undefined) return 'Null';
-      if (val instanceof ObjectId || (val && val._bsontype === 'ObjectId')) return 'ObjectId';
+      if ((val && (val as any)._bsontype === 'ObjectId') || (val && typeof val === 'object' && (val as any).constructor?.name === 'ObjectId')) return 'ObjectId';
       if (val instanceof Date) return 'Date';
       if (Array.isArray(val)) return 'Array';
       if (typeof val === 'boolean') return 'Boolean';
@@ -274,7 +285,7 @@ export class MongoAdapter implements DBAdapter {
       for (const [k, v] of Object.entries(doc)) {
          if (v === null || v === undefined) {
             out[k] = null;
-         } else if (v instanceof ObjectId || (v && (v as any)._bsontype === 'ObjectId')) {
+         } else if ((v && (v as any)._bsontype === 'ObjectId') || (v && typeof v === 'object' && (v as any).constructor?.name === 'ObjectId')) {
             out[k] = v.toString();
          } else if (v instanceof Date) {
             out[k] = v.toISOString();
@@ -318,6 +329,7 @@ export class MongoAdapter implements DBAdapter {
                .map((c) => c.name);
 
             if (searchFields.length > 0) {
+               const ObjectId = await this.getObjectIdClass();
                filter = {
                   $or: searchFields.map((f) => {
                      if (f === '_id' && ObjectId.isValid(trimmed)) {
@@ -457,6 +469,7 @@ export class MongoAdapter implements DBAdapter {
       if (!rows || rows.length === 0) return;
       const db = await this.getDb();
       const coll = db.collection(collectionName);
+      const ObjectId = await this.getObjectIdClass();
 
       // Sanitize rows: convert _id string into ObjectId if valid
       const sanitized = rows.map((r) => {

@@ -1,5 +1,8 @@
 import { openImportModal } from './importModal.js';
 import { escapeHtml } from '../lib/utils.js';
+import { installDesktopApp } from '../lib/api.js';
+import { openAiConfigModal } from './aiConfigModal.js';
+import { isSafeModeEnabled, setSafeModeEnabled } from '../app/console/safeModal.js';
 
 let paletteContainer = null;
 let inputEl = null;
@@ -248,7 +251,7 @@ function getAvailableActions() {
          desc: 'Configure DeepSeek, Ollama, OpenAI API keys and provider presets',
          badge: 'AI Config',
          action: () => {
-            import('./aiConfigModal.js').then((m) => m.openAiConfigModal());
+            openAiConfigModal();
          },
       },
       {
@@ -259,20 +262,14 @@ function getAvailableActions() {
          desc: 'Protect against accidental UPDATE/DELETE/DROP queries without confirmation',
          badge: 'Safe Mode',
          action: () => {
-            import('../app/console/safeModal.js')
-               .then(({ isSafeModeEnabled, setSafeModeEnabled }) => {
-                  const current = isSafeModeEnabled();
-                  setSafeModeEnabled(!current);
-                  window.showToast?.(
-                     !current
-                        ? 'Safe Mode enabled (Destructive query guard ON)'
-                        : 'Safe Mode disabled (Guard OFF)',
-                     !current ? 'success' : 'info',
-                  );
-               })
-               .catch(() => {
-                  document.getElementById('console-safe-toggle-btn')?.click();
-               });
+            const current = isSafeModeEnabled();
+            setSafeModeEnabled(!current);
+            window.showToast?.(
+               !current
+                  ? 'Safe Mode enabled (Destructive query guard ON)'
+                  : 'Safe Mode disabled (Guard OFF)',
+               !current ? 'success' : 'info',
+            );
          },
       },
       {
@@ -336,7 +333,6 @@ function getAvailableActions() {
          desc: 'Create a 1-click desktop shortcut to launch Drixio directly without terminal commands',
          badge: 'Desktop App',
          action: async () => {
-            const { installDesktopApp } = await import('../lib/api.js');
             const res = await installDesktopApp();
             if (res.success) {
                window.showToast?.(res.message, 'success');

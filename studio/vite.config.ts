@@ -13,6 +13,15 @@ export default defineConfig({
       outDir: '../dist/studio',
       emptyOutDir: true,
       chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+         output: {
+            manualChunks(id) {
+               if (id.includes('node_modules/sql-formatter')) {
+                  return 'sql-formatter';
+               }
+            },
+         },
+      },
    },
    server: {
       port: 51214,

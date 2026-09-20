@@ -2,11 +2,11 @@
 
 <div align="center">
 
-**The developer-first, zero-overhead database manager & Studio for SQLite, PostgreSQL, and MySQL.**
+**The developer-first, zero-overhead database manager & Studio for SQLite, PostgreSQL, MySQL, SQL Server, and MongoDB.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
-[![Database](https://img.shields.io/badge/Databases-SQLite%20%7C%20PostgreSQL%20%7C%20MySQL-orange.svg)](#)
+[![Database](https://img.shields.io/badge/Databases-SQLite%20%7C%20PostgreSQL%20%7C%20MySQL%20%7C%20MSSQL%20%7C%20MongoDB-orange.svg)](#)
 
 [Features](#-key-features) • [Quick Start](#-quick-start) • [Drixio Studio](#-drixio-studio) • [AI Copilot](#-byok-ai-copilot) • [Safety & Doctor](#-table-recycle-bin--safety) • [CLI Reference](#-cli-commands) • [License](#-license)
 
@@ -16,13 +16,14 @@
 
 ## ⚡ Why Drixio?
 
-Traditional database GUIs are often bloated, electron-heavy, subscription-locked, or blind to common production mistakes. **Drixio** is designed from the ground up for modern developers: lightning-fast startup, terminal-native agility, a sleek browser-based Studio, and unique built-in superpowers like zero-overhead BYOK AI, soft-delete Table Recycle Bin, Schema Health Doctor, and deterministic PII data masking.
+Traditional database GUIs are often bloated, electron-heavy, subscription-locked, or blind to common production mistakes. **Drixio** is designed from the ground up for modern developers: lightning-fast startup, terminal-native agility, a sleek browser-based Studio, and unique built-in superpowers like zero-overhead BYOK AI, soft-delete Table Recycle Bin, Schema Health Doctor, deterministic PII data masking, and native SSH bastion tunneling.
 
 ---
 
 ## ✨ Key Features
 
 - 🧠 **Zero-Overhead BYOK AI Copilot**: Bring your own API key (DeepSeek, OpenAI, Ollama local LLMs, Groq). Zero middleman proxy, zero telemetry, schema-aware SQL generation, and instant error debugging.
+- 🚇 **SSH Bastion Tunneling**: Securely bridge database connections through remote jump servers / bastion hosts (password & private key PEM support).
 - ♻️ **Table Recycle Bin & Pre-Drop Snapshots**: Dropping a table never means catastrophic data loss. Recover soft-deleted tables with 1 click. Dual-layer auto-snapshot saved locally to `.drixio/trash/`.
 - 🩺 **Schema Health Doctor**: Deep architectural linter and performance auditor. Detects missing PKs, unindexed foreign keys, redundant duplicate indexes, and unconstrained categoricals with 1-click remediation SQL.
 - 🛡️ **Deterministic PII Data Masking**: Export production data safely for local staging/dev. Pseudonymizes emails, phones, names, IPs, and credentials (`[PROTECTED]`) while preserving relational joins across tables.
@@ -49,17 +50,33 @@ Drixio automatically discovers your database in the following order:
 2. Prisma schema at `prisma/schema.prisma`
 3. Environment variables in `.env` (`DATABASE_URL`, `POSTGRES_URL`, `MYSQL_URL`, etc.)
 
-You can also pass a connection URL directly:
+You can also pass a connection URL directly for any of the 5 supported engines:
 
 ```bash
+# SQLite
+npx drixio "file:./drixio.sqlite"
+
 # PostgreSQL
 npx drixio "postgresql://postgres:password@localhost:5432/mydb"
 
 # MySQL
 npx drixio "mysql://root:password@localhost:3306/mydb"
 
-# SQLite
-npx drixio "file:./local.db"
+# Microsoft SQL Server (MSSQL)
+npx drixio "mssql://sa:Password123!@localhost:1433/master"
+
+# MongoDB (NoSQL)
+npx drixio "mongodb://localhost:27017/drixio_dev"
+```
+
+### 🐳 Local Multi-DB Docker Compose
+
+Clone and instantly start all 4 server databases locally:
+
+```bash
+pnpm db:up     # Starts PostgreSQL (5432), MySQL (3306), MSSQL (1433), MongoDB (27017)
+pnpm db:status # Check running containers
+pnpm db:down   # Stop and clean up
 ```
 
 ---

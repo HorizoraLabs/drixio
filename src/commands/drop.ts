@@ -8,7 +8,9 @@ export async function runDropDbCommand(args: string[]) {
    let dialect = args[0];
    if (
       !dialect ||
-      !['sqlite', 'mysql', 'postgres'].includes(dialect.toLowerCase())
+      !['sqlite', 'mysql', 'postgres', 'mssql', 'mongodb'].includes(
+         dialect.toLowerCase(),
+      )
    ) {
       dialect = await select({
          message: 'Which database type do you want to drop?',
@@ -16,6 +18,8 @@ export async function runDropDbCommand(args: string[]) {
             { name: 'SQLite (Local File)', value: 'sqlite' },
             { name: 'MySQL (Local Server)', value: 'mysql' },
             { name: 'PostgreSQL (Local Server)', value: 'postgres' },
+            { name: 'Microsoft SQL Server (Local/Docker)', value: 'mssql' },
+            { name: 'MongoDB (NoSQL Document)', value: 'mongodb' },
          ],
       });
    }
@@ -54,12 +58,30 @@ export async function runDropDbCommand(args: string[]) {
          process.exit(1);
       }
    } else {
-      // MySQL or Postgres
+      // MySQL, Postgres, MSSQL, or MongoDB
       console.log(
          pc.dim(
             `Please provide credentials for your local ${dialect} server to drop a database.`,
          ),
       );
+
+      const defaultPort =
+         dialect === 'mysql'
+            ? '3306'
+            : dialect === 'mssql'
+              ? '1433'
+              : dialect === 'mongodb'
+                ? '27017'
+                : '5432';
+
+      const defaultUser =
+         dialect === 'mysql'
+            ? 'root'
+            : dialect === 'mssql'
+              ? 'sa'
+              : dialect === 'mongodb'
+                ? ''
+                : 'postgres';
 
       const host = await input({
          message: 'Server Host:',
@@ -67,11 +89,11 @@ export async function runDropDbCommand(args: string[]) {
       });
       const port = await input({
          message: 'Server Port:',
-         default: dialect === 'mysql' ? '3306' : '5432',
+         default: defaultPort,
       });
       const user = await input({
          message: 'Username:',
-         default: dialect === 'mysql' ? 'root' : 'postgres',
+         default: defaultUser,
       });
       const pass = await password({
          message: 'Password (leave empty if none):',

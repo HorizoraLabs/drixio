@@ -4,7 +4,7 @@ import {
    DatabaseStatus,
    IndexSchema,
 } from '../types.js';
-import sql from 'mssql';
+import type sql from 'mssql';
 
 // ─── Connection config builder ────────────────────────────────────────────────
 
@@ -28,68 +28,89 @@ function buildMssqlConfig(connectionString: string): sql.config {
             params.get('trustServerCertificate') === 'true' ||
             params.get('TrustServerCertificate') === 'true' ||
             params.get('trustservercertificate') === 'true';
+         const connectionTimeout = params.has('connectionTimeout')
+            ? parseInt(params.get('connectionTimeout')!, 10)
+            : 10000;
+         const requestTimeout = params.has('requestTimeout')
+            ? parseInt(params.get('requestTimeout')!, 10)
+            : 30000;
 
-         // Auto-enable encryption for Azure SQL
-         const isAzure = host.includes('.database.windows.net') ||
+         const isAzure =
+            host.includes('.database.windows.net') ||
             host.includes('.sql.azuresynapse.net');
 
          return {
-            user,
-            password,
             server: host,
             port,
+            user,
+            password,
             database,
             options: {
-               encrypt: encrypt || isAzure,
-               trustServerCertificate,
+               encrypt: isAzure || encrypt,
+               trustServerCertificate: !isAzure && trustServerCertificate,
                enableArithAbort: true,
             },
-            connectionTimeout: 10000,
-            requestTimeout: 30000,
+            connectionTimeout,
+            requestTimeout,
+            pool: {
+               max: 10,
+               min: 0,
+               idleTimeoutMillis: 30000,
+            },
          };
       } catch {
          // Fall through to key-value parser
       }
    }
 
-   // ── ADO.NET key=value format ──────────────────────────────────────────────
-   // e.g. Server=host,1433;Database=db;User Id=user;Password=pass;Encrypt=True
-   const kvMap: Record<string, string> = {};
-   connectionString.split(';').forEach((part) => {
-      const idx = part.indexOf('=');
+   // ── ADO.NET / ODBC style: Server=xxx;Database=yyy;User Id=zzz;Password=ppp; ──
+   const map = new Map<string, string>();
+   for (const pair of connectionString.split(';')) {
+      const idx = pair.indexOf('=');
       if (idx > 0) {
-         kvMap[part.slice(0, idx).trim().toLowerCase()] = part.slice(idx + 1).trim();
+         map.set(
+            pair.slice(0, idx).trim().toLowerCase(),
+            pair.slice(idx + 1).trim(),
+         );
       }
-   });
-
-   // Server may include port as "host,1433" or "host\\instance"
-   let server = kvMap['server'] || kvMap['data source'] || kvMap['datasource'] || 'localhost';
-   let port = 1433;
-   if (server.includes(',')) {
-      const [h, p] = server.split(',');
-      server = h.trim();
-      port = parseInt(p.trim(), 10) || 1433;
    }
 
-   const database = kvMap['database'] || kvMap['initial catalog'] || undefined;
-   const user = kvMap['user id'] || kvMap['uid'] || kvMap['user'] || '';
-   const password = kvMap['password'] || kvMap['pwd'] || '';
-   const encrypt = kvMap['encrypt']?.toLowerCase() !== 'false';
-   const trust = kvMap['trustservercertificate']?.toLowerCase() === 'true';
+   const serverVal =
+      map.get('server') || map.get('data source') || 'localhost';
+   let host = serverVal;
+   let port = 1433;
+   if (serverVal.includes(',')) {
+      const parts = serverVal.split(',');
+      host = parts[0].trim();
+      port = parseInt(parts[1].trim(), 10) || 1433;
+   }
+
+   const user = map.get('user id') || map.get('uid') || map.get('user') || '';
+   const password = map.get('password') || map.get('pwd') || '';
+   const database = map.get('database') || map.get('initial catalog') || undefined;
+
+   const encryptStr = map.get('encrypt') || '';
+   const trustStr = map.get('trustservercertificate') || '';
+   const isAzure = host.includes('.database.windows.net');
 
    return {
+      server: host,
+      port,
       user,
       password,
-      server,
-      port,
       database,
       options: {
-         encrypt,
-         trustServerCertificate: trust,
+         encrypt: isAzure || encryptStr === 'true' || encryptStr === 'yes',
+         trustServerCertificate: !isAzure && (trustStr === 'true' || trustStr === 'yes'),
          enableArithAbort: true,
       },
       connectionTimeout: 10000,
       requestTimeout: 30000,
+      pool: {
+         max: 10,
+         min: 0,
+         idleTimeoutMillis: 30000,
+      },
    };
 }
 
@@ -98,11 +119,20 @@ function buildMssqlConfig(connectionString: string): sql.config {
 export class MssqlAdapter implements DBAdapter {
    private connectionString: string;
    private pool: sql.ConnectionPool | null = null;
+   private sqlDriver: typeof sql | null = null;
    private currentSchema: string;
 
    constructor(connection: string) {
       this.connectionString = connection;
       this.currentSchema = MssqlAdapter.extractSchema(connection);
+   }
+
+   private async getSql(): Promise<typeof sql> {
+      if (!this.sqlDriver) {
+         const mod = await import('mssql');
+         this.sqlDriver = ((mod as any).default || mod) as typeof sql;
+      }
+      return this.sqlDriver;
    }
 
    // ── Schema extraction ──────────────────────────────────────────────────────
@@ -122,6 +152,7 @@ export class MssqlAdapter implements DBAdapter {
 
    private async getPool(): Promise<sql.ConnectionPool> {
       if (!this.pool || !this.pool.connected) {
+         const sql = await this.getSql();
          const config = buildMssqlConfig(this.connectionString);
          const pool = new sql.ConnectionPool(config);
          await pool.connect();
@@ -206,6 +237,7 @@ export class MssqlAdapter implements DBAdapter {
 
    async getTables(): Promise<string[]> {
       const pool = await this.getPool();
+      const sql = await this.getSql();
       const result = await pool
          .request()
          .input('schema', sql.NVarChar, this.currentSchema)
@@ -222,6 +254,7 @@ export class MssqlAdapter implements DBAdapter {
 
    async getTrashTables(): Promise<string[]> {
       const pool = await this.getPool();
+      const sql = await this.getSql();
       const result = await pool
          .request()
          .input('schema', sql.NVarChar, this.currentSchema)
@@ -240,6 +273,7 @@ export class MssqlAdapter implements DBAdapter {
 
    async getSchema(tableName: string): Promise<ColumnSchema[]> {
       const pool = await this.getPool();
+      const sql = await this.getSql();
 
       // Single comprehensive query joining INFORMATION_SCHEMA views
       const result = await pool
@@ -381,6 +415,7 @@ export class MssqlAdapter implements DBAdapter {
 
    async getIndexes(tableName: string): Promise<IndexSchema[]> {
       const pool = await this.getPool();
+      const sql = await this.getSql();
       const result = await pool
          .request()
          .input('tableName', sql.NVarChar, tableName)
@@ -513,6 +548,7 @@ export class MssqlAdapter implements DBAdapter {
       const placeholders = cols.map((_, i) => `@v${i}`).join(', ');
       const insertSql = `INSERT INTO ${this.quoteTable(tableName)} (${colsQuoted}) VALUES (${placeholders})`;
 
+      const sql = await this.getSql();
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {

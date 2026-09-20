@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { compress } from 'hono/compress';
 import { serveStatic } from '@hono/node-server/serve-static';
 import open from 'open';
 import path from 'path';
@@ -35,6 +36,9 @@ export async function runStudio(dbConfig: DBConfig, isAppMode: boolean = false) 
    }
 
    const app = new Hono();
+
+   // Enable zero-overhead on-the-fly wire compression for static assets and API responses
+   app.use('*', compress());
 
    // Register API routes
    registerApiRoutes(app, dbConfig);

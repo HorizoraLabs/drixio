@@ -4,7 +4,7 @@ import {
    DatabaseStatus,
    IndexSchema,
 } from '../types.js';
-import mysql from 'mysql2/promise';
+import type mysql from 'mysql2/promise';
 
 export class MysqlAdapter implements DBAdapter {
    private connection: string;
@@ -14,9 +14,11 @@ export class MysqlAdapter implements DBAdapter {
       this.connection = connection;
    }
 
-   private async getPool() {
+   private async getPool(): Promise<mysql.Pool> {
       if (!this.pool) {
-         this.pool = mysql.createPool({
+         const mysqlModule = await import('mysql2/promise');
+         const mysqlDriver = ((mysqlModule as any).default || mysqlModule) as typeof mysql;
+         this.pool = mysqlDriver.createPool({
             uri: this.connection,
             multipleStatements: true,
             connectTimeout: 10000,

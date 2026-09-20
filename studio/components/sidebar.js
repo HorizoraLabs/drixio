@@ -8,18 +8,20 @@ import {
    fetchTrashListApi,
    fetchSchemas,
    switchSchemaApi,
+   installDesktopApp,
 } from '../lib/api.js';
 import { showContextMenu } from './contextMenu.js';
 import { openMockDataModal } from '../app/data/modal.js';
 import { openCreateTableModal } from '../app/schema/createTableModal.js';
 import { openRenameTableModal } from '../app/schema/modals.js';
-import { openRecycleBinModal } from './recycleBinModal.js';
-import { openHealthModal } from './healthModal.js';
 import { openDropdownPicker } from './dropdownPicker.js';
 
 window.openCreateTableModal = openCreateTableModal;
 window.refreshTableList = initSidebar;
-window.openHealthModal = openHealthModal;
+window.openHealthModal = () =>
+   import('./healthModal.js').then((m) => m.openHealthModal());
+window.openRecycleBinModal = () =>
+   import('./recycleBinModal.js').then((m) => m.openRecycleBinModal());
 
 let isEventsBound = false;
 
@@ -643,7 +645,6 @@ function bindSidebarEvents() {
    const appBtn = document.getElementById('sidebar-app-btn');
    if (appBtn) {
       appBtn.addEventListener('click', async () => {
-         const { installDesktopApp } = await import('../lib/api.js');
          const res = await installDesktopApp();
          if (res.success) {
             window.showToast?.(res.message, 'success');
@@ -657,7 +658,7 @@ function bindSidebarEvents() {
    const healthBtn = document.getElementById('sidebar-health-btn');
    if (healthBtn) {
       healthBtn.addEventListener('click', () => {
-         openHealthModal();
+         import('./healthModal.js').then((m) => m.openHealthModal());
       });
    }
 
@@ -665,7 +666,7 @@ function bindSidebarEvents() {
    const trashBtn = document.getElementById('sidebar-trash-btn');
    if (trashBtn) {
       trashBtn.addEventListener('click', () => {
-         openRecycleBinModal();
+         import('./recycleBinModal.js').then((m) => m.openRecycleBinModal());
       });
    }
 

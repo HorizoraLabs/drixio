@@ -7,7 +7,9 @@ export async function runInitCommand(args: string[]) {
    let dialect = args[0];
    if (
       !dialect ||
-      !['sqlite', 'mysql', 'postgres'].includes(dialect.toLowerCase())
+      !['sqlite', 'mysql', 'postgres', 'mssql', 'mongodb'].includes(
+         dialect.toLowerCase(),
+      )
    ) {
       dialect = await select({
          message: 'Which database do you want to initialize locally?',
@@ -15,6 +17,8 @@ export async function runInitCommand(args: string[]) {
             { name: 'SQLite (Local File)', value: 'sqlite' },
             { name: 'MySQL (Local Server)', value: 'mysql' },
             { name: 'PostgreSQL (Local Server)', value: 'postgres' },
+            { name: 'Microsoft SQL Server (Local/Docker)', value: 'mssql' },
+            { name: 'MongoDB (NoSQL Document)', value: 'mongodb' },
          ],
       });
    }
@@ -52,12 +56,30 @@ export async function runInitCommand(args: string[]) {
          process.exit(1);
       }
    } else {
-      // MySQL or Postgres
+      // MySQL, Postgres, MSSQL, or MongoDB
       console.log(
          pc.dim(
-            'Please provide credentials for your local server (e.g. running via XAMPP, Homebrew, etc.)',
+            'Please provide credentials for your local server (e.g. running via Docker, Native service, etc.)',
          ),
       );
+
+      const defaultPort =
+         dialect === 'mysql'
+            ? '3306'
+            : dialect === 'mssql'
+              ? '1433'
+              : dialect === 'mongodb'
+                ? '27017'
+                : '5432';
+
+      const defaultUser =
+         dialect === 'mysql'
+            ? 'root'
+            : dialect === 'mssql'
+              ? 'sa'
+              : dialect === 'mongodb'
+                ? ''
+                : 'postgres';
 
       const host = await input({
          message: 'Server Host:',
@@ -65,11 +87,11 @@ export async function runInitCommand(args: string[]) {
       });
       const port = await input({
          message: 'Server Port:',
-         default: dialect === 'mysql' ? '3306' : '5432',
+         default: defaultPort,
       });
       const user = await input({
          message: 'Username:',
-         default: dialect === 'mysql' ? 'root' : 'postgres',
+         default: defaultUser,
       });
       const pass = await password({
          message: 'Password (leave empty if none):',
@@ -78,6 +100,7 @@ export async function runInitCommand(args: string[]) {
       if (!dbName) {
          dbName = await input({
             message: 'New Database Name (e.g. my_project):',
+            default: dialect === 'mongodb' ? 'drixio_dev' : undefined,
          });
       }
 
@@ -89,7 +112,7 @@ export async function runInitCommand(args: string[]) {
 
       try {
          const result = await createDatabase({
-            dialect: dialect as 'mysql' | 'postgres',
+            dialect: dialect as any,
             dbName,
             host,
             port,

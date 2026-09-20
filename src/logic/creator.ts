@@ -210,7 +210,7 @@ export async function createDatabase(
 }
 
 export interface DropDatabaseOptions {
-   dialect: 'sqlite' | 'postgres' | 'mysql';
+   dialect: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb';
    dbName: string;
    host?: string;
    port?: number | string;
@@ -219,7 +219,7 @@ export interface DropDatabaseOptions {
 }
 
 export interface DropDatabaseData {
-   dialect: 'sqlite' | 'postgres' | 'mysql';
+   dialect: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb';
    dbName: string;
    message: string;
 }
@@ -227,7 +227,7 @@ export interface DropDatabaseData {
 export type DropDatabaseResult = Result<DropDatabaseData>;
 
 /**
- * Common logic to drop an existing physical database (SQLite file, MySQL database, or PostgreSQL database).
+ * Common logic to drop an existing physical database (SQLite file, MySQL, PostgreSQL, MSSQL, or MongoDB).
  * Symmetrical to `createDatabase`.
  */
 export async function dropDatabase(
@@ -237,7 +237,9 @@ export async function dropDatabase(
       const dialect = options.dialect.toLowerCase() as
          | 'sqlite'
          | 'postgres'
-         | 'mysql';
+         | 'mysql'
+         | 'mssql'
+         | 'mongodb';
       let dbName = (options.dbName || '').trim();
 
       if (!dbName) {
@@ -323,6 +325,67 @@ export async function dropDatabase(
             dialect: 'postgres',
             dbName,
             message: `Dropped database '${dbName}' on PostgreSQL (${host}:${port})`,
+         });
+      }
+
+      if (dialect === 'mssql') {
+         const host = options.host || 'localhost';
+         const port = parseInt(String(options.port || 1433), 10);
+         const user = options.user || 'sa';
+         const password = options.password || '';
+
+         const sql = await import('mssql');
+         const conn = await (sql as any).default.connect({
+            user,
+            password,
+            server: host,
+            port,
+            database: 'master',
+            options: { encrypt: false, trustServerCertificate: true },
+         });
+
+         try {
+            const escaped = dbName.replace(/]/g, ']]');
+            await conn.query(
+               `IF EXISTS (SELECT * FROM sys.databases WHERE name = '${dbName.replace(/'/g, "''")}') DROP DATABASE [${escaped}]`,
+            );
+         } finally {
+            await conn.close();
+         }
+
+         return ok({
+            dialect: 'mssql',
+            dbName,
+            message: `Dropped database '${dbName}' on SQL Server (${host}:${port})`,
+         });
+      }
+
+      if (dialect === 'mongodb') {
+         const host = options.host || 'localhost';
+         const port = parseInt(String(options.port || 27017), 10);
+         const user = options.user || '';
+         const password = options.password || '';
+
+         const { MongoClient } = await import('mongodb');
+         const auth = password
+            ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@`
+            : user
+              ? `${encodeURIComponent(user)}@`
+              : '';
+         const targetUrl = `mongodb://${auth}${host}:${port}/${dbName}`;
+         const client = new MongoClient(targetUrl, { serverSelectionTimeoutMS: 8000 });
+
+         try {
+            await client.connect();
+            await client.db(dbName).dropDatabase();
+         } finally {
+            await client.close();
+         }
+
+         return ok({
+            dialect: 'mongodb',
+            dbName,
+            message: `Dropped database '${dbName}' on MongoDB (${host}:${port})`,
          });
       }
 

@@ -6,7 +6,8 @@
       "drixio": "dist/cli.js"
    },
    "files": [
-      "dist"
+      "dist/cli.js",
+      "dist/studio"
    ],
    "scripts": {
       "dev": "tsx bin/cli.ts",
@@ -24,6 +25,7 @@
       "db:down": "docker compose down",
       "db:status": "docker compose ps",
       "db:logs": "docker compose logs -f",
+      "build:sea": "node scripts/build-sea.js",
       "prepublishOnly": "pnpm build"
    },
    "keywords": [
@@ -61,7 +63,8 @@
       "tsx": "^4.23.1",
       "typescript": "^7.0.2",
       "vite": "^8.1.5",
-      "vitest": "^4.1.10"
+      "vitest": "^4.1.10",
+      "sql-formatter": "^15.8.2"
    },
    "dependencies": {
       "@hono/node-server": "^2.0.12",
@@ -73,7 +76,6 @@
       "open": "^11.0.0",
       "pg": "^8.22.0",
       "picocolors": "^1.1.1",
-      "sql-formatter": "^15.8.2",
       "ssh2": "^1.17.0"
    }
 }

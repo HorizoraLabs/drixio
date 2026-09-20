@@ -4,7 +4,7 @@ import {
    DatabaseStatus,
    IndexSchema,
 } from '../types.js';
-import pg from 'pg';
+import type pg from 'pg';
 
 /**
  * Creates a robust PoolConfig supporting cloud PostgreSQL providers (Supabase, Neon, RDS, etc.)
@@ -85,9 +85,11 @@ export class PostgresAdapter implements DBAdapter {
       return 'public';
    }
 
-   private getPool(): pg.Pool {
+   private async getPool(): Promise<pg.Pool> {
       if (!this.pool) {
-         this.pool = new pg.Pool(buildPgPoolConfig(this.connectionString));
+         const pgModule = await import('pg');
+         const pgDriver = ((pgModule as any).default || pgModule) as typeof pg;
+         this.pool = new pgDriver.Pool(buildPgPoolConfig(this.connectionString));
          // Prevent unhandled error events from crashing the process
          this.pool.on('error', () => {});
          // Set search_path for all new connections in the pool
@@ -101,6 +103,11 @@ export class PostgresAdapter implements DBAdapter {
       return this.pool;
    }
 
+   private async queryPool(sql: string, params?: any[]): Promise<pg.QueryResult<any>> {
+      const pool = await this.getPool();
+      return pool.query(sql, params);
+   }
+
    quoteIdentifier(name: string): string {
       // Postgres uses double quotes for identifiers; escape any embedded double quotes
       return `"${name.replace(/"/g, '""')}"`;
@@ -108,7 +115,7 @@ export class PostgresAdapter implements DBAdapter {
 
    async getStatus(): Promise<DatabaseStatus> {
       try {
-         const dbRes = await this.getPool().query(
+         const dbRes = await this.queryPool(
             'SELECT current_database() as db, version() as version',
          );
          const dbName = dbRes.rows[0]?.db;
@@ -120,7 +127,7 @@ export class PostgresAdapter implements DBAdapter {
          let uptime = 0;
 
          try {
-            const uptimeRes = await this.getPool().query(
+            const uptimeRes = await this.queryPool(
                'SELECT EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time())) as uptime',
             );
             uptime = parseInt(uptimeRes.rows[0]?.uptime || '0', 10);
@@ -130,7 +137,7 @@ export class PostgresAdapter implements DBAdapter {
 
          // requires pg_stat_database permission but usually available
          try {
-            const statRes = await this.getPool().query(
+            const statRes = await this.queryPool(
                'SELECT sum(numbackends) as conns, sum(xact_commit + xact_rollback) as txs FROM pg_stat_database',
             );
             activeConnections = parseInt(statRes.rows[0]?.conns || '0', 10);
@@ -141,7 +148,7 @@ export class PostgresAdapter implements DBAdapter {
 
          let sizeBytes = 0;
          try {
-            const sizeRes = await this.getPool().query(
+            const sizeRes = await this.queryPool(
                'SELECT pg_database_size(current_database()) as size',
             );
             sizeBytes = parseInt(sizeRes.rows[0]?.size || '0', 10);
@@ -175,7 +182,7 @@ export class PostgresAdapter implements DBAdapter {
         AND tablename NOT LIKE '_drixio_trash_%'
       ORDER BY tablename;
     `;
-      const res = await this.getPool().query(query, [this.currentSchema]);
+      const res = await this.queryPool(query, [this.currentSchema]);
       return res.rows.map((row) => row.tablename);
    }
 
@@ -187,7 +194,7 @@ export class PostgresAdapter implements DBAdapter {
         AND tablename LIKE '_drixio_trash_%'
       ORDER BY tablename DESC;
     `;
-      const res = await this.getPool().query(query, [this.currentSchema]);
+      const res = await this.queryPool(query, [this.currentSchema]);
       return res.rows.map((row) => row.tablename);
    }
 
@@ -264,7 +271,7 @@ export class PostgresAdapter implements DBAdapter {
       WHERE c.table_name = $1 AND c.table_schema = $2
       ORDER BY c.ordinal_position;
     `;
-      const res = await this.getPool().query(query, [
+      const res = await this.queryPool(query, [
          tableName,
          this.currentSchema,
       ]);
@@ -289,7 +296,7 @@ export class PostgresAdapter implements DBAdapter {
               AND NOT a.attisdropped
             ORDER BY a.attnum, e.enumsortorder;
          `;
-         const nativeEnumRes = await this.getPool().query(nativeEnumQuery, [
+         const nativeEnumRes = await this.queryPool(nativeEnumQuery, [
             tableName,
             this.currentSchema,
          ]);
@@ -314,7 +321,7 @@ export class PostgresAdapter implements DBAdapter {
              AND cc.constraint_schema = tc.constraint_schema
             WHERE tc.table_name = $1 AND tc.table_schema = $2;
          `;
-         const checkRes = await this.getPool().query(checkQuery, [
+         const checkRes = await this.queryPool(checkQuery, [
             tableName,
             this.currentSchema,
          ]);
@@ -403,7 +410,7 @@ export class PostgresAdapter implements DBAdapter {
           i.relname, array_position(ix.indkey, a.attnum);
     `;
 
-      const res = await this.getPool().query(query, [
+      const res = await this.queryPool(query, [
          tableName,
          this.currentSchema,
       ]);
@@ -448,7 +455,7 @@ export class PostgresAdapter implements DBAdapter {
       }
       sql += ` LIMIT $1 OFFSET $2`;
 
-      const res = await this.getPool().query(sql, [limit, offset]);
+      const res = await this.queryPool(sql, [limit, offset]);
       return { columns, rows: res.rows };
    }
 
@@ -457,7 +464,7 @@ export class PostgresAdapter implements DBAdapter {
       rows: Record<string, any>[];
       affectedRows?: number;
    }> {
-      const res = await this.getPool().query(sql);
+      const res = await this.queryPool(sql);
       let columns: string[] = [];
       if (res.fields) {
          columns = res.fields.map((f) => f.name);
@@ -471,7 +478,7 @@ export class PostgresAdapter implements DBAdapter {
    }
 
    async executeSql(sql: string): Promise<void> {
-      await this.getPool().query(sql);
+      await this.queryPool(sql);
    }
 
    async close(): Promise<void> {
@@ -483,7 +490,7 @@ export class PostgresAdapter implements DBAdapter {
 
    async insert(tableName: string, rows: Record<string, any>[]): Promise<void> {
       if (rows.length === 0) return;
-      const pool = this.getPool();
+      const pool = await this.getPool();
       const client = await pool.connect();
       try {
          const cols = Object.keys(rows[0]);
@@ -506,7 +513,7 @@ export class PostgresAdapter implements DBAdapter {
 
    async truncateTable(tableName: string): Promise<void> {
       const quoted = this.quoteTable(tableName);
-      await this.getPool().query(
+      await this.queryPool(
          `TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE;`,
       );
    }
@@ -534,7 +541,7 @@ export class PostgresAdapter implements DBAdapter {
            AND schema_name NOT LIKE 'pg_toast_temp_%'
          ORDER BY schema_name;
       `;
-      const res = await this.getPool().query(query);
+      const res = await this.queryPool(query);
       return res.rows.map((row) => row.schema_name);
    }
 
@@ -569,7 +576,7 @@ export class PostgresAdapter implements DBAdapter {
          ORDER BY (CASE WHEN n.nspname = $1 THEN 0 ELSE 1 END), t.typname;
       `;
       try {
-         const res = await this.getPool().query(query, [this.currentSchema]);
+         const res = await this.queryPool(query, [this.currentSchema]);
          const seen = new Set<string>();
          const result: { name: string; values: string[] }[] = [];
          for (const row of res.rows) {
@@ -589,7 +596,7 @@ export class PostgresAdapter implements DBAdapter {
    }
 
    async renameTable(oldName: string, newName: string): Promise<void> {
-      await this.getPool().query(
+      await this.queryPool(
          `ALTER TABLE ${this.quoteTable(oldName)} RENAME TO ${this.quoteIdentifier(newName)};`,
       );
    }

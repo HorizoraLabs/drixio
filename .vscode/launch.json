@@ -1,0 +1,38 @@
+{
+   "version": "0.2.0",
+   "configurations": [
+      {
+         "type": "node",
+         "request": "launch",
+         "name": "Debug CLI (Interactive TUI)",
+         "runtimeExecutable": "pnpm",
+         "runtimeArgs": ["dev"],
+         "console": "integratedTerminal",
+         "internalConsoleOptions": "neverOpen",
+         "skipFiles": ["<node_internals>/**"]
+      },
+      {
+         "type": "node",
+         "request": "launch",
+         "name": "Debug Studio Backend",
+         "runtimeExecutable": "pnpm",
+         "runtimeArgs": ["exec", "tsx", "bin/cli.ts", "studio"],
+         "env": {
+            "PORT": "51213"
+         },
+         "console": "integratedTerminal",
+         "skipFiles": ["<node_internals>/**"]
+      },
+      {
+         "type": "node",
+         "request": "launch",
+         "name": "Debug Current Vitest Test",
+         "autoAttachChildProcesses": true,
+         "runtimeExecutable": "pnpm",
+         "runtimeArgs": ["exec", "vitest", "run", "${file}"],
+         "console": "integratedTerminal",
+         "skipFiles": ["<node_internals>/**"]
+      }
+   ]
+}
+

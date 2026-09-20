@@ -100,14 +100,16 @@ export async function runStudio(dbConfig: DBConfig, isAppMode: boolean = false) 
       hostname,
    });
 
-   try {
-      const { openBrowserApp } = await import('../logic/launcher.js');
-      await openBrowserApp(
-         `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`,
-         isAppMode,
-      );
-   } catch {
-      // In headless environments, Docker or SSH, opening a browser may fail safely
+   if (!process.env.DRIXIO_NO_OPEN && !process.env.NO_OPEN) {
+      try {
+         const { openBrowserApp } = await import('../logic/launcher.js');
+         await openBrowserApp(
+            `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`,
+            isAppMode,
+         );
+      } catch {
+         // In headless environments, Docker or SSH, opening a browser may fail safely
+      }
    }
 }
 

@@ -56,6 +56,9 @@ import {
    purgeAllTrash,
    runSchemaHealthCheck,
    createDesktopLauncher,
+   setupTunneledUrl,
+   ActiveTunnel,
+   SshTunnelConfig,
 } from '../logic/index.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -66,6 +69,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
    // Dynamic database connection state
    let currentDbConfig: DBConfig = { ...dbConfig };
    let currentAdapter: DBAdapter | null = null;
+   let currentTunnel: ActiveTunnel | null = null;
 
    const initAdapter = (cfg: DBConfig): DBAdapter | null => {
       if ((cfg as any).adapter) return (cfg as any).adapter;
@@ -1667,7 +1671,19 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             newConfig = await detectDatabase(targetUrl);
          }
 
-         const newAdapter = createDBAdapter(newConfig);
+         let activeTunnel: ActiveTunnel | null = null;
+         let actualConnectUrl = targetUrl;
+         if (body.sshTunnel && body.sshTunnel.enabled && body.sshTunnel.host) {
+            const tunnelResult = await setupTunneledUrl(targetUrl, body.sshTunnel);
+            actualConnectUrl = tunnelResult.tunneledUrl;
+            activeTunnel = tunnelResult.tunnel;
+         }
+
+         const adapterConfig = activeTunnel
+            ? { ...newConfig, targetUrl: actualConnectUrl }
+            : newConfig;
+
+         const newAdapter = createDBAdapter(adapterConfig);
          await newAdapter.getTables();
 
          if (currentAdapter) {
@@ -1675,8 +1691,15 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
                await currentAdapter.close();
             } catch {}
          }
+         if (currentTunnel) {
+            try {
+               await currentTunnel.close();
+            } catch {}
+            currentTunnel = null;
+         }
          currentDbConfig = newConfig;
          currentAdapter = newAdapter;
+         currentTunnel = activeTunnel;
 
          if (saveToEnv) {
             try {
@@ -1775,7 +1798,7 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             }
          }
 
-         // Server databases (PostgreSQL, MySQL)
+         // Server databases (PostgreSQL, MySQL, MSSQL, MongoDB)
          let targetUrl = '';
          if (mode === 'create') {
             targetUrl = assembleConnectionUrl(dialect, host, port, user, password, '');
@@ -1790,17 +1813,37 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             targetUrl = rawUrl.trim();
          }
 
-         const testConfig = await detectDatabase(targetUrl);
+         let ephemeralTunnel: ActiveTunnel | null = null;
+         let actualTestUrl = targetUrl;
+         if (body.sshTunnel && body.sshTunnel.enabled && body.sshTunnel.host) {
+            const tunnelResult = await setupTunneledUrl(targetUrl, body.sshTunnel);
+            actualTestUrl = tunnelResult.tunneledUrl;
+            ephemeralTunnel = tunnelResult.tunnel;
+         }
+
+         const testConfig = await detectDatabase(actualTestUrl);
          const testAdapter = createDBAdapter(testConfig);
          let tablesCount = 0;
          try {
-            await testAdapter.query('SELECT 1 as connected;');
+            if (dialect === 'mongodb') {
+               const status = await testAdapter.getStatus();
+               if (status.status === 'error') {
+                  throw new Error(status.version || 'MongoDB connection failed');
+               }
+            } else {
+               await testAdapter.query('SELECT 1 as connected;');
+            }
             try {
                const tables = await testAdapter.getTables();
                tablesCount = tables.length;
             } catch {}
          } finally {
             await testAdapter.close();
+            if (ephemeralTunnel) {
+               try {
+                  await ephemeralTunnel.close();
+               } catch {}
+            }
          }
 
          const latencyMs = Date.now() - startTime;
@@ -1834,6 +1877,12 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             try {
                await currentAdapter.close();
             } catch {}
+         }
+         if (currentTunnel) {
+            try {
+               await currentTunnel.close();
+            } catch {}
+            currentTunnel = null;
          }
          currentDbConfig = {
             type: 'unknown',

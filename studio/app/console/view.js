@@ -125,6 +125,13 @@ export function loadSqlConsole(tableName, btnElement, container) {
               <kbd class="console-kbd-hint">Ctrl I</kbd>
             </button>
 
+            <!-- Format SQL Button -->
+            <button type="button" id="console-top-format-btn" class="console-action-btn secondary" title="Format SQL Query (Shift+Alt+F)">
+              <span class="material-symbols-outlined icon">format_align_left</span>
+              <span>Format</span>
+              <kbd class="console-kbd-hint">Shift Alt F</kbd>
+            </button>
+
             <!-- Save Button -->
             <button type="button" id="console-save-snippet-btn" class="console-action-btn secondary" title="Save Query (Ctrl+S)">
               <span class="material-symbols-outlined icon">bookmark_add</span>

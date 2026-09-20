@@ -1,0 +1,54 @@
+{
+   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+   "vcs": {
+      "enabled": true,
+      "clientKind": "git",
+      "useIgnoreFile": true
+   },
+   "files": {
+      "ignoreUnknown": false,
+      "includes": [
+         "**",
+         "!dist",
+         "!node_modules",
+         "!coverage",
+         "!*.sqlite",
+         "!*.db",
+         "!testing-db.sqlite"
+      ]
+   },
+   "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 3,
+      "lineWidth": 100
+   },
+   "linter": {
+      "enabled": true,
+      "rules": {
+         "preset": "none",
+         "suspicious": {
+            "noDebugger": "error",
+            "noDuplicateCase": "error",
+            "noDuplicateParameters": "error",
+            "noDuplicateObjectKeys": "error",
+            "noFallthroughSwitchClause": "error",
+            "noCompareNegZero": "error"
+         },
+         "correctness": {
+            "noUnusedVariables": "warn",
+            "noConstAssign": "error",
+            "noPrecisionLoss": "error",
+            "noVoidElementsWithChildren": "error"
+         }
+      }
+   },
+   "javascript": {
+      "formatter": {
+         "quoteStyle": "single",
+         "semicolons": "always",
+         "trailingCommas": "all"
+      }
+   }
+}
+

@@ -64,6 +64,15 @@ export function loadConnectView(container) {
       existingPath: './drixio.sqlite',
    };
 
+   const sshParams = {
+      enabled: false,
+      host: '',
+      port: '22',
+      user: '',
+      password: '',
+      privateKey: '',
+   };
+
    let saveToEnv = true;
 
    let testStatus = {
@@ -425,7 +434,11 @@ export function loadConnectView(container) {
                 ? '27017'
                 : '3306';
       const port = serverParams[selectedType].port.trim() || defaultPort;
-      return `${host}:${port}`;
+      let loc = `${host}:${port}`;
+      if (selectedType !== 'sqlite' && sshParams.enabled && sshParams.host) {
+         loc += ` (via SSH ${sshParams.host}:${sshParams.port || 22})`;
+      }
+      return loc;
    };
 
    const updatePreviewUI = () => {
@@ -602,6 +615,10 @@ export function loadConnectView(container) {
          payload = { mode: 'existing', dbType: selectedType, url };
       }
 
+      if (selectedType !== 'sqlite' && sshParams.enabled && sshParams.host) {
+         payload.sshTunnel = { ...sshParams };
+      }
+
       try {
          const res = await fetch('/api/test-connect', {
             method: 'POST',
@@ -628,6 +645,63 @@ export function loadConnectView(container) {
          };
       }
       updateTestStatusUI();
+   };
+
+   const renderSshSection = () => {
+      const isExpanded = sshParams.enabled;
+      return /* html */ `
+      <div class="connect-ssh-card ${sshParams.enabled ? 'active' : ''}">
+         <div class="connect-ssh-toggle-header" id="ssh-toggle-header">
+            <div class="connect-ssh-header-left">
+               <input type="checkbox" id="ssh-tunnel-enable" ${sshParams.enabled ? 'checked' : ''} />
+               <span class="connect-ssh-title">SSH Bastion Tunnel</span>
+               <span class="connect-ssh-badge">ssh2</span>
+            </div>
+            <span class="material-symbols-outlined connect-ssh-toggle-icon ${isExpanded ? 'expanded' : ''}">expand_more</span>
+         </div>
+         <div class="connect-ssh-body ${isExpanded ? '' : 'hidden'}" id="ssh-tunnel-body">
+            <div class="connect-grid-2">
+               <div class="connect-field">
+                  <label class="connect-label" for="ssh-host">SSH Host / Bastion IP</label>
+                  <div class="connect-input-wrap">
+                     <input type="text" id="ssh-host" class="connect-input mono" placeholder="bastion.example.com" value="${sshParams.host}" />
+                  </div>
+                  <p class="connect-hint">Jump host or bastion server address.</p>
+               </div>
+               <div class="connect-field">
+                  <label class="connect-label" for="ssh-port">SSH Port</label>
+                  <div class="connect-input-wrap">
+                     <input type="text" id="ssh-port" class="connect-input mono" placeholder="22" value="${sshParams.port}" />
+                  </div>
+                  <p class="connect-hint">Default SSH port is <code>22</code>.</p>
+               </div>
+            </div>
+
+            <div class="connect-grid-2">
+               <div class="connect-field">
+                  <label class="connect-label" for="ssh-user">SSH Username</label>
+                  <div class="connect-input-wrap">
+                     <input type="text" id="ssh-user" class="connect-input mono" placeholder="ubuntu" value="${sshParams.user}" />
+                  </div>
+                  <p class="connect-hint">Remote user on the bastion server.</p>
+               </div>
+               <div class="connect-field">
+                  <label class="connect-label" for="ssh-password">SSH Password (Optional)</label>
+                  <div class="connect-input-wrap">
+                     <input type="password" id="ssh-password" class="connect-input mono" placeholder="Password if not using key" value="${sshParams.password}" />
+                  </div>
+                  <p class="connect-hint">Authentication password if not using SSH key.</p>
+               </div>
+            </div>
+
+            <div class="connect-field">
+               <label class="connect-label" for="ssh-key">Private Key (Optional PEM / OpenSSH)</label>
+               <textarea id="ssh-key" class="connect-textarea mono" rows="3" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----...">${sshParams.privateKey}</textarea>
+               <p class="connect-hint">Private key data. If provided, key-based authentication takes priority.</p>
+            </div>
+         </div>
+      </div>
+      `;
    };
 
    const render = () => {
@@ -713,6 +787,9 @@ export function loadConnectView(container) {
 
               <div class="connect-form-body">
                 ${renderFields(selectedType, currentMode)}
+
+                <!-- SSH Bastion Tunnel (Server Engines) -->
+                ${selectedType !== 'sqlite' ? renderSshSection() : ''}
 
                 <!-- Quick Presets -->
                 ${
@@ -1238,6 +1315,82 @@ export function loadConnectView(container) {
          };
       }
 
+      // SSH Tunnel Toggle & Inputs
+      const sshCheckbox = container.querySelector('#ssh-tunnel-enable');
+      const sshHeader = container.querySelector('#ssh-toggle-header');
+      const sshBody = container.querySelector('#ssh-tunnel-body');
+      const sshToggleIcon = container.querySelector('.connect-ssh-toggle-icon');
+
+      if (sshCheckbox) {
+         sshCheckbox.onchange = () => {
+            sshParams.enabled = sshCheckbox.checked;
+            if (sshBody) {
+               sshBody.classList.toggle('hidden', !sshParams.enabled);
+            }
+            if (sshToggleIcon) {
+               sshToggleIcon.classList.toggle('expanded', sshParams.enabled);
+            }
+            const card = container.querySelector('.connect-ssh-card');
+            if (card) {
+               card.classList.toggle('active', sshParams.enabled);
+            }
+            resetTestStatus();
+            updatePreviewUI();
+         };
+      }
+
+      if (sshHeader) {
+         sshHeader.onclick = (e) => {
+            if (e.target === sshCheckbox || e.target.closest('#ssh-tunnel-enable')) return;
+            if (sshCheckbox) {
+               sshCheckbox.checked = !sshCheckbox.checked;
+               sshCheckbox.dispatchEvent(new Event('change'));
+            }
+         };
+      }
+
+      const sshHostInput = container.querySelector('#ssh-host');
+      if (sshHostInput) {
+         sshHostInput.oninput = () => {
+            sshParams.host = sshHostInput.value.trim();
+            resetTestStatus();
+            updatePreviewUI();
+         };
+      }
+
+      const sshPortInput = container.querySelector('#ssh-port');
+      if (sshPortInput) {
+         sshPortInput.oninput = () => {
+            sshParams.port = sshPortInput.value.trim();
+            resetTestStatus();
+            updatePreviewUI();
+         };
+      }
+
+      const sshUserInput = container.querySelector('#ssh-user');
+      if (sshUserInput) {
+         sshUserInput.oninput = () => {
+            sshParams.user = sshUserInput.value.trim();
+            resetTestStatus();
+         };
+      }
+
+      const sshPassInput = container.querySelector('#ssh-password');
+      if (sshPassInput) {
+         sshPassInput.oninput = () => {
+            sshParams.password = sshPassInput.value;
+            resetTestStatus();
+         };
+      }
+
+      const sshKeyInput = container.querySelector('#ssh-key');
+      if (sshKeyInput) {
+         sshKeyInput.oninput = () => {
+            sshParams.privateKey = sshKeyInput.value;
+            resetTestStatus();
+         };
+      }
+
       // Presets chips click
       container.querySelectorAll('.connect-preset-chip').forEach((chip) => {
          chip.onclick = () => {
@@ -1462,6 +1615,10 @@ export function loadConnectView(container) {
                   createIfNotExist: false,
                   saveToEnv,
                };
+            }
+
+            if (selectedType !== 'sqlite' && sshParams.enabled && sshParams.host) {
+               payload.sshTunnel = { ...sshParams };
             }
 
             const originalBtnHtml = submitBtn.innerHTML;

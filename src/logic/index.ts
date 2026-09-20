@@ -20,3 +20,4 @@ export * from './trash.js';
 export * from './anonymizer.js';
 export * from './health.js';
 export * from './launcher.js';
+export * from './ssh.js';

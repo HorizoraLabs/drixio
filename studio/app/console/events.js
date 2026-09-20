@@ -13,6 +13,7 @@ import { createModal } from '../../components/modal.js';
 import { initQueryHistory } from './history.js';
 import { toggleAiPromptBar, triggerAiFix } from './aiBar.js';
 import { openAiExplainModal } from './aiExplainModal.js';
+import { format as formatSqlString } from 'sql-formatter';
 
 export const bindConsoleEvents = (editor, resultsBody) => {
    // ==================== TABS STATE MANAGEMENT ====================
@@ -1177,101 +1178,28 @@ export const bindConsoleEvents = (editor, resultsBody) => {
 
    const formatSql = (sql) => {
       if (!sql || !sql.trim()) return sql;
-      let text = sql.trim().replace(/\r\n/g, '\n');
-
-      const keywords = [
-         'SELECT',
-         'FROM',
-         'WHERE',
-         'AND',
-         'OR',
-         'ORDER BY',
-         'GROUP BY',
-         'LEFT JOIN',
-         'RIGHT JOIN',
-         'INNER JOIN',
-         'CROSS JOIN',
-         'FULL JOIN',
-         'JOIN',
-         'ON',
-         'AS',
-         'INSERT INTO',
-         'VALUES',
-         'UPDATE',
-         'SET',
-         'DELETE FROM',
-         'CREATE TABLE',
-         'DROP TABLE',
-         'ALTER TABLE',
-         'HAVING',
-         'LIMIT',
-         'OFFSET',
-         'UNION ALL',
-         'UNION',
-         'CASE',
-         'WHEN',
-         'THEN',
-         'ELSE',
-         'END',
-         'PRIMARY KEY',
-         'FOREIGN KEY',
-         'NOT NULL',
-         'DEFAULT',
-         'DESC',
-         'ASC',
-         'IN',
-         'IS NULL',
-         'IS NOT NULL',
-         'IS',
-         'LIKE',
-         'BETWEEN',
-         'EXISTS',
-         'COUNT',
-         'SUM',
-         'AVG',
-         'MIN',
-         'MAX',
-         'PRAGMA',
-         'EXPLAIN',
-      ];
-
-      // Protect string literals from modification
-      const parts = text.split(/('(?:''|[^'])*'|"(?:""|[^"])*")/g);
-      for (let i = 0; i < parts.length; i += 2) {
-         if (!parts[i]) continue;
-         keywords.forEach((kw) => {
-            const regex = new RegExp(`\\b${kw}\\b`, 'gi');
-            parts[i] = parts[i].replace(regex, kw);
-         });
+      const rawDialect = (window.AppState?.dbType || 'sqlite').toLowerCase();
+      let language = 'sql';
+      if (rawDialect === 'postgres' || rawDialect === 'postgresql') {
+         language = 'postgresql';
+      } else if (rawDialect === 'mysql') {
+         language = 'mysql';
+      } else if (rawDialect === 'mssql') {
+         language = 'tsql';
+      } else if (rawDialect === 'sqlite') {
+         language = 'sqlite';
       }
-      text = parts.join('');
 
-      // Add linebreaks before major clauses
-      const majorClauses = [
-         'FROM',
-         'WHERE',
-         'GROUP BY',
-         'HAVING',
-         'ORDER BY',
-         'LIMIT',
-         'OFFSET',
-         'LEFT JOIN',
-         'RIGHT JOIN',
-         'INNER JOIN',
-         'CROSS JOIN',
-         'JOIN',
-         'SET',
-         'VALUES',
-      ];
-      majorClauses.forEach((cl) => {
-         const re = new RegExp(`[ \\t]+(${cl}\\b)`, 'g');
-         text = text.replace(re, '\n$1');
-      });
-
-      // Indent AND / OR
-      text = text.replace(/[ \t]+(AND\b|OR\b)/g, '\n  $1');
-
-      return text;
+      try {
+         return formatSqlString(sql.trim(), {
+            language,
+            tabWidth: 2,
+            keywordCase: 'upper',
+            linesBetweenQueries: 2,
+         });
+      } catch {
+         return sql;
+      }
    };
 
    const formatCurrentQuery = () => {
@@ -1322,6 +1250,11 @@ export const bindConsoleEvents = (editor, resultsBody) => {
 
    if (formatBtn) {
       formatBtn.onclick = formatCurrentQuery;
+   }
+
+   const topFormatBtn = document.getElementById('console-top-format-btn');
+   if (topFormatBtn) {
+      topFormatBtn.onclick = formatCurrentQuery;
    }
 
    const showShortcutsModal = () => {

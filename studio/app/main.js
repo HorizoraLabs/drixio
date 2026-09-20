@@ -17,13 +17,11 @@ import { openImportModal } from '../components/importModal.js';
 import { openHelpModal } from '../components/helpModal.js';
 import { initDbSwitcher } from '../components/dbSwitcher.js';
 import { saveConnection } from '../lib/connections.js';
-import { gsap } from 'gsap';
 import {
    initCommandPalette,
    openCommandPalette,
 } from '../components/commandPalette.js';
 
-window.gsap = gsap;
 const header = document.getElementById('header-container');
 const sidebar = document.getElementById('sidebar-container');
 const tab = document.getElementById('tab-container');

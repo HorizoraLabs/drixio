@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import pc from 'picocolors';
 import { parseArgs } from 'node:util';
-import { detectDatabase, getDrixioVersion } from '../src/logic/index.js';
+import {
+   detectDatabase,
+   getDrixioVersion,
+   isConnectionString,
+   classifyDatabaseUrl,
+} from '../src/logic/index.js';
 import { runQuickCommand } from '../src/commands/index.js';
 import { runTui } from '../src/tui/index.js';
 
@@ -9,17 +14,11 @@ async function main() {
    const args = process.argv.slice(2);
    let customUrl: string | undefined;
 
-   // Handle URL shortcut if the first argument looks like a database connection string
+   // Handle URL shortcut if the first argument looks like a database connection string or file
    if (
       args.length > 0 &&
-      (args[0].startsWith('postgres://') ||
-         args[0].startsWith('postgresql://') ||
-         args[0].startsWith('mysql://') ||
-         args[0].startsWith('file:') ||
-         args[0].startsWith('sqlite:') ||
-         args[0].endsWith('.db') ||
-         args[0].endsWith('.sqlite') ||
-         args[0].endsWith('.sqlite3'))
+      (isConnectionString(args[0]) ||
+         classifyDatabaseUrl(args[0], process.cwd()) !== null)
    ) {
       customUrl = args[0];
    }

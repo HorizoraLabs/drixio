@@ -100,11 +100,17 @@ export function openCommandPalette() {
    paletteContainer.classList.add('is-open');
 
    const modalEl = document.getElementById('command-palette-modal');
-   if (window.gsap && modalEl) {
-      gsap.fromTo(
-         modalEl,
-         { opacity: 0, scale: 0.95, y: -15 },
-         { opacity: 1, scale: 1, y: 0, duration: 0.2, ease: 'power2.out' },
+   if (modalEl) {
+      modalEl.animate(
+         [
+            { opacity: 0, transform: 'translateY(-15px) scale(0.95)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+         ],
+         {
+            duration: 200,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+            fill: 'forwards',
+         },
       );
    }
 
@@ -117,17 +123,21 @@ export function closeCommandPalette() {
    isOpen = false;
 
    const modalEl = document.getElementById('command-palette-modal');
-   if (window.gsap && modalEl) {
-      gsap.to(modalEl, {
-         opacity: 0,
-         scale: 0.95,
-         y: -10,
-         duration: 0.15,
-         ease: 'power2.in',
-         onComplete: () => {
-            paletteContainer?.classList.remove('is-open');
+   if (modalEl) {
+      const anim = modalEl.animate(
+         [
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+            { opacity: 0, transform: 'translateY(-10px) scale(0.95)' },
+         ],
+         {
+            duration: 150,
+            easing: 'cubic-bezier(0.4, 0, 1, 1)',
+            fill: 'forwards',
          },
-      });
+      );
+      anim.onfinish = () => {
+         paletteContainer?.classList.remove('is-open');
+      };
    } else {
       paletteContainer.classList.remove('is-open');
    }

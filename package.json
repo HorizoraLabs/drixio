@@ -44,6 +44,7 @@
       "access": "public"
    },
    "devDependencies": {
+      "@types/mssql": "^12.3.0",
       "@types/node": "^26.1.2",
       "@types/pg": "^8.20.0",
       "gsap": "^3.15.0",
@@ -57,6 +58,8 @@
       "@hono/node-server": "^2.0.12",
       "@inquirer/prompts": "^8.5.2",
       "hono": "^4.12.32",
+      "mongodb": "^7.6.0",
+      "mssql": "^12.7.2",
       "mysql2": "^3.23.2",
       "open": "^11.0.0",
       "pg": "^8.22.0",

@@ -74,6 +74,20 @@ describe('loader: classifyDatabaseUrl', () => {
       });
    });
 
+   it('should classify mssql connection URLs and connection strings', () => {
+      const res1 = classifyDatabaseUrl('mssql://sa:Password123!@localhost:1433/mydb', cwd);
+      expect(res1).toEqual({
+         type: 'mssql',
+         targetUrl: 'mssql://sa:Password123!@localhost:1433/mydb',
+      });
+
+      const res2 = classifyDatabaseUrl('sqlserver://user:pass@remote.db.net:1433/production', cwd);
+      expect(res2?.type).toBe('mssql');
+
+      const res3 = classifyDatabaseUrl('Server=localhost,1433;Database=testdb;User Id=sa;Password=secret;', cwd);
+      expect(res3?.type).toBe('mssql');
+   });
+
    it('should return null for invalid non-database strings', () => {
       expect(classifyDatabaseUrl('http://google.com', cwd)).toBeNull();
       expect(classifyDatabaseUrl('', cwd)).toBeNull();

@@ -71,6 +71,10 @@ export function renderDbSwitcherMenu() {
             return 'dns';
          case 'mysql':
             return 'storage';
+         case 'mssql':
+            return 'database';
+         case 'mongodb':
+            return 'dataset';
          case 'sqlite':
          default:
             return 'data_object';

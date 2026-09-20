@@ -499,6 +499,10 @@ export async function applySchemaChanges(
                   sqls.push(
                      `ALTER TABLE ${qChildTable} DROP FOREIGN KEY ${qConstraint};`,
                   );
+               } else if (dbType === 'mssql') {
+                  sqls.push(
+                     `ALTER TABLE ${qChildTable} DROP CONSTRAINT ${qConstraint};`,
+                  );
                }
             }
          }
@@ -515,11 +519,20 @@ export async function applySchemaChanges(
    for (const [colName, edits] of Object.entries(pendingEdits)) {
       let currentName = colName;
       if (edits.name && edits.name !== colName) {
-         const quotedOld = dialect.quoteIdentifier(colName);
-         const quotedNew = dialect.quoteIdentifier(edits.name);
-         sqls.push(
-            `ALTER TABLE ${quotedTable} RENAME COLUMN ${quotedOld} TO ${quotedNew};`,
-         );
+         if (dbType === 'mssql') {
+            // MSSQL uses sp_rename for column renaming
+            const escapedFull = `${tableName}.${colName}`.replace(/'/g, "''");
+            const escapedNew = edits.name.replace(/'/g, "''");
+            sqls.push(
+               `EXEC sp_rename '${escapedFull}', '${escapedNew}', 'COLUMN';`,
+            );
+         } else {
+            const quotedOld = dialect.quoteIdentifier(colName);
+            const quotedNew = dialect.quoteIdentifier(edits.name);
+            sqls.push(
+               `ALTER TABLE ${quotedTable} RENAME COLUMN ${quotedOld} TO ${quotedNew};`,
+            );
+         }
          currentName = edits.name;
       }
 
@@ -593,6 +606,189 @@ export async function applySchemaChanges(
             sqls.push(
                `ALTER TABLE ${quotedTable} MODIFY COLUMN ${quotedCol} ${mysqlType} ${nullStr} ${defStr};`,
             );
+         } else if (dbType === 'mssql') {
+            // MSSQL: must drop existing default constraint before changing column type
+            const escTable = tableName.replace(/'/g, "''");
+            const escColName = currentName.replace(/'/g, "''");
+            sqls.push(
+               `DECLARE @dfC NVARCHAR(200);\nSELECT @dfC = dc.name FROM sys.default_constraints dc JOIN sys.columns c ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id WHERE OBJECT_NAME(dc.parent_object_id) = '${escTable}' AND c.name = '${escColName}';\nIF @dfC IS NOT NULL EXEC('ALTER TABLE ${quotedTable} DROP CONSTRAINT [' + @dfC + ']');`,
+            );
+            let mssqlType = type;
+            if (edits.enumValues && edits.enumValues.length > 0) {
+               const vals = edits.enumValues
+                  .map((v: string) => `'${dialect.escapeString(v)}'`)
+                  .join(', ');
+               // MSSQL: use NVARCHAR for enum-like columns; CHECK constraint added separately
+               mssqlType = `NVARCHAR(255)`;
+            }
+            const mssqlNull = edits.nullable === false ? 'NOT NULL' : 'NULL';
+            sqls.push(
+               `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} ${mssqlType} ${mssqlNull};`,
+            );
+            if (edits.defaultValue !== undefined) {
+               const formatted2 = formatSqlDefaultValue(edits.defaultValue);
+               if (formatted2 !== null) {
+                  const safeConName = `DF_${tableName}_${currentName}`
+                     .replace(/[^a-zA-Z0-9_]/g, '_')
+                     .slice(0, 128);
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} ADD CONSTRAINT [${safeConName}] DEFAULT ${formatted2} FOR ${quotedCol};`,
+                  );
+               }
+            }
+         }
+      }
+   }
+
+   // ── Handle PK / FK constraint changes for existing columns (Postgres, MySQL & MSSQL) ──
+
+   // SQLite uses recreateTable above which rebuilds the whole table including all constraints.
+   // Postgres/MySQL execute individual ALTER TABLE statements, so isPk and fkTarget changes
+   // on EXISTING columns must be handled explicitly here — the loop above only covers
+   // type / nullable / defaultValue edits.
+   {
+      // Build a lookup of the original column state
+      const origColMap = new Map<string, ColumnSchema>();
+      for (const col of origSchemaForCascade) {
+         origColMap.set(col.name, col);
+      }
+
+      const esc = (s: string) => s.replace(/'/g, "''");
+
+      for (const [editColName, edits] of Object.entries(pendingEdits)) {
+         const origCol = origColMap.get(editColName);
+         if (!origCol) continue;
+
+         // Column name after any rename already applied above
+         const currentColName = (edits as any).name || editColName;
+         const quotedCurrentCol = dialect.quoteIdentifier(currentColName);
+
+         // ── Compute intended isPk ───────────────────────────────────────
+         let newIsPk = origCol.isPk;
+         const rawPk = (edits as any).isPk;
+         if (rawPk !== undefined) {
+            if (typeof rawPk === 'string') {
+               newIsPk = rawPk.includes('PK') || rawPk.includes('PFK');
+            } else {
+               newIsPk = !!rawPk;
+            }
+         }
+
+         // ── Compute intended fkTarget ───────────────────────────────────
+         let newFkTarget: ColumnSchema['fkTarget'] = origCol.fkTarget;
+         if ((edits as any).fkTarget !== undefined) {
+            // Explicit override — null means "remove FK"
+            newFkTarget = (edits as any).fkTarget ?? undefined;
+         } else if (rawPk !== undefined && typeof rawPk === 'string') {
+            // Try to parse FK info embedded in the key-string (e.g. "PFK: users.id")
+            const fkStrMatch = rawPk.match(
+               /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
+            );
+            if (fkStrMatch) {
+               const act = fkStrMatch[3]
+                  ? fkStrMatch[3].toUpperCase()
+                  : undefined;
+               newFkTarget = {
+                  table: fkStrMatch[1],
+                  column: fkStrMatch[2],
+                  onDelete:
+                     act && act !== 'NO ACTION'
+                        ? act
+                        : origCol.fkTarget?.onDelete,
+                  onUpdate: origCol.fkTarget?.onUpdate,
+               };
+            } else if (rawPk === '' || rawPk === 'PK' || rawPk === '-') {
+               newFkTarget = undefined;
+            }
+         }
+
+         // ── Detect actual changes ───────────────────────────────────────
+         const pkChanged = !!origCol.isPk !== !!newIsPk;
+         const origFkSig = origCol.fkTarget
+            ? `${origCol.fkTarget.table}.${origCol.fkTarget.column}|${origCol.fkTarget.onDelete ?? ''}|${origCol.fkTarget.onUpdate ?? ''}`
+            : '';
+         const newFkSig = newFkTarget
+            ? `${newFkTarget.table}.${newFkTarget.column}|${newFkTarget.onDelete ?? ''}|${newFkTarget.onUpdate ?? ''}`
+            : '';
+         const fkChanged = origFkSig !== newFkSig;
+
+         if (!pkChanged && !fkChanged) continue;
+
+         // ── Safe execution order: DROP FK → DROP PK → ADD PK → ADD FK ──
+
+         // Step 1: Drop old FK constraint (must happen before dropping PK)
+         if (fkChanged && origCol.fkTarget) {
+            const oldCon = origCol.fkTarget.constraintName;
+            if (oldCon) {
+               const qCon = dialect.quoteIdentifier(oldCon);
+               if (dbType === 'postgres') {
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} DROP CONSTRAINT IF EXISTS ${qCon};`,
+                  );
+               } else if (dbType === 'mysql') {
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} DROP FOREIGN KEY ${qCon};`,
+                  );
+               } else if (dbType === 'mssql') {
+                  sqls.push(
+                     `ALTER TABLE ${quotedTable} DROP CONSTRAINT ${qCon};`,
+                  );
+               }
+            } else if (dbType === 'postgres') {
+               // Fallback: locate constraint name via information_schema
+               sqls.push(
+                  `DO $$\nDECLARE v_fk text;\nBEGIN\n  SELECT tc.constraint_name INTO v_fk\n  FROM information_schema.table_constraints tc\n  JOIN information_schema.key_column_usage kcu\n    ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema\n  WHERE tc.table_schema = current_schema()\n    AND tc.table_name = '${esc(tableName)}'\n    AND tc.constraint_type = 'FOREIGN KEY'\n    AND kcu.column_name = '${esc(editColName)}'\n  LIMIT 1;\n  IF v_fk IS NOT NULL THEN\n    EXECUTE format('ALTER TABLE ${quotedTable} DROP CONSTRAINT %I', v_fk);\n  END IF;\nEND$$;`,
+               );
+            } else if (dbType === 'mssql') {
+               sqls.push(
+                  `DECLARE @fkName NVARCHAR(200);\nSELECT @fkName = fk.name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id WHERE OBJECT_NAME(fk.parent_object_id) = '${esc(tableName)}' AND c.name = '${esc(editColName)}';\nIF @fkName IS NOT NULL EXEC('ALTER TABLE ${quotedTable} DROP CONSTRAINT [' + @fkName + ']');`,
+               );
+            }
+         }
+
+         // Step 2: Drop PK (after FK is cleared)
+         if (pkChanged && !newIsPk) {
+            if (dbType === 'postgres') {
+               sqls.push(
+                  `DO $$\nDECLARE v_pk text;\nBEGIN\n  SELECT constraint_name INTO v_pk\n  FROM information_schema.table_constraints\n  WHERE table_schema = current_schema()\n    AND table_name = '${esc(tableName)}'\n    AND constraint_type = 'PRIMARY KEY';\n  IF v_pk IS NOT NULL THEN\n    EXECUTE format('ALTER TABLE ${quotedTable} DROP CONSTRAINT %I', v_pk);\n  END IF;\nEND$$;`,
+               );
+            } else if (dbType === 'mysql') {
+               sqls.push(`ALTER TABLE ${quotedTable} DROP PRIMARY KEY;`);
+            } else if (dbType === 'mssql') {
+               sqls.push(
+                  `DECLARE @pkName NVARCHAR(200);\nSELECT @pkName = kc.name FROM sys.key_constraints kc WHERE OBJECT_NAME(kc.parent_object_id) = '${esc(tableName)}' AND kc.type = 'PK';\nIF @pkName IS NOT NULL EXEC('ALTER TABLE ${quotedTable} DROP CONSTRAINT [' + @pkName + ']');`,
+               );
+            }
+         }
+
+         // Step 3: Add PK
+         if (pkChanged && newIsPk) {
+            sqls.push(
+               `ALTER TABLE ${quotedTable} ADD PRIMARY KEY (${quotedCurrentCol});`,
+            );
+         }
+
+         // Step 4: Add new FK constraint
+         if (fkChanged && newFkTarget?.table && newFkTarget?.column) {
+            const newCon = dialect.quoteIdentifier(
+               `fk_${tableName}_${currentColName}_${Date.now()}`,
+            );
+            const qRefTable = dialect.quoteIdentifier(newFkTarget.table);
+            const qRefCol = dialect.quoteIdentifier(newFkTarget.column);
+            let fkSql = `ALTER TABLE ${quotedTable} ADD CONSTRAINT ${newCon} FOREIGN KEY (${quotedCurrentCol}) REFERENCES ${qRefTable}(${qRefCol})`;
+            if (
+               newFkTarget.onDelete &&
+               newFkTarget.onDelete.toUpperCase() !== 'NO ACTION'
+            ) {
+               fkSql += ` ON DELETE ${newFkTarget.onDelete.toUpperCase()}`;
+            }
+            if (
+               newFkTarget.onUpdate &&
+               newFkTarget.onUpdate.toUpperCase() !== 'NO ACTION'
+            ) {
+               fkSql += ` ON UPDATE ${newFkTarget.onUpdate.toUpperCase()}`;
+            }
+            sqls.push(`${fkSql};`);
          }
       }
    }
@@ -617,6 +813,12 @@ export async function applySchemaChanges(
                const nullStr = ref.nullable === false ? 'NOT NULL' : 'NULL';
                sqls.push(
                   `ALTER TABLE ${qChildTable} MODIFY COLUMN ${qChildCol} ${mysqlType} ${nullStr};`,
+               );
+            } else if (dbType === 'mssql') {
+               const mssqlType = ptc.newType;
+               const nullStr = ref.nullable === false ? 'NOT NULL' : 'NULL';
+               sqls.push(
+                  `ALTER TABLE ${qChildTable} ALTER COLUMN ${qChildCol} ${mssqlType} ${nullStr};`,
                );
             }
 
@@ -678,14 +880,26 @@ export async function applySchemaChanges(
             .map((v: string) => `'${dialect.escapeString(v)}'`)
             .join(', ');
          type = `ENUM(${vals})`;
+      } else if (
+         dbType === 'mssql' &&
+         ins.enumValues &&
+         ins.enumValues.length > 0
+      ) {
+         type = `NVARCHAR(255)`;
       }
 
       const nullStr = ins.nullable === false ? 'NOT NULL' : '';
       const formattedDef = formatSqlDefaultValue(ins.defaultValue);
       const defStr = formattedDef !== null ? `DEFAULT ${formattedDef}` : '';
-      sqls.push(
-         `ALTER TABLE ${quotedTable} ADD COLUMN ${quotedCol} ${type} ${nullStr} ${defStr};`,
-      );
+      if (dbType === 'mssql') {
+         sqls.push(
+            `ALTER TABLE ${quotedTable} ADD ${quotedCol} ${type} ${nullStr} ${defStr};`,
+         );
+      } else {
+         sqls.push(
+            `ALTER TABLE ${quotedTable} ADD COLUMN ${quotedCol} ${type} ${nullStr} ${defStr};`,
+         );
+      }
 
       if (ins.fkTarget && ins.fkTarget.table && ins.fkTarget.column) {
          const fkConstraintName = dialect.quoteIdentifier(
@@ -718,6 +932,10 @@ export async function applySchemaChanges(
                sqls.push(
                   `ALTER TABLE ${quotedTable} DROP INDEX ${dialect.quoteIdentifier(idxName)};`,
                );
+            } else if (dbType === 'mssql') {
+               sqls.push(
+                  `DROP INDEX ${dialect.quoteIdentifier(idxName)} ON ${quotedTable};`,
+               );
             } else {
                sqls.push(`DROP INDEX ${dialect.quoteIdentifier(idxName)};`);
             }
@@ -733,9 +951,15 @@ export async function applySchemaChanges(
          const colsStr = idx.columns
             .map((c) => dialect.quoteIdentifier(c))
             .join(', ');
-         sqls.push(
-            `CREATE ${uniqueStr} INDEX IF NOT EXISTS ${nameStr} ON ${quotedTable} (${colsStr});`,
-         );
+         if (dbType === 'mssql') {
+            sqls.push(
+               `CREATE ${uniqueStr} INDEX ${nameStr} ON ${quotedTable} (${colsStr});`,
+            );
+         } else {
+            sqls.push(
+               `CREATE ${uniqueStr} INDEX IF NOT EXISTS ${nameStr} ON ${quotedTable} (${colsStr});`,
+            );
+         }
       }
    }
 

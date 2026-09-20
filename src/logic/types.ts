@@ -85,7 +85,7 @@ export interface SchemaDiffResult {
 
 export interface DatabaseStatus {
    status: 'connected' | 'disconnected' | 'error';
-   dbType: 'mysql' | 'postgres' | 'sqlite' | 'unknown';
+   dbType: 'mysql' | 'postgres' | 'sqlite' | 'mssql' | 'mongodb' | 'unknown';
    dbName?: string;
    version?: string;
    activeConnections?: number;
@@ -144,7 +144,7 @@ export interface DBAdapter {
 }
 
 export interface DBConfig {
-   type: 'sqlite' | 'postgres' | 'mysql' | 'unknown';
+   type: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb' | 'unknown';
    targetUrl: string;
    source: '.env' | 'auto-detected' | 'manual';
    readOnly?: boolean;

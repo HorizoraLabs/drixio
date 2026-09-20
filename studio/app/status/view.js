@@ -456,6 +456,10 @@ function renderStatusData(data, tableStats = {}, latency = null) {
       connUri = `postgresql://localhost:5432/${data.dbName || 'postgres'}`;
    } else if (data.dbType === 'mysql') {
       connUri = `mysql://localhost:3306/${data.dbName || 'mysql'}`;
+   } else if (data.dbType === 'mssql') {
+      connUri = `mssql://localhost:1433/${data.dbName || 'master'}`;
+   } else if (data.dbType === 'mongodb') {
+      connUri = `mongodb://localhost:27017/${data.dbName || 'test'}`;
    } else {
       connUri = `${data.dbType || 'database'}://${data.dbName || ''}`;
    }
@@ -491,8 +495,16 @@ function renderStatusData(data, tableStats = {}, latency = null) {
          nodeEngineIcon.textContent = 'dns';
          nodeEngineAvatar.style.background = 'rgba(99, 102, 241, 0.15)';
          nodeEngineAvatar.style.color = '#818cf8';
+      } else if (data.dbType === 'mssql') {
+         nodeEngineIcon.textContent = 'dns';
+         nodeEngineAvatar.style.background = 'rgba(239, 68, 68, 0.15)';
+         nodeEngineAvatar.style.color = '#f87171';
+      } else if (data.dbType === 'mongodb') {
+         nodeEngineIcon.textContent = 'dataset';
+         nodeEngineAvatar.style.background = 'rgba(16, 185, 129, 0.15)';
+         nodeEngineAvatar.style.color = '#34d399';
       } else {
-         nodeEngineIcon.textContent = 'database';
+         nodeEngineIcon.textContent = 'storage';
          nodeEngineAvatar.style.background = 'rgba(245, 158, 11, 0.15)';
          nodeEngineAvatar.style.color = '#f59e0b';
       }

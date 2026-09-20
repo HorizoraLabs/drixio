@@ -16,10 +16,14 @@ async function doRenameTable(
       await adapter.renameTable(oldName, newName);
    } else {
       const dialect = getDialect(dbType as any);
-      const sql =
-         dbType === 'mysql'
-            ? `RENAME TABLE ${dialect.quoteIdentifier(oldName)} TO ${dialect.quoteIdentifier(newName)};`
-            : `ALTER TABLE ${dialect.quoteIdentifier(oldName)} RENAME TO ${dialect.quoteIdentifier(newName)};`;
+      let sql = '';
+      if (dbType === 'mysql') {
+         sql = `RENAME TABLE ${dialect.quoteIdentifier(oldName)} TO ${dialect.quoteIdentifier(newName)};`;
+      } else if (dbType === 'mssql') {
+         sql = `EXEC sp_rename '${oldName.replace(/'/g, "''")}', '${newName.replace(/'/g, "''")}';`;
+      } else {
+         sql = `ALTER TABLE ${dialect.quoteIdentifier(oldName)} RENAME TO ${dialect.quoteIdentifier(newName)};`;
+      }
       await adapter.executeSql(sql);
    }
 }

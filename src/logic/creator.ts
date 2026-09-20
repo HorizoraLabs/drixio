@@ -3,7 +3,7 @@ import path from 'path';
 import { Result, ok, err } from './types.js';
 
 export interface CreateDatabaseOptions {
-   dialect: 'sqlite' | 'postgres' | 'mysql';
+   dialect: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb';
    dbName: string;
    host?: string;
    port?: number | string;
@@ -14,7 +14,7 @@ export interface CreateDatabaseOptions {
 export interface CreateDatabaseData {
    targetUrl: string;
    dbName: string;
-   dialect: 'sqlite' | 'postgres' | 'mysql';
+   dialect: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb';
 }
 
 export type CreateDatabaseResult = Result<CreateDatabaseData>;
@@ -146,6 +146,60 @@ export async function createDatabase(
             targetUrl,
             dbName,
             dialect: 'postgres',
+         });
+      }
+
+      if (dialect === 'mssql') {
+         const sql = await import('mssql');
+         const conn = await (sql as any).default.connect({
+            user,
+            password,
+            server: host,
+            port,
+            database: 'master',
+            options: { encrypt: false, trustServerCertificate: true },
+         });
+         try {
+            const escaped = dbName.replace(/]/g, ']]');
+            await conn.query(
+               `IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '${dbName.replace(/'/g, "''")}') CREATE DATABASE [${escaped}]`,
+            );
+         } finally {
+            await conn.close();
+         }
+         const auth = password
+            ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@`
+            : user
+              ? `${encodeURIComponent(user)}@`
+              : '';
+         const targetUrl = `mssql://${auth}${host}:${port}/${dbName}`;
+         return ok({
+            targetUrl,
+            dbName,
+            dialect: 'mssql',
+         });
+      }
+
+      if (dialect === 'mongodb') {
+         const { MongoClient } = await import('mongodb');
+         const auth = password
+            ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@`
+            : user
+              ? `${encodeURIComponent(user)}@`
+              : '';
+         const targetUrl = `mongodb://${auth}${host}:${port}/${dbName}`;
+         const client = new MongoClient(targetUrl, { serverSelectionTimeoutMS: 8000 });
+         try {
+            await client.connect();
+            const db = client.db(dbName);
+            await db.command({ ping: 1 });
+         } finally {
+            await client.close();
+         }
+         return ok({
+            targetUrl,
+            dbName,
+            dialect: 'mongodb',
          });
       }
 

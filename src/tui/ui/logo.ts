@@ -2,7 +2,7 @@ import pc from 'picocolors';
 import { getDrixioVersion } from '../../logic/version.js';
 
 export interface DBConfigProps {
-   type: 'sqlite' | 'postgres' | 'mysql' | 'unknown';
+   type: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb' | 'unknown';
    targetUrl: string;
    source: '.env' | 'auto-detected' | 'manual';
 }

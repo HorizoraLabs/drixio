@@ -113,14 +113,20 @@
    font-weight: 700;
 }
 
-/* Engine Selection Grid (3 Modern Cards) */
+/* Engine Selection Grid (Modern Cards) */
 .connect-engine-grid {
    display: grid;
-   grid-template-columns: repeat(3, 1fr);
+   grid-template-columns: repeat(5, 1fr);
    gap: 12px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1300px) {
+   .connect-engine-grid {
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+   }
+}
+
+@media (max-width: 700px) {
    .connect-engine-grid {
       grid-template-columns: 1fr;
    }

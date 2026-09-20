@@ -6,17 +6,21 @@ import {
 } from '../../lib/connections.js';
 
 export function loadConnectView(container) {
-   let selectedType = 'sqlite'; // 'sqlite' | 'postgres' | 'mysql'
+   let selectedType = 'sqlite'; // 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb'
    const modes = {
       sqlite: 'create', // 'create' | 'existing'
       postgres: 'existing', // 'existing' | 'create'
       mysql: 'existing', // 'existing' | 'create'
+      mssql: 'existing', // 'existing' | 'create'
+      mongodb: 'existing', // 'existing' | 'create'
    };
 
    // Input method for server-based databases: 'uri' | 'fields'
    const inputMethods = {
       postgres: 'uri',
       mysql: 'uri',
+      mssql: 'uri',
+      mongodb: 'uri',
    };
 
    // Preserved form parameters across tab switches
@@ -36,6 +40,22 @@ export function loadConnectView(container) {
          user: 'root',
          password: '',
          dbname: 'mysql',
+      },
+      mssql: {
+         uri: 'mssql://sa:Password123!@localhost:1433/master',
+         host: 'localhost',
+         port: '1433',
+         user: 'sa',
+         password: '',
+         dbname: 'master',
+      },
+      mongodb: {
+         uri: 'mongodb://localhost:27017/test',
+         host: 'localhost',
+         port: '27017',
+         user: '',
+         password: '',
+         dbname: 'test',
       },
    };
 
@@ -72,6 +92,18 @@ export function loadConnectView(container) {
          badge: 'Server Instance',
          icon: 'storage',
          desc: 'High-performance relational database.',
+      },
+      mssql: {
+         name: 'SQL Server',
+         badge: 'MSSQL Instance',
+         icon: 'dns',
+         desc: 'Microsoft SQL Server enterprise database.',
+      },
+      mongodb: {
+         name: 'MongoDB',
+         badge: 'NoSQL Document',
+         icon: 'dataset',
+         desc: 'Document-oriented NoSQL database.',
       },
    };
 
@@ -114,6 +146,31 @@ export function loadConnectView(container) {
             action: 'Will connect to MySQL database and inspect tables.',
          },
       },
+      mssql: {
+         create: {
+            title: 'About Create New (SQL Server)',
+            desc: 'Connects to your Microsoft SQL Server instance using administrative credentials and executes "CREATE DATABASE" to initialize your database.',
+            action: 'Will connect to SQL Server and run CREATE DATABASE.',
+         },
+         existing: {
+            title: 'About Connect Existing (SQL Server)',
+            desc: 'Connects to an existing Microsoft SQL Server database via connection URI (mssql://) or host parameters. Introspects schemas and tables.',
+            action: 'Will connect to SQL Server database and inspect tables.',
+         },
+      },
+      mongodb: {
+         create: {
+            title: 'About Create New (MongoDB)',
+            desc: 'Connects to your MongoDB instance or cluster. MongoDB dynamically creates databases and collections when documents are inserted.',
+            action:
+               'Will connect to MongoDB instance and initialize database namespace.',
+         },
+         existing: {
+            title: 'About Connect Existing (MongoDB)',
+            desc: 'Connects to a MongoDB database (local, Docker, or Atlas SRV) via connection URI. Introspects collections, sampled schema, and indexes.',
+            action: 'Will connect to MongoDB service and sample collection schemas.',
+         },
+      },
    };
 
    const presets = {
@@ -142,6 +199,26 @@ export function loadConnectView(container) {
          },
          { label: 'No Pass', uri: 'mysql://root:@localhost:3306/mydb' },
       ],
+      mssql: [
+         {
+            label: 'Local Default',
+            uri: 'mssql://sa:Password123!@localhost:1433/master',
+         },
+         {
+            label: 'Azure SQL Format',
+            uri: 'mssql://user:password@server.database.windows.net:1433/mydb?encrypt=true',
+         },
+      ],
+      mongodb: [
+         {
+            label: 'Local Default',
+            uri: 'mongodb://localhost:27017/test',
+         },
+         {
+            label: 'Atlas SRV Format',
+            uri: 'mongodb+srv://user:password@cluster0.mongodb.net/test?retryWrites=true&w=majority',
+         },
+      ],
    };
 
    const parseConnectionUri = (rawUri) => {
@@ -167,16 +244,41 @@ export function loadConnectView(container) {
             ? 'postgres'
             : proto.startsWith('my')
               ? 'mysql'
-              : proto;
+              : (proto.startsWith('ms') || proto.startsWith('sqlserver'))
+                ? 'mssql'
+                : proto.startsWith('mongo')
+                  ? 'mongodb'
+                  : proto;
 
          const host = url.hostname || 'localhost';
-         const defaultPort = dialect === 'mysql' ? '3306' : '5432';
+         const defaultPort =
+            dialect === 'mysql'
+               ? '3306'
+               : dialect === 'mssql'
+                 ? '1433'
+                 : dialect === 'mongodb'
+                   ? '27017'
+                   : '5432';
          const port = url.port || defaultPort;
-         const defaultUser = dialect === 'mysql' ? 'root' : 'postgres';
+         const defaultUser =
+            dialect === 'mysql'
+               ? 'root'
+               : dialect === 'mssql'
+                 ? 'sa'
+                 : dialect === 'mongodb'
+                   ? ''
+                   : 'postgres';
          const user = decodeURIComponent(url.username || defaultUser);
          const password = decodeURIComponent(url.password || '');
          const pathname = url.pathname.replace(/^\//, '');
-         const defaultDb = dialect === 'mysql' ? 'mysql' : 'postgres';
+         const defaultDb =
+            dialect === 'mysql'
+               ? 'mysql'
+               : dialect === 'mssql'
+                 ? 'master'
+                 : dialect === 'mongodb'
+                   ? 'test'
+                   : 'postgres';
          const dbName = decodeURIComponent(pathname.split('?')[0] || defaultDb);
 
          return {
@@ -209,7 +311,12 @@ export function loadConnectView(container) {
          return sqliteParams.existingPath.trim() || './drixio.sqlite';
       }
 
-      if (selectedType === 'postgres' || selectedType === 'mysql') {
+      if (
+         selectedType === 'postgres' ||
+         selectedType === 'mysql' ||
+         selectedType === 'mssql' ||
+         selectedType === 'mongodb'
+      ) {
          const currentMethod = inputMethods[selectedType];
          if (currentMethod === 'uri') {
             const raw = serverParams[selectedType].uri.trim();
@@ -218,9 +325,23 @@ export function loadConnectView(container) {
 
          const p = serverParams[selectedType];
          const host = p.host.trim() || 'localhost';
-         const defaultPort = selectedType === 'postgres' ? '5432' : '3306';
+         const defaultPort =
+            selectedType === 'postgres'
+               ? '5432'
+               : selectedType === 'mssql'
+                 ? '1433'
+                 : selectedType === 'mongodb'
+                   ? '27017'
+                   : '3306';
          const port = p.port.trim() || defaultPort;
-         const defaultUser = selectedType === 'postgres' ? 'postgres' : 'root';
+         const defaultUser =
+            selectedType === 'postgres'
+               ? 'postgres'
+               : selectedType === 'mssql'
+                 ? 'sa'
+                 : selectedType === 'mongodb'
+                   ? ''
+                   : 'root';
          const user = p.user.trim() || defaultUser;
          const password = p.password || '';
          const defaultDb =
@@ -228,7 +349,11 @@ export function loadConnectView(container) {
                ? 'new_db'
                : selectedType === 'postgres'
                  ? 'postgres'
-                 : 'mysql';
+                 : selectedType === 'mssql'
+                   ? 'master'
+                   : selectedType === 'mongodb'
+                     ? 'test'
+                     : 'mysql';
          const dbName = p.dbname.trim() || defaultDb;
 
          const auth = password
@@ -263,7 +388,11 @@ export function loadConnectView(container) {
             ? 'new_db'
             : selectedType === 'postgres'
               ? 'postgres'
-              : 'mysql';
+              : selectedType === 'mssql'
+                ? 'master'
+                : selectedType === 'mongodb'
+                  ? 'test'
+                  : 'mysql';
       return serverParams[selectedType].dbname.trim() || defaultDb;
    };
 
@@ -275,11 +404,26 @@ export function loadConnectView(container) {
       if (currentMethod === 'uri') {
          const parsed = parseConnectionUri(serverParams[selectedType].uri);
          if (parsed?.host) {
-            return `${parsed.host}:${parsed.port || (selectedType === 'postgres' ? '5432' : '3306')}`;
+            const defaultP =
+               selectedType === 'postgres'
+                  ? '5432'
+                  : selectedType === 'mssql'
+                    ? '1433'
+                    : selectedType === 'mongodb'
+                      ? '27017'
+                      : '3306';
+            return `${parsed.host}:${parsed.port || defaultP}`;
          }
       }
       const host = serverParams[selectedType].host.trim() || 'localhost';
-      const defaultPort = selectedType === 'postgres' ? '5432' : '3306';
+      const defaultPort =
+         selectedType === 'postgres'
+            ? '5432'
+            : selectedType === 'mssql'
+              ? '1433'
+              : selectedType === 'mongodb'
+                ? '27017'
+                : '3306';
       const port = serverParams[selectedType].port.trim() || defaultPort;
       return `${host}:${port}`;
    };
@@ -405,19 +549,38 @@ export function loadConnectView(container) {
 
       if (
          currentMode === 'create' &&
-         (selectedType === 'postgres' || selectedType === 'mysql')
+         (selectedType === 'postgres' ||
+            selectedType === 'mysql' ||
+            selectedType === 'mssql' ||
+            selectedType === 'mongodb')
       ) {
          const p = serverParams[selectedType];
          payload = {
             mode: 'create',
             dbType: selectedType,
             host: p.host.trim() || 'localhost',
-            port: p.port.trim() || (selectedType === 'mysql' ? '3306' : '5432'),
+            port:
+               p.port.trim() ||
+               (selectedType === 'mysql'
+                  ? '3306'
+                  : selectedType === 'mssql'
+                    ? '1433'
+                    : selectedType === 'mongodb'
+                      ? '27017'
+                      : '5432'),
             user:
                p.user.trim() ||
-               (selectedType === 'mysql' ? 'root' : 'postgres'),
+               (selectedType === 'mysql'
+                  ? 'root'
+                  : selectedType === 'mssql'
+                    ? 'sa'
+                    : selectedType === 'mongodb'
+                      ? ''
+                      : 'postgres'),
             password: p.password || '',
-            dbName: p.dbname.trim() || 'new_db',
+            dbName:
+               p.dbname.trim() ||
+               (selectedType === 'mongodb' ? 'test' : 'new_db'),
          };
       } else if (selectedType === 'sqlite' && currentMode === 'create') {
          let name = sqliteParams.createName.trim() || 'drixio.sqlite';
@@ -490,7 +653,7 @@ export function loadConnectView(container) {
                 <span>Select Database Dialect</span>
               </div>
               <div class="connect-engine-grid">
-                ${['sqlite', 'postgres', 'mysql']
+                ${['sqlite', 'postgres', 'mysql', 'mssql', 'mongodb']
                    .map((type) => {
                       const meta = engineMeta[type];
                       const isActive = selectedType === type;
@@ -682,12 +845,16 @@ export function loadConnectView(container) {
                   <div class="saved-conn-list">
                     ${savedConnections
                        .map((conn) => {
-                          const icon =
-                             conn.dialect === 'postgres'
-                                ? 'database'
-                                : conn.dialect === 'mysql'
-                                  ? 'storage'
-                                  : 'description';
+                           const icon =
+                              conn.dialect === 'postgres'
+                                 ? 'database'
+                                 : conn.dialect === 'mysql'
+                                   ? 'storage'
+                                   : conn.dialect === 'mssql'
+                                     ? 'dns'
+                                     : conn.dialect === 'mongodb'
+                                       ? 'dataset'
+                                       : 'description';
                           return /* html */ `
                         <div class="saved-conn-item" data-id="${conn.id}">
                           <div class="saved-conn-main">
@@ -762,21 +929,43 @@ export function loadConnectView(container) {
         `;
       }
 
-      // PostgreSQL & MySQL
+      // PostgreSQL, MySQL, SQL Server & MongoDB
       const isPostgres = type === 'postgres';
+      const isMssql = type === 'mssql';
+      const isMongo = type === 'mongodb';
       const currentMethod = inputMethods[type];
       const p = serverParams[type];
-      const defaultPort = isPostgres ? '5432' : '3306';
-      const defaultUser = isPostgres ? 'postgres' : 'root';
+      const defaultPort = isPostgres
+         ? '5432'
+         : isMssql
+           ? '1433'
+           : isMongo
+             ? '27017'
+             : '3306';
+      const defaultUser = isPostgres
+         ? 'postgres'
+         : isMssql
+           ? 'sa'
+           : isMongo
+             ? ''
+             : 'root';
       const isCreate = mode === 'create';
       const defaultDb = isCreate
          ? 'my_project'
          : isPostgres
            ? 'postgres'
-           : 'mysql';
+           : isMssql
+             ? 'master'
+             : isMongo
+               ? 'test'
+               : 'mysql';
       const exampleUri = isPostgres
          ? 'postgresql://postgres:password@localhost:5432/mydb'
-         : 'mysql://root:password@localhost:3306/mydb';
+         : isMssql
+           ? 'mssql://sa:password@localhost:1433/mydb'
+           : isMongo
+             ? 'mongodb://localhost:27017/mydb'
+             : 'mysql://root:password@localhost:3306/mydb';
 
       return /* html */ `
       <!-- Segmented Input Method Selector -->
@@ -1193,7 +1382,10 @@ export function loadConnectView(container) {
 
             if (
                currentMode === 'create' &&
-               (selectedType === 'postgres' || selectedType === 'mysql')
+               (selectedType === 'postgres' ||
+                  selectedType === 'mysql' ||
+                  selectedType === 'mssql' ||
+                  selectedType === 'mongodb')
             ) {
                const p = serverParams[selectedType];
                const dbName = p.dbname.trim();
@@ -1213,10 +1405,22 @@ export function loadConnectView(container) {
                   host: p.host.trim() || 'localhost',
                   port:
                      p.port.trim() ||
-                     (selectedType === 'mysql' ? '3306' : '5432'),
+                     (selectedType === 'mysql'
+                        ? '3306'
+                        : selectedType === 'mssql'
+                          ? '1433'
+                          : selectedType === 'mongodb'
+                            ? '27017'
+                            : '5432'),
                   user:
                      p.user.trim() ||
-                     (selectedType === 'mysql' ? 'root' : 'postgres'),
+                     (selectedType === 'mysql'
+                        ? 'root'
+                        : selectedType === 'mssql'
+                          ? 'sa'
+                          : selectedType === 'mongodb'
+                            ? ''
+                            : 'postgres'),
                   password: p.password || '',
                   dbName,
                   saveToEnv,

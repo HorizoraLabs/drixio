@@ -67,6 +67,8 @@ export async function runSchemaHealthCheck(
                addPkSql = `ALTER TABLE ${quotedTable} ADD COLUMN id INTEGER PRIMARY KEY AUTOINCREMENT;`;
             } else if (dbType === 'postgres') {
                addPkSql = `ALTER TABLE ${quotedTable} ADD COLUMN id SERIAL PRIMARY KEY;`;
+            } else if (dbType === 'mssql') {
+               addPkSql = `ALTER TABLE ${quotedTable} ADD id INT IDENTITY(1,1) PRIMARY KEY;`;
             } else {
                addPkSql = `ALTER TABLE ${quotedTable} ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY;`;
             }
@@ -125,7 +127,7 @@ export async function runSchemaHealthCheck(
 
                if (colsA === colsB && idxA.name && idxB.name) {
                   const dropIdxSql =
-                     dbType === 'mysql'
+                     dbType === 'mysql' || dbType === 'mssql'
                         ? `DROP INDEX ${dialect.quoteIdentifier(idxB.name)} ON ${quotedTable};`
                         : `DROP INDEX ${dialect.quoteIdentifier(idxB.name)};`;
 
@@ -152,7 +154,9 @@ export async function runSchemaHealthCheck(
                      ? `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT '';`
                      : dbType === 'mysql'
                        ? `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT '';`
-                       : `-- In SQLite, re-create or assign a DEFAULT value during migration\n-- ALTER TABLE ${quotedTable} ...`;
+                       : dbType === 'mssql'
+                         ? `ALTER TABLE ${quotedTable} ADD CONSTRAINT [DF_${tableName}_${col.name}] DEFAULT '' FOR ${quotedCol};`
+                         : `-- In SQLite, re-create or assign a DEFAULT value during migration\n-- ALTER TABLE ${quotedTable} ...`;
 
                issues.push({
                   id: `notnull-no-default-${tableName}-${col.name}`,

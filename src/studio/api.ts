@@ -1617,7 +1617,9 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
             const dialect = (dbType || 'sqlite').toLowerCase() as
                | 'sqlite'
                | 'postgres'
-               | 'mysql';
+               | 'mysql'
+               | 'mssql'
+               | 'mongodb';
             const result = await createDatabase({
                dialect,
                dbName: dbName || body.sqlitePath || 'database.sqlite',

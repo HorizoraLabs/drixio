@@ -1,25 +1,12 @@
-@import url('./styles/utilities.css');
-@import url('./styles/sidebar.css');
-@import url('./styles/header.css');
-@import url('./styles/tab.css');
-@import url('./styles/main.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('./styles/base.css');
+@import url('./styles/components.css');
+@import url('./styles/data.css');
 @import url('./styles/console.css');
-@import url('./styles/modal.css');
-@import url('./styles/grid.css');
-@import url('./styles/toast.css');
+@import url('./styles/schema.css');
 @import url('./styles/erd.css');
 @import url('./styles/status.css');
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-@import url('./styles/searchBar.css');
-@import url('./styles/filterBar.css');
-@import url('./styles/contextMenu.css');
-@import url('./styles/data.css');
-@import url('./styles/schema.css');
 @import url('./styles/connect.css');
-@import url('./styles/typePicker.css');
-@import url('./styles/dropdownPicker.css');
-@import url('./styles/commandPalette.css');
 
 :root {
    --color-bg-primary: #ffffff;

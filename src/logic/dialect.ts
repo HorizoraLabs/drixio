@@ -318,8 +318,123 @@ export class MysqlDialect implements Dialect {
    }
 }
 
+export class MssqlDialect implements Dialect {
+   quoteIdentifier(name: string): string {
+      // MSSQL uses square brackets; escape embedded closing brackets
+      return `[${name.replace(/\]/g, ']]')}]`;
+   }
+
+   escapeString(val: string): string {
+      return val.replace(/'/g, "''");
+   }
+
+   buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
+      const pkColumns = columns.filter(
+         (c) => !!(c.isPk || (c as any).primaryKey),
+      );
+      const isCompositePk = pkColumns.length > 1;
+
+      const lines = columns.map((col) => {
+         const isPk = !!(col.isPk || (col as any).primaryKey);
+         const tLower = col.type.toLowerCase();
+         const hasFk = !!(col.fkTarget && col.fkTarget.table && col.fkTarget.column);
+         let typeStr = col.type;
+
+         if (tLower === 'integer' || tLower === 'int') typeStr = 'INT';
+         else if (tLower === 'text' || tLower === 'string')
+            typeStr = 'NVARCHAR(MAX)';
+         else if (tLower === 'varchar' || tLower === 'varchar(255)')
+            typeStr = 'NVARCHAR(255)';
+         else if (tLower === 'boolean' || tLower === 'bool') typeStr = 'BIT';
+         else if (tLower === 'decimal' || tLower === 'numeric') typeStr = 'DECIMAL(18,2)';
+         else if (tLower === 'datetime' || tLower === 'timestamp')
+            typeStr = 'DATETIME2';
+         else if (tLower === 'uuid' || tLower === 'uniqueidentifier')
+            typeStr = 'UNIQUEIDENTIFIER';
+         else if (col.enumValues && col.enumValues.length > 0) {
+            // MSSQL doesn't have native ENUM; use NVARCHAR with CHECK constraint
+            const vals = col.enumValues
+               .map((v) => `'${this.escapeString(v)}'`)
+               .join(', ');
+            typeStr = `NVARCHAR(255) CHECK(${this.quoteIdentifier(col.name)} IN (${vals}))`;
+         }
+
+         if (isPk && !isCompositePk) {
+            if (!hasFk && (tLower.includes('int') || typeStr === 'INT')) {
+               typeStr += ' IDENTITY(1,1) PRIMARY KEY';
+            } else {
+               typeStr += ' PRIMARY KEY';
+            }
+         }
+
+         if (!col.nullable || (isPk && isCompositePk)) typeStr += ' NOT NULL';
+         if (col.isUnique && !isPk) typeStr += ' UNIQUE';
+
+         if (
+            col.defaultValue &&
+            col.defaultValue !== 'AutoInc' &&
+            col.defaultValue !== 'IDENTITY' &&
+            !col.defaultValue.startsWith('FK ->')
+         ) {
+            const formatted = formatSqlDefaultValue(col.defaultValue);
+            if (formatted !== null) {
+               typeStr += ` DEFAULT ${formatted}`;
+            }
+         }
+
+         return `  ${this.quoteIdentifier(col.name)} ${typeStr}`;
+      });
+
+      if (isCompositePk) {
+         const pkColsQuoted = pkColumns
+            .map((c) => this.quoteIdentifier(c.name))
+            .join(', ');
+         lines.push(`  PRIMARY KEY (${pkColsQuoted})`);
+      }
+
+      const fks = columns
+         .filter((col) => col.fkTarget && col.fkTarget.table && col.fkTarget.column)
+         .map((col) => {
+            let fkStr = `  FOREIGN KEY (${this.quoteIdentifier(col.name)}) REFERENCES ${this.quoteIdentifier(col.fkTarget!.table)}(${this.quoteIdentifier(col.fkTarget!.column)})`;
+            if (col.fkTarget!.onDelete && col.fkTarget!.onDelete !== 'NO ACTION') {
+               fkStr += ` ON DELETE ${col.fkTarget!.onDelete}`;
+            }
+            if (col.fkTarget!.onUpdate && col.fkTarget!.onUpdate !== 'NO ACTION') {
+               fkStr += ` ON UPDATE ${col.fkTarget!.onUpdate}`;
+            }
+            return fkStr;
+         });
+
+      if (fks.length > 0) {
+         lines.push(...fks);
+      }
+
+      return `CREATE TABLE ${this.quoteIdentifier(tableName)} (\n${lines.join(',\n')}\n);`;
+   }
+}
+
+export class MongoDialect implements Dialect {
+   quoteIdentifier(name: string): string {
+      return name;
+   }
+
+   escapeString(val: string): string {
+      return val.replace(/"/g, '\\"');
+   }
+
+   buildCreateTable(tableName: string, columns: ColumnSchema[]): string {
+      const fields = columns
+         .map(
+            (c) =>
+               `//   ${c.name}: ${c.type}${c.isPk ? ' (Primary Key)' : ''}`,
+         )
+         .join('\n');
+      return `// MongoDB Collection: ${tableName}\n// Schema (inferred):\n${fields}\ndb.createCollection("${tableName}");`;
+   }
+}
+
 export function getDialect(
-   type: 'sqlite' | 'postgres' | 'mysql' | 'unknown',
+   type: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb' | 'unknown',
 ): Dialect {
    switch (type) {
       case 'sqlite':
@@ -328,10 +443,15 @@ export function getDialect(
          return new PostgresDialect();
       case 'mysql':
          return new MysqlDialect();
+      case 'mssql':
+         return new MssqlDialect();
+      case 'mongodb':
+         return new MongoDialect();
       default:
          return new SqliteDialect();
    }
 }
+
 
 /**
  * Construct a SQL WHERE clause from user search input.

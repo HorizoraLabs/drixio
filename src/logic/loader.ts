@@ -20,7 +20,15 @@ const DB_ENV_KEYS = [
    'MYSQL_DATABASE_URL',
    'JAWSDB_URL',
    'CLEARDB_DATABASE_URL',
+   'MSSQL_URL',
+   'SQLSERVER_URL',
+   'MSSQL_CONNECTION_STRING',
+   'AZURE_SQL_CONNECTION_STRING',
+   'MONGODB_URI',
+   'MONGO_URL',
+   'MONGODB_URL',
 ];
+
 
 /**
  * Parses raw .env content into key-value pairs.
@@ -108,7 +116,10 @@ export async function loadCascadedEnv(
 export function classifyDatabaseUrl(
    rawUrl: string,
    cwd: string,
-): { type: 'sqlite' | 'postgres' | 'mysql'; targetUrl: string } | null {
+): {
+   type: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb';
+   targetUrl: string;
+} | null {
    let trimmed = rawUrl.trim();
    if (!trimmed) return null;
 
@@ -129,6 +140,28 @@ export function classifyDatabaseUrl(
 
    if (trimmed.startsWith('mysql://')) {
       return { type: 'mysql', targetUrl: trimmed };
+   }
+
+   // MongoDB / Atlas SRV: URL-style
+   const lowerTrimmed = trimmed.toLowerCase();
+   if (
+      lowerTrimmed.startsWith('mongodb://') ||
+      lowerTrimmed.startsWith('mongodb+srv://')
+   ) {
+      return { type: 'mongodb', targetUrl: trimmed };
+   }
+
+   // MSSQL: URL-style
+   if (
+      lowerTrimmed.startsWith('mssql://') ||
+      lowerTrimmed.startsWith('sqlserver://')
+   ) {
+      return { type: 'mssql', targetUrl: trimmed };
+   }
+
+   // MSSQL: ADO.NET key-value style (Server=host;Database=db;...)
+   if (/server\s*=/i.test(trimmed) && /database\s*=/i.test(trimmed)) {
+      return { type: 'mssql', targetUrl: trimmed };
    }
 
    const lower = trimmed.toLowerCase();
@@ -163,6 +196,7 @@ export function classifyDatabaseUrl(
 
    return null;
 }
+
 
 /**
  * Assembles a connection string from separate DB host, port, user, pass, database variables.
@@ -436,14 +470,39 @@ export function assembleConnectionUrl(
    database: string,
 ): string {
    const targetHost = host || 'localhost';
-   const targetPort = port || (type === 'postgres' ? '5432' : '3306');
-   const targetUser = user || (type === 'postgres' ? 'postgres' : 'root');
+   const defaultPort =
+      type === 'postgres'
+         ? '5432'
+         : type === 'mssql'
+           ? '1433'
+           : type === 'mongodb'
+             ? '27017'
+             : '3306';
+   const targetPort = port || defaultPort;
+   const defaultUser =
+      type === 'postgres'
+         ? 'postgres'
+         : type === 'mssql'
+           ? 'sa'
+           : type === 'mongodb'
+             ? ''
+             : 'root';
+   const targetUser = user || defaultUser;
    const auth = password
-      ? `${encodeURIComponent(targetUser)}:${encodeURIComponent(password)}`
-      : encodeURIComponent(targetUser);
-   const defaultDb = type === 'postgres' ? 'postgres' : '';
+      ? `${encodeURIComponent(targetUser)}:${encodeURIComponent(password)}@`
+      : targetUser
+        ? `${encodeURIComponent(targetUser)}@`
+        : '';
+   const defaultDb =
+      type === 'postgres'
+         ? 'postgres'
+         : type === 'mssql'
+           ? 'master'
+           : type === 'mongodb'
+             ? 'test'
+             : '';
    const dbNameStr = database || defaultDb;
-   return `${type}://${auth}@${targetHost}:${targetPort}/${dbNameStr}`;
+   return `${type}://${auth}${targetHost}:${targetPort}/${dbNameStr}`;
 }
 
 export function resolveLocalDbPath(targetUrl: string, cwd: string): string {
@@ -455,7 +514,15 @@ export function resolveLocalDbPath(targetUrl: string, cwd: string): string {
 
 export function isConnectionString(url: string): boolean {
    const trimmed = url.trim();
-   return trimmed.startsWith('postgres://') ||
-      trimmed.startsWith('postgresql://') ||
-      trimmed.startsWith('mysql://');
+   const lower = trimmed.toLowerCase();
+   return (
+      lower.startsWith('postgres://') ||
+      lower.startsWith('postgresql://') ||
+      lower.startsWith('mysql://') ||
+      lower.startsWith('mssql://') ||
+      lower.startsWith('sqlserver://') ||
+      lower.startsWith('mongodb://') ||
+      lower.startsWith('mongodb+srv://') ||
+      (/server\s*=/i.test(trimmed) && /database\s*=/i.test(trimmed))
+   );
 }

@@ -210,6 +210,7 @@ export function openCreateTableModal(onSuccess) {
 
    function quoteIdent(name) {
       if (dbType === 'mysql') return `\`${name}\``;
+      if (dbType === 'mssql') return `[${name}]`;
       return `"${name}"`;
    }
 
@@ -332,6 +333,45 @@ export function openCreateTableModal(onSuccess) {
                   typeStr += ' NOT NULL';
                if (col.isUnique && !col.primaryKey) typeStr += ' UNIQUE';
             }
+         } else if (dbType === 'mssql') {
+            if (hasEnumValues) {
+               const vals = col.enumValues
+                  .map((v) => `'${v.replace(/'/g, "''")}'`)
+                  .join(', ');
+               typeStr = `NVARCHAR(255) CHECK(${colName} IN (${vals}))`;
+            } else if (tLower === 'integer' || tLower === 'int')
+               typeStr = 'INT';
+            else if (tLower === 'text' || tLower === 'string')
+               typeStr = 'NVARCHAR(MAX)';
+            else if (tLower.startsWith('varchar'))
+               typeStr = col.type.toUpperCase();
+            else if (tLower === 'boolean' || tLower === 'bool')
+               typeStr = 'BIT';
+            else if (
+               tLower === 'decimal' ||
+               tLower === 'numeric' ||
+               tLower.startsWith('decimal')
+            )
+               typeStr = col.type.toUpperCase().includes('(')
+                  ? col.type.toUpperCase()
+                  : 'DECIMAL(18,2)';
+            else if (tLower === 'datetime' || tLower === 'timestamp')
+               typeStr = 'DATETIME2';
+            else if (tLower === 'date') typeStr = 'DATE';
+            else if (tLower === 'real') typeStr = 'FLOAT';
+            else if (tLower === 'uuid') typeStr = 'UNIQUEIDENTIFIER';
+
+            if (col.primaryKey && !isCompositePk) {
+               if (!hasFk && (tLower.includes('int') || typeStr === 'INT')) {
+                  typeStr += ' IDENTITY(1,1) PRIMARY KEY';
+               } else {
+                  typeStr += ' PRIMARY KEY';
+               }
+            }
+
+            if (!col.nullable || (col.primaryKey && isCompositePk))
+               typeStr += ' NOT NULL';
+            if (col.isUnique && !col.primaryKey) typeStr += ' UNIQUE';
          } else {
             // MySQL
             if (hasEnumValues) {

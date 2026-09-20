@@ -112,7 +112,12 @@ export const bindGridEvents = () => {
          if (collected.length === 0) return;
          const tableName = window.AppState?.currentTable || 'table_name';
          const dbType = window.AppState?.dbType || 'sqlite';
-         const q = (id) => (dbType === 'mysql' ? `\`${id}\`` : `"${id}"`);
+         const q = (id) =>
+            dbType === 'mysql'
+               ? `\`${id}\``
+               : dbType === 'mssql'
+                 ? `[${id}]`
+                 : `"${id}"`;
 
          const formatSqlVal = (val) => {
             if (val === null || val === undefined) return 'NULL';

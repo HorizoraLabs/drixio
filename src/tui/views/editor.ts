@@ -17,7 +17,7 @@ import { drawTable } from '../ui/table.js';
 import { printCustomDashboard } from '../ui/logo.js';
 
 interface DBConfigProps {
-   type: 'sqlite' | 'postgres' | 'mysql' | 'unknown';
+   type: 'sqlite' | 'postgres' | 'mysql' | 'mssql' | 'mongodb' | 'unknown';
    targetUrl: string;
    source: '.env' | 'auto-detected' | 'manual';
 }

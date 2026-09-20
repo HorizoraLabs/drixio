@@ -146,7 +146,11 @@ export function autoLayoutErd(erdData) {
 export function exportErdAsSql(erdData) {
    if (!erdData || erdData.length === 0) return '';
    const dbType = (window.AppState?.dbType || 'sqlite').toLowerCase();
-   const quote = dbType === 'mysql' ? '`' : '"';
+   const q = (name) => {
+      if (dbType === 'mysql') return `\`${name}\``;
+      if (dbType === 'mssql') return `[${name}]`;
+      return `"${name}"`;
+   };
 
    const lines = [];
    erdData.forEach((schema) => {
@@ -154,7 +158,7 @@ export function exportErdAsSql(erdData) {
       const isCompositePk = pkCols.length > 1;
 
       const colDefs = schema.columns.map((c) => {
-         let def = `  ${quote}${c.name}${quote} ${c.type}`;
+         let def = `  ${q(c.name)} ${c.type}`;
          if (c.isPk && !isCompositePk) def += ' PRIMARY KEY';
          if (!c.nullable && (!c.isPk || isCompositePk)) def += ' NOT NULL';
          if (c.isUnique && (!c.isPk || isCompositePk)) def += ' UNIQUE';
@@ -163,14 +167,14 @@ export function exportErdAsSql(erdData) {
 
       if (isCompositePk) {
          const pkColsQuoted = pkCols
-            .map((c) => `${quote}${c.name}${quote}`)
+            .map((c) => q(c.name))
             .join(', ');
          colDefs.push(`  PRIMARY KEY (${pkColsQuoted})`);
       }
 
       schema.columns.forEach((c) => {
          if (c.fkTarget && c.fkTarget.table && c.fkTarget.column) {
-            let fkDef = `  FOREIGN KEY (${quote}${c.name}${quote}) REFERENCES ${quote}${c.fkTarget.table}${quote}(${quote}${c.fkTarget.column}${quote})`;
+            let fkDef = `  FOREIGN KEY (${q(c.name)}) REFERENCES ${q(c.fkTarget.table)}(${q(c.fkTarget.column)})`;
             if (
                c.fkTarget.onDelete &&
                c.fkTarget.onDelete.toUpperCase() !== 'NO ACTION'
@@ -188,7 +192,7 @@ export function exportErdAsSql(erdData) {
       });
 
       lines.push(
-         `CREATE TABLE ${quote}${schema.table}${quote} (\n${colDefs.join(',\n')}\n);`,
+         `CREATE TABLE ${q(schema.table)} (\n${colDefs.join(',\n')}\n);`,
       );
    });
 

@@ -476,7 +476,11 @@ export function generateMigrationSql(
                   typeStr += ` DEFAULT ${formatted}`;
                }
             }
-            lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
+            if (dbType === 'mssql') {
+               lines.push(`ALTER TABLE ${qTable} ADD ${qCol} ${typeStr};`);
+            } else {
+               lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
+            }
          }
 
          // B. Drop Columns
@@ -528,6 +532,11 @@ export function generateMigrationSql(
                      .trim()
                      .replace(/\s+;/g, ';'),
                );
+            } else if (dbType === 'mssql') {
+               const nullStr = mod.newNullable === false ? 'NOT NULL' : 'NULL';
+               lines.push(
+                  `ALTER TABLE ${qTable} ALTER COLUMN ${qCol} ${newType} ${nullStr};`,
+               );
             } else if (dbType === 'sqlite') {
                lines.push(
                   `-- SQLite Warning: Column "${mod.name}" in table "${t.tableName}" requires modification (${mod.oldType} -> ${mod.newType}).`,
@@ -544,6 +553,10 @@ export function generateMigrationSql(
                if (dbType === 'mysql') {
                   lines.push(
                      `ALTER TABLE ${qTable} DROP INDEX ${dialect.quoteIdentifier(idx.name)};`,
+                  );
+               } else if (dbType === 'mssql') {
+                  lines.push(
+                     `DROP INDEX IF EXISTS ${dialect.quoteIdentifier(idx.name)} ON ${qTable};`,
                   );
                } else {
                   lines.push(
@@ -643,7 +656,11 @@ export function generateRollbackSql(
                   typeStr += ` DEFAULT ${formatted}`;
                }
             }
-            lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
+            if (dbType === 'mssql') {
+               lines.push(`ALTER TABLE ${qTable} ADD ${qCol} ${typeStr};`);
+            } else {
+               lines.push(`ALTER TABLE ${qTable} ADD COLUMN ${qCol} ${typeStr};`);
+            }
          }
 
          // Revert modified columns
@@ -688,6 +705,11 @@ export function generateRollbackSql(
                      .trim()
                      .replace(/\s+;/g, ';'),
                );
+            } else if (dbType === 'mssql') {
+               const nullStr = mod.oldNullable === false ? 'NOT NULL' : 'NULL';
+               lines.push(
+                  `ALTER TABLE ${qTable} ALTER COLUMN ${qCol} ${oldType} ${nullStr};`,
+               );
             }
          }
 
@@ -697,6 +719,10 @@ export function generateRollbackSql(
                if (dbType === 'mysql') {
                   lines.push(
                      `ALTER TABLE ${qTable} DROP INDEX ${dialect.quoteIdentifier(idx.name)};`,
+                  );
+               } else if (dbType === 'mssql') {
+                  lines.push(
+                     `DROP INDEX IF EXISTS ${dialect.quoteIdentifier(idx.name)} ON ${qTable};`,
                   );
                } else {
                   lines.push(

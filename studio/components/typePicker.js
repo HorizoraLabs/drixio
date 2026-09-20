@@ -309,6 +309,166 @@ export const DIALECT_TYPE_CATALOGS = {
          },
       ],
    },
+   mssql: {
+      category: 'SQL SERVER DATA TYPES',
+      types: [
+         {
+            name: 'INT',
+            value: 'INT',
+            desc: 'Standard 4-byte integer (-2B to +2B)',
+            icon: '#',
+         },
+         {
+            name: 'BIGINT',
+            value: 'BIGINT',
+            desc: '8-byte integer for large scale IDs',
+            icon: '#',
+         },
+         {
+            name: 'SMALLINT',
+            value: 'SMALLINT',
+            desc: '2-byte integer (-32,768 to 32,767)',
+            icon: '#',
+         },
+         {
+            name: 'TINYINT',
+            value: 'TINYINT',
+            desc: '1-byte unsigned integer (0 to 255)',
+            icon: '#',
+         },
+         {
+            name: 'BIT',
+            value: 'BIT',
+            desc: 'Integer with value 1, 0, or NULL (boolean)',
+            icon: 'toggle_on',
+         },
+         {
+            name: 'DECIMAL(18,2)',
+            value: 'DECIMAL(18,2)',
+            desc: 'Fixed precision numeric data',
+            icon: '#',
+         },
+         {
+            name: 'FLOAT',
+            value: 'FLOAT',
+            desc: 'Approximate numeric floating point',
+            icon: '#',
+         },
+         {
+            name: 'NVARCHAR(255)',
+            value: 'NVARCHAR(255)',
+            desc: 'Variable-length Unicode string',
+            icon: 'abc',
+         },
+         {
+            name: 'NVARCHAR(MAX)',
+            value: 'NVARCHAR(MAX)',
+            desc: 'Variable-length Unicode text (up to 2GB)',
+            icon: 'abc',
+         },
+         {
+            name: 'VARCHAR(255)',
+            value: 'VARCHAR(255)',
+            desc: 'Variable-length non-Unicode string',
+            icon: 'abc',
+         },
+         {
+            name: 'DATETIME2',
+            value: 'DATETIME2',
+            desc: 'Date and time with high fractional precision',
+            icon: 'schedule',
+         },
+         {
+            name: 'DATE',
+            value: 'DATE',
+            desc: 'Calendar date (YYYY-MM-DD)',
+            icon: 'schedule',
+         },
+         {
+            name: 'TIME',
+            value: 'TIME',
+            desc: 'Time of day (hh:mm:ss.nnnnnnn)',
+            icon: 'schedule',
+         },
+         {
+            name: 'UNIQUEIDENTIFIER',
+            value: 'UNIQUEIDENTIFIER',
+            desc: '16-byte GUID / UUID',
+            icon: 'key',
+         },
+         {
+            name: 'VARBINARY(MAX)',
+            value: 'VARBINARY(MAX)',
+            desc: 'Variable-length binary data (blobs)',
+            icon: 'data_array',
+         },
+      ],
+   },
+   mongodb: {
+      category: 'MONGODB BSON DATA TYPES',
+      types: [
+         {
+            name: 'ObjectId',
+            value: 'ObjectId',
+            desc: '12-byte BSON unique identifier (default _id)',
+            icon: 'key',
+         },
+         {
+            name: 'String',
+            value: 'String',
+            desc: 'UTF-8 encoded string',
+            icon: 'abc',
+         },
+         {
+            name: 'Int32',
+            value: 'Int32',
+            desc: '32-bit signed integer',
+            icon: '#',
+         },
+         {
+            name: 'Int64',
+            value: 'Int64',
+            desc: '64-bit signed integer (Long)',
+            icon: '#',
+         },
+         {
+            name: 'Double',
+            value: 'Double',
+            desc: '64-bit IEEE 754 floating point',
+            icon: '#',
+         },
+         {
+            name: 'Boolean',
+            value: 'Boolean',
+            desc: 'Logical true/false boolean value',
+            icon: 'toggle_on',
+         },
+         {
+            name: 'Date',
+            value: 'Date',
+            desc: 'BSON Date/Time in UTC milliseconds',
+            icon: 'schedule',
+         },
+         {
+            name: 'Object',
+            value: 'Object',
+            desc: 'Embedded nested BSON document',
+            icon: '{ }',
+         },
+         {
+            name: 'Array',
+            value: 'Array',
+            desc: 'List or set of embedded values/documents',
+            icon: '[ ]',
+         },
+         {
+            name: 'Binary',
+            value: 'Binary',
+            desc: 'BSON binary data payload',
+            icon: 'data_array',
+         },
+      ],
+   },
 };
 
 export function getDbDialect(explicitDialect) {
@@ -319,6 +479,8 @@ export function getDbDialect(explicitDialect) {
    ).toLowerCase();
    if (db.includes('postgres') || db.includes('pg')) return 'postgres';
    if (db.includes('mysql')) return 'mysql';
+   if (db.includes('mssql') || db.includes('sqlserver')) return 'mssql';
+   if (db.includes('mongo')) return 'mongodb';
    return 'sqlite';
 }
 

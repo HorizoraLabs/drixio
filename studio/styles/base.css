@@ -1,0 +1,401 @@
+/* ==========================================================================
+   DRIXIO STUDIO - BASE STYLES & UTILITIES (base.css)
+   Contains core layout framing, toolbars, global buttons, custom scrollbar,
+   and essential utility classes.
+   ========================================================================== */
+
+/* ==================== MAIN CONTENT LAYOUT ==================== */
+#main-content {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   background-color: var(--color-bg-primary);
+   overflow: hidden; /* Prevent body scroll */
+   min-width: 0;
+   min-height: 0;
+}
+
+/* ==================== SEAMLESS INTEGRATED TOOLBAR ==================== */
+.toolbar {
+   display: flex;
+   align-items: center;
+   border-bottom: 1px solid var(--color-border);
+   height: 42px;
+   flex-shrink: 0;
+   background-color: var(--color-bg-secondary);
+   padding: 0 12px 0 6px;
+   box-sizing: border-box;
+   gap: 6px;
+}
+
+[data-theme='dark'] .toolbar {
+   background-color: #171717;
+   border-bottom-color: var(--color-border);
+}
+
+/* Header & Toolbar Buttons */
+.header-btn {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   border-radius: 6px;
+   font-weight: 500;
+   cursor: pointer;
+   transition: all 0.12s ease;
+   user-select: none;
+   border: 1px solid var(--color-border);
+   background-color: var(--color-bg-primary);
+   color: var(--color-text);
+   box-sizing: border-box;
+}
+
+[data-theme='dark'] .header-btn.secondary {
+   background-color: #121212;
+   border-color: var(--color-border);
+   color: var(--color-text);
+}
+
+.header-btn.secondary:hover {
+   background-color: var(--color-bg-secondary-dark);
+   border-color: var(--color-text-soft);
+}
+
+.header-btn.primary {
+   background-color: var(--color-primary);
+   border-color: var(--color-primary);
+   color: #ffffff;
+}
+
+.header-btn.primary:hover {
+   background-color: var(--color-primary-dark);
+}
+
+#btn-run-query:active,
+#btn-clear-query:active,
+.btn-primary:active,
+.btn-secondary:active,
+.table-btn:active {
+   transform: scale(0.96);
+}
+
+#btn-clear-query .material-symbols-outlined {
+   font-size: 16px;
+}
+
+.refresh-btn {
+   background-color: var(--color-bg-primary);
+   border-radius: 6px;
+   width: 28px;
+   height: 28px;
+   padding: 0;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   cursor: pointer;
+   border: 1px solid var(--color-border);
+   color: var(--color-text-secondary);
+   transition: all 0.15s ease;
+   box-sizing: border-box;
+   flex-shrink: 0;
+}
+
+[data-theme='dark'] .refresh-btn {
+   background-color: #121212;
+   border-color: var(--color-border);
+}
+
+.refresh-btn:hover {
+   background-color: var(--color-bg-secondary-dark);
+   color: var(--color-text);
+   border-color: var(--color-text-soft);
+}
+
+.refresh-btn:active {
+   transform: scale(0.92);
+}
+
+.refresh-btn .material-symbols-outlined {
+   font-size: 18px;
+   margin-bottom: 0.5px;
+   color: #10b981;
+   transition: transform 0.25s ease;
+}
+
+.refresh-btn:hover .material-symbols-outlined {
+   transform: rotate(60deg);
+}
+
+/* ==================== GLOBAL MODERN CUSTOM SCROLLBAR ==================== */
+* {
+   scrollbar-width: thin;
+   scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+   width: 6px;
+   height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+   background: var(--color-border);
+   border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+   background: var(--color-text-soft);
+}
+
+*::-webkit-scrollbar-corner {
+   background: transparent;
+}
+
+/* ==================== CORE UTILITY CLASSES ==================== */
+.hidden {
+   display: none !important;
+}
+
+.block {
+   display: block;
+}
+
+.inline-block {
+   display: inline-block;
+}
+
+.flex {
+   display: flex;
+}
+
+.flex-1 {
+   flex: 1;
+}
+
+.text-soft {
+   color: var(--color-text-soft);
+}
+
+.text-error {
+   color: var(--color-error);
+}
+
+.items-center {
+   display: flex;
+   align-items: center;
+}
+
+.justify-center {
+   display: flex;
+   justify-content: center;
+}
+
+.justify-end {
+   display: flex;
+   justify-content: flex-end;
+}
+
+.justify-between {
+   display: flex;
+   justify-content: space-between;
+}
+
+.flex-col {
+   display: flex;
+   flex-direction: column;
+}
+
+.gap-1 {
+   gap: 4px;
+}
+.gap-2 {
+   gap: 8px;
+}
+.gap-3 {
+   gap: 12px;
+}
+.gap-4 {
+   gap: 16px;
+}
+
+.p-2 {
+   padding: 8px;
+}
+.p-4 {
+   padding: 16px;
+}
+.p-6 {
+   padding: 24px;
+}
+
+.text-center {
+   text-align: center;
+}
+
+/* Additional Utilities */
+.animate-spin {
+   animation: spin 1s linear infinite;
+}
+@keyframes spin {
+   100% {
+      transform: rotate(360deg);
+   }
+}
+
+.icon-14 {
+   font-size: 14px;
+}
+.icon-16 {
+   font-size: 16px;
+}
+.icon-18 {
+   font-size: 18px;
+}
+.icon-20 {
+   font-size: 20px;
+}
+.icon-36 {
+   font-size: 36px;
+}
+
+.mt-2px {
+   margin-top: 2px;
+}
+.mt-2 {
+   margin-top: 8px;
+}
+.mb-1 {
+   margin-bottom: 4px;
+}
+.mb-1\.5 {
+   margin-bottom: 6px;
+}
+.mb-2 {
+   margin-bottom: 8px;
+}
+.mx-2 {
+   margin-left: 8px;
+   margin-right: 8px;
+}
+.ml-2 {
+   margin-left: 8px;
+}
+.pl-6 {
+   padding-left: 24px;
+}
+.pt-1 {
+   padding-top: 4px;
+}
+
+.text-success {
+   color: #10b981;
+}
+.text-10 {
+   font-size: 10px;
+}
+.text-11 {
+   font-size: 11px;
+}
+.text-12 {
+   font-size: 12px;
+}
+.text-13 {
+   font-size: 13px;
+}
+.text-right {
+   text-align: right;
+}
+.text-secondary {
+   color: var(--color-text-secondary);
+}
+
+.opacity-50 {
+   opacity: 0.5;
+}
+.opacity-70 {
+   opacity: 0.7;
+}
+.opacity-80 {
+   opacity: 0.8;
+}
+.transition-opacity {
+   transition: opacity 0.2s;
+}
+
+.font-normal {
+   font-weight: normal;
+}
+.font-medium {
+   font-weight: 500;
+}
+.font-semibold {
+   font-weight: 600;
+}
+.font-mono {
+   font-family: monospace;
+}
+
+.cursor-pointer {
+   cursor: pointer;
+}
+.cursor-grab {
+   cursor: grab;
+}
+.select-none {
+   user-select: none;
+}
+.pointer-events-auto {
+   pointer-events: auto;
+}
+
+.w-12 {
+   width: 12px;
+}
+.w-250 {
+   width: 250px;
+}
+.w-400 {
+   width: 400px;
+}
+.w-500 {
+   width: 500px;
+}
+.w-full {
+   width: 100%;
+}
+.h-80 {
+   height: 80px;
+}
+
+.align-middle {
+   vertical-align: middle;
+}
+.border-l {
+   border-left: 1px solid var(--color-border);
+}
+
+/* Utility variants */
+.gap-6px {
+   gap: 6px;
+}
+.btn-icon {
+   background: none;
+   border: none;
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 4px;
+   border-radius: 4px;
+}
+
+.text-brand {
+   color: var(--color-brand-500);
+}
+
+.italic {
+   font-style: italic;
+}
+

@@ -116,7 +116,7 @@ export async function moveToTrash(
          backupPath = path.join(backupDir, backupFileName);
 
          const snapshotPayload = {
-            drixioVersion: '1.2.0',
+            drixioVersion: '1.2.1',
             tableName,
             dbType,
             deletedAt: timestamp,

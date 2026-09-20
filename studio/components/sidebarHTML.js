@@ -47,7 +47,7 @@ export const SideBarHTML = /* html */ `
         <span class="status-indicator-dot" id="sidebar-db-status-dot"></span>
         <span id="brand-db-type">CONNECTING...</span>
       </div>
-      <span class="sidebar-version-tag">v1.2.0</span>
+      <span class="sidebar-version-tag">v1.2.1</span>
     </div>
 
     <div class="sidebar-footer-actions">

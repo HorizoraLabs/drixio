@@ -146,7 +146,7 @@ export function formatDisplayVal(val, colSchema) {
 }
 
 export function generateRowHtml(row, rowIndex, pkColumn, columns, schema = []) {
-   let html = `<td class="row-header" data-row-idx="${rowIndex}"><span class="row-num">${rowIndex + 1}</span><input type="checkbox" class="row-select-checkbox" data-row-idx="${rowIndex}" /></td>`;
+   let html = `<td class="row-header" data-row-idx="${rowIndex}"><span class="row-num">${rowIndex + 1}</span></td>`;
    const pkCols = schema.filter((c) => c.isPk).map((c) => c.name);
    let pkValue;
    if (pkCols.length > 1) {

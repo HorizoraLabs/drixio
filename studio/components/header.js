@@ -29,32 +29,25 @@ export const HeaderHTML = /* html */ `
       <div id="env-badge-wrap" class="breadcrumb-item">
         <span id="env-badge" class="env-badge local hidden">LOCAL</span>
       </div>
-      <button id="header-connect-btn" class="header-connect-pill" title="Database Connection Status & Switcher" type="button">
-        <span class="material-symbols-outlined connect-icon">settings_ethernet</span>
-        <span class="connect-label">Connect</span>
-      </button>
-      <button id="header-readonly-btn" class="header-readonly-pill" title="Toggle Read-Only Protection Mode" type="button">
-        <span class="material-symbols-outlined readonly-icon" id="readonly-icon">lock_open</span>
-        <span class="readonly-label" id="readonly-label">EDITABLE</span>
-      </button>
     </div>
   </div>
   
-  <div class="header-right">
+  <div class="header-center">
     <!-- Quick Search Pill (Supabase Style) -->
     <div id="header-search-pill" class="header-search-pill" title="Quick search tables (Ctrl+K)">
       <span class="material-symbols-outlined search-icon">search</span>
       <span class="search-placeholder">Search...</span>
       <kbd class="search-kbd">Ctrl K</kbd>
     </div>
+  </div>
 
+  <div class="header-right">
     <div class="header-actions">
-      <!-- Import Pure Icon Button (Opens Import Modal) -->
+      <!-- Data Migration Group (Pure Icons) -->
       <button id="import-btn" class="header-icon-btn" title="Import Data / Restore Database" aria-label="Import Data" type="button">
         <span id="import-icon" class="material-symbols-outlined">upload</span>
       </button>
 
-      <!-- Export Pure Icon Button (Dropdown Popover) -->
       <div class="header-dropdown-wrap" style="position: relative;">
         <button id="export-btn" class="header-icon-btn" title="Export Data / Schema" aria-label="Export Data" type="button">
           <span id="export-icon" class="material-symbols-outlined">download</span>
@@ -211,17 +204,30 @@ export const HeaderHTML = /* html */ `
           </button>
         </li>
       </ul>
-    </div>
+      </div>
 
-    <!-- Help / Shortcuts Icon Button -->
-    <button id="header-help-btn" class="header-icon-btn" title="Shortcuts & Documentation" aria-label="Help" type="button">
-      <span class="material-symbols-outlined">help</span>
-    </button>
+      <div class="header-divider"></div>
 
-    <!-- GitHub Link Icon Button -->
-    <a href="https://github.com/TerKSDev/drixio" target="_blank" rel="noopener noreferrer" class="header-icon-btn" title="GitHub Repository" aria-label="GitHub">
-      <span class="material-symbols-outlined">code</span>
-    </a>
+      <!-- System Connection & Security Shield (Pure Icons) -->
+      <button id="header-connect-btn" class="header-icon-btn" title="Database Connection Status & Switcher" aria-label="Database Connection" type="button">
+        <span class="material-symbols-outlined connect-icon">settings_ethernet</span>
+      </button>
+
+      <button id="header-readonly-btn" class="header-icon-btn" title="Toggle Read-Only Protection Mode" aria-label="Toggle Read-Only Protection" type="button">
+        <span class="material-symbols-outlined readonly-icon" id="readonly-icon">lock_open</span>
+      </button>
+
+      <div class="header-divider"></div>
+
+      <!-- Help / Shortcuts Icon Button -->
+      <button id="header-help-btn" class="header-icon-btn" title="Shortcuts & Documentation" aria-label="Help" type="button">
+        <span class="material-symbols-outlined">help</span>
+      </button>
+
+      <!-- GitHub Link Icon Button -->
+      <a href="https://github.com/TerKSDev/drixio" target="_blank" rel="noopener noreferrer" class="header-icon-btn" title="GitHub Repository" aria-label="GitHub">
+        <span class="material-symbols-outlined">code</span>
+      </a>
   </div>
 </div>
 </header>

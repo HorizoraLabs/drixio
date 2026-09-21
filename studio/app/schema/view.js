@@ -7,7 +7,6 @@ import {
 } from '../grid/view.js';
 import { openExportOrmModal } from './ormModal.js';
 import { openSchemaDiffModal } from './diffModal.js';
-import { openRenameTableModal } from './modals.js';
 import { showContextMenu } from '../../components/contextMenu.js';
 
 export { saveSchemaEdits } from './core.js';
@@ -62,14 +61,14 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
 
          renderTarget.innerHTML = /* html */ `
         <div class="toolbar">
-          <div class="filter-bar-container" style="max-width: 320px; position: relative;">
+          <div class="filter-bar-container" style="flex: 1; position: relative; min-width: 0;">
             <div class="filter-bar-input-box" id="schema-search-box-${tableName}">
               <span class="material-symbols-outlined filter-bar-search-icon">search</span>
               <input 
                 type="text" 
                 id="schema-search-val-${tableName}" 
                 class="filter-bar-input" 
-                placeholder="Search name or type..." 
+                placeholder="Search name, type, default, constraint..." 
                 value="${window.SchemaGrid.filterText}" 
                 autocomplete="off"
                 spellcheck="false"
@@ -85,22 +84,26 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
             </div>
             <div class="schema-autocomplete-popover hidden" id="schema-search-popover-${tableName}"></div>
           </div>
-          <div class="flex-1"></div>
-          <button type="button" id="btn-rename-table-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Rename Table">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">edit_note</span>
-            <span>Rename Table</span>
+          <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)">
+            <span class="material-symbols-outlined" style="color: #10b981;">refresh</span>
           </button>
-          <button type="button" id="btn-export-orm-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Export Prisma / Drizzle ORM Schema">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">bolt</span>
-            <span>Export ORM</span>
-          </button>
-          <button type="button" id="btn-schema-diff-${tableName}" class="header-btn secondary" style="height: 30px; font-size: 12px; gap: 6px; padding: 0 12px;" title="Compare Schemas & Generate Migration SQL">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: #10b981;">compare_arrows</span>
-            <span>Schema Diff</span>
-          </button>
-          <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)"><span class="material-symbols-outlined">refresh</span></button>
         </div>
         <div id="schema-grid-container-${tableName}" class="table-container"></div>
+        <div class="data-grid-footer schema-grid-footer" id="schema-grid-footer-${tableName}">
+          <div class="footer-left-group">
+            <span class="footer-records-count" id="schema-columns-count-${tableName}"></span>
+          </div>
+          <div class="footer-right-group">
+            <button type="button" id="btn-export-orm-${tableName}" class="footer-btn" title="Export Prisma / Drizzle ORM Schema">
+              <span class="material-symbols-outlined" style="font-size: 12px; color: var(--color-primary);">bolt</span>
+              <span>Export ORM</span>
+            </button>
+            <button type="button" id="btn-schema-diff-${tableName}" class="footer-btn" title="Compare Schemas & Generate Migration SQL">
+              <span class="material-symbols-outlined" style="font-size: 12px; color: #10b981;">compare_arrows</span>
+              <span>Schema Diff</span>
+            </button>
+          </div>
+        </div>
       `;
 
          window.renderSchemaGrid = () => {
@@ -133,6 +136,21 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                      return window.SchemaGrid.sortState.asc ? 1 : -1;
                   return 0;
                });
+            }
+
+            const countEl = document.getElementById(
+               `schema-columns-count-${tableName}`,
+            );
+            if (countEl) {
+               const totalCols = window.SchemaGrid.schema.length;
+               if (
+                  window.SchemaGrid.filterText &&
+                  displaySchema.length !== totalCols
+               ) {
+                  countEl.textContent = `Showing ${displaySchema.length} of ${totalCols} columns`;
+               } else {
+                  countEl.textContent = `${totalCols} column${totalCols !== 1 ? 's' : ''}`;
+               }
             }
 
             if (displaySchema.length === 0 && window.SchemaGrid.filterText) {
@@ -840,13 +858,6 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
                hideSuggestions();
             }
          });
-
-         const renameTableBtn = document.getElementById(
-            `btn-rename-table-${tableName}`,
-         );
-         if (renameTableBtn) {
-            renameTableBtn.onclick = () => openRenameTableModal(tableName);
-         }
 
          const exportOrmBtn = document.getElementById(
             `btn-export-orm-${tableName}`,

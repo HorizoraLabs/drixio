@@ -89,16 +89,14 @@ export class PostgresAdapter implements DBAdapter {
       if (!this.pool) {
          const pgModule = await import('pg');
          const pgDriver = ((pgModule as any).default || pgModule) as typeof pg;
-         this.pool = new pgDriver.Pool(buildPgPoolConfig(this.connectionString));
+         const config = buildPgPoolConfig(this.connectionString);
+         // Set search_path via connection options to avoid client.query() in the
+         // 'connect' event, which triggers a pg@9.0 DeprecationWarning.
+         const quoted = this.currentSchema.replace(/"/g, '""');
+         config.options = `--search_path="${quoted}",public`;
+         this.pool = new pgDriver.Pool(config);
          // Prevent unhandled error events from crashing the process
          this.pool.on('error', () => {});
-         // Set search_path for all new connections in the pool
-         this.pool.on('connect', (client: pg.PoolClient) => {
-            const quoted = this.currentSchema.replace(/"/g, '""');
-            client
-               .query(`SET search_path TO "${quoted}", public`)
-               .catch(() => {});
-         });
       }
       return this.pool;
    }
@@ -479,6 +477,33 @@ export class PostgresAdapter implements DBAdapter {
 
    async executeSql(sql: string): Promise<void> {
       await this.queryPool(sql);
+   }
+
+   /**
+    * Run a list of SQL statements inside a single transaction on one dedicated
+    * pool client.  This avoids the pg@9.0 DeprecationWarning caused by issuing
+    * BEGIN on one pool connection and subsequent statements on another.
+    */
+   async executeTransaction(sqls: string[]): Promise<void> {
+      if (sqls.length === 0) return;
+      const pool = await this.getPool();
+      const client = await pool.connect();
+      try {
+         await client.query('BEGIN');
+         for (const sql of sqls) {
+            await client.query(sql);
+         }
+         await client.query('COMMIT');
+      } catch (e) {
+         try {
+            await client.query('ROLLBACK');
+         } catch {
+            // Ignore rollback error if the connection is already broken
+         }
+         throw e;
+      } finally {
+         client.release();
+      }
    }
 
    async close(): Promise<void> {

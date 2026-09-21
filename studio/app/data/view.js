@@ -23,9 +23,9 @@ import {
 import { openCellDrawer } from './cellDrawer.js';
 import {
    selectAllRows,
-   handleRowCheckboxChange,
    clearRowSelection,
 } from './bulkBar.js';
+import { renderPaginationFooter } from './pagination.js';
 import { updateCell } from './core.js';
 
 export { saveDataGridEdits } from './core.js';
@@ -135,22 +135,13 @@ export async function loadTableData(
           <div class="toolbar">
             ${backBtnHtml}
             <div id="filter-bar-mount-${tableName}" class="flex-1" style="height: 100%; display: flex; align-items: center; min-width: 0;"></div>
-            <div id="col-visibility-mount-${tableName}" class="toolbar-item" style="display: flex; align-items: center;"></div>
-            <div class="page-size-picker flex items-center gap-1.5" title="Rows per page">
-              <span class="material-symbols-outlined icon-14" style="font-size: 15px; color: var(--color-primary);">table_rows</span>
-              <select id="select-page-size-${tableName}" class="page-size-select">
-                <option value="25">25 / page</option>
-                <option value="50" selected>50 / page</option>
-                <option value="100">100 / page</option>
-                <option value="200">200 / page</option>
-              </select>
-            </div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
               <span class="material-symbols-outlined" style="color: #10b981;">refresh</span>
             </button>
           </div>
           <div id="bulk-bar-mount-${tableName}"></div>
           <div class="table-container" id="data-grid-container-${tableName}"></div>
+          <div id="pagination-footer-mount-${tableName}"></div>
         `;
             renderTarget.innerHTML = html;
 
@@ -173,6 +164,44 @@ export async function loadTableData(
                   },
                });
             }
+         }
+
+         // Render Bottom Pagination Footer (Supabase / DBeaver style)
+         const footerMount = document.getElementById(
+            `pagination-footer-mount-${tableName}`,
+         );
+         if (footerMount) {
+            renderPaginationFooter({
+               container: footerMount,
+               tableName,
+               totalRecords:
+                  typeof res.data.total === 'number' ? res.data.total : -1,
+               currentCount: rows.length,
+               onPageChange: (newPage) => {
+                  if (window.DataGrid) {
+                     window.DataGrid.pagination.offset =
+                        (newPage - 1) * window.DataGrid.pagination.limit;
+                  }
+                  loadTableData(
+                     tableName,
+                     btnElement,
+                     getFilterQuery(tableName),
+                     true,
+                  );
+               },
+               onLimitChange: (newLimit) => {
+                  if (window.DataGrid) {
+                     window.DataGrid.pagination.limit = newLimit;
+                     window.DataGrid.pagination.offset = 0;
+                  }
+                  loadTableData(
+                     tableName,
+                     btnElement,
+                     getFilterQuery(tableName),
+                     true,
+                  );
+               },
+            });
 
             const colVisMount = document.getElementById(
                `col-visibility-mount-${tableName}`,
@@ -183,26 +212,6 @@ export async function loadTableData(
                   tableName,
                   schema,
                });
-            }
-
-            const pageSizeSelect = document.getElementById(
-               `select-page-size-${tableName}`,
-            );
-            if (pageSizeSelect) {
-               pageSizeSelect.value = String(window.DataGrid.pagination.limit || 50);
-               pageSizeSelect.onchange = (e) => {
-                  const newLimit = parseInt(e.target.value, 10);
-                  if (newLimit && window.DataGrid) {
-                     window.DataGrid.pagination.limit = newLimit;
-                     window.DataGrid.pagination.offset = 0;
-                     loadTableData(
-                        tableName,
-                        btnElement,
-                        getFilterQuery(tableName),
-                        true,
-                     );
-                  }
-               };
             }
          }
 
@@ -292,7 +301,7 @@ export async function loadTableData(
             }
          } else {
             let tableHtml = `<table class="data-table" id="data-grid-table-${tableName}"><thead><tr>`;
-            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click to select all cells, right-click for table actions"><span class="corner-num">#</span><input type="checkbox" id="select-all-rows-${tableName}" class="row-select-checkbox corner-checkbox" title="Select all rows" /></th>`;
+            tableHtml += `<th class="row-header table-corner-header" id="th-row-header-${tableName}" title="Click to select all rows, right-click for table actions"><span class="corner-num">#</span></th>`;
             columns.forEach((col) => {
                const colSchema = schema.find((c) => c.name === col);
                let colIcon = '';
@@ -709,54 +718,22 @@ export async function loadTableData(
                   ]);
                };
 
-               // Left-click selects all cells in the table (unless checkbox was clicked)
+               // Left-click selects/toggles all rows in the table
                cornerHeader.addEventListener('click', (e) => {
-                  if (e.target.closest('.row-select-checkbox')) return;
                   e.preventDefault();
                   e.stopPropagation();
-                  selectAllGridCells(
-                     `data-grid-table-${tableName}`,
-                     window.DataGrid,
-                     columns.length,
-                  );
+                  const totalRows = (window.DataGrid?.rows || []).length;
+                  const currentSelected = (
+                     window.DataGrid?.selectedRowIndices || new Set()
+                  ).size;
+                  const allSelected =
+                     totalRows > 0 && currentSelected === totalRows;
+                  selectAllRows(tableName, !allSelected);
                });
 
                // Right-click opens the context menu
                cornerHeader.addEventListener('contextmenu', handleCornerMenu);
-
-               const selectAllCb = document.getElementById(
-                  `select-all-rows-${tableName}`,
-               );
-               if (selectAllCb) {
-                  selectAllCb.onclick = (e) => {
-                     e.stopPropagation();
-                     selectAllRows(tableName, selectAllCb.checked);
-                  };
-               }
             }
-
-            // Row Checkbox Selection Events
-            tableContainer.addEventListener('change', (e) => {
-               const cb = e.target.closest('.row-select-checkbox');
-               if (cb && cb.dataset.rowIdx !== undefined) {
-                  const rowIdx = parseInt(cb.dataset.rowIdx, 10);
-                  handleRowCheckboxChange(
-                     tableName,
-                     rowIdx,
-                     cb.checked,
-                     e.shiftKey || window.DataGrid?._lastShiftKey,
-                  );
-               }
-            });
-
-            tableContainer.addEventListener('click', (e) => {
-               const cb = e.target.closest('.row-select-checkbox');
-               if (cb && cb.dataset.rowIdx !== undefined) {
-                  if (window.DataGrid) {
-                     window.DataGrid._lastShiftKey = e.shiftKey;
-                  }
-               }
-            });
 
             // Cell Drawer Trigger Button Event
             tableContainer.addEventListener('click', (e) => {

@@ -20,12 +20,12 @@
    display: flex;
    align-items: center;
    border-bottom: 1px solid var(--color-border);
-   height: 42px;
+   height: 45px;
    flex-shrink: 0;
    background-color: var(--color-bg-secondary);
-   padding: 0 12px 0 6px;
+   padding: 0 10px 0 5px;
    box-sizing: border-box;
-   gap: 6px;
+   gap: 5px;
 }
 
 [data-theme='dark'] .toolbar {

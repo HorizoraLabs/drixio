@@ -21,20 +21,23 @@ export function clearRowSelection(tableName) {
    window.DataGrid.selectedRowIndices = new Set();
    window.DataGrid.lastSelectedRowIndex = null;
 
-   // Uncheck all row checkboxes
    const tableEl = document.getElementById(`data-grid-table-${tableName}`);
    if (tableEl) {
-      tableEl.querySelectorAll('.row-select-checkbox').forEach((cb) => {
-         cb.checked = false;
-         cb.closest('tr')?.classList.remove('row-selected');
+      tableEl.querySelectorAll('tbody tr.row-selected').forEach((tr) => {
+         tr.classList.remove('row-selected');
       });
-      const selectAll = document.getElementById(`select-all-rows-${tableName}`);
-      if (selectAll) {
-         selectAll.checked = false;
-         selectAll.indeterminate = false;
-      }
       const cornerTh = document.getElementById(`th-row-header-${tableName}`);
       cornerTh?.classList.remove('has-selection');
+   }
+
+   if (window.DataGrid.selection) {
+      window.DataGrid.selection.startRow = -1;
+      window.DataGrid.selection.endRow = -1;
+      window.DataGrid.selection.isRowSelection = false;
+      window.DataGrid.selection.isDraggingRow = false;
+      if (typeof window.renderSelection === 'function') {
+         window.renderSelection(`data-grid-table-${tableName}`, window.DataGrid);
+      }
    }
 
    updateBulkBar(tableName);
@@ -51,12 +54,11 @@ export function selectAllRows(tableName, shouldSelect) {
 
    const tableEl = document.getElementById(`data-grid-table-${tableName}`);
    if (tableEl) {
-      tableEl.querySelectorAll('.row-select-checkbox').forEach((cb) => {
-         cb.checked = shouldSelect;
+      tableEl.querySelectorAll('tbody tr:not(.ghost-row-tr)').forEach((tr, i) => {
          if (shouldSelect) {
-            cb.closest('tr')?.classList.add('row-selected');
+            tr.classList.add('row-selected');
          } else {
-            cb.closest('tr')?.classList.remove('row-selected');
+            tr.classList.remove('row-selected');
          }
       });
       const cornerTh = document.getElementById(`th-row-header-${tableName}`);
@@ -67,87 +69,47 @@ export function selectAllRows(tableName, shouldSelect) {
       }
    }
 
+   if (shouldSelect && rows.length > 0) {
+      const colsLength = window.DataGrid.columns?.length || 0;
+      window.DataGrid.selection = {
+         isDragging: false,
+         isDraggingRow: false,
+         isRowSelection: true,
+         startRow: 0,
+         endRow: rows.length - 1,
+         startCol: 0,
+         endCol: Math.max(0, colsLength - 1),
+      };
+   } else if (window.DataGrid.selection) {
+      window.DataGrid.selection.startRow = -1;
+      window.DataGrid.selection.endRow = -1;
+      window.DataGrid.selection.isRowSelection = false;
+      window.DataGrid.selection.isDraggingRow = false;
+   }
+
+   if (typeof window.renderSelection === 'function') {
+      window.renderSelection(`data-grid-table-${tableName}`, window.DataGrid);
+   }
+
    updateBulkBar(tableName);
 }
 
-export function handleRowCheckboxChange(
-   tableName,
-   rowIndex,
-   isChecked,
-   isShiftKey,
-) {
-   if (!window.DataGrid) return;
-   if (!window.DataGrid.selectedRowIndices) {
-      window.DataGrid.selectedRowIndices = new Set();
-   }
-
-   const indices = window.DataGrid.selectedRowIndices;
-   const lastIdx = window.DataGrid.lastSelectedRowIndex;
-
-   if (isShiftKey && lastIdx !== null && lastIdx !== undefined) {
-      // Range selection
-      const start = Math.min(lastIdx, rowIndex);
-      const end = Math.max(lastIdx, rowIndex);
-      const tableEl = document.getElementById(`data-grid-table-${tableName}`);
-
-      for (let i = start; i <= end; i++) {
-         if (isChecked) {
-            indices.add(i);
-         } else {
-            indices.delete(i);
-         }
-         const cb = tableEl?.querySelector(`.row-select-checkbox[data-row-idx="${i}"]`);
-         if (cb) {
-            cb.checked = isChecked;
-            if (isChecked) {
-               cb.closest('tr')?.classList.add('row-selected');
-            } else {
-               cb.closest('tr')?.classList.remove('row-selected');
-            }
-         }
-      }
-   } else {
-      if (isChecked) {
-         indices.add(rowIndex);
+export function syncRowSelectedClasses(tableName, selectedIndices) {
+   const tableEl = document.getElementById(`data-grid-table-${tableName}`);
+   if (!tableEl) return;
+   tableEl.querySelectorAll('tbody tr:not(.ghost-row-tr)').forEach((tr) => {
+      const rIdx = parseInt(tr.querySelector('td.row-header')?.dataset.rowIdx, 10);
+      if (!isNaN(rIdx) && selectedIndices.has(rIdx)) {
+         tr.classList.add('row-selected');
       } else {
-         indices.delete(rowIndex);
+         tr.classList.remove('row-selected');
       }
-      const tableEl = document.getElementById(`data-grid-table-${tableName}`);
-      const cb = tableEl?.querySelector(`.row-select-checkbox[data-row-idx="${rowIndex}"]`);
-      if (cb) {
-         cb.checked = isChecked;
-         if (isChecked) {
-            cb.closest('tr')?.classList.add('row-selected');
-         } else {
-            cb.closest('tr')?.classList.remove('row-selected');
-         }
-      }
-   }
-
-   window.DataGrid.lastSelectedRowIndex = rowIndex;
-   updateSelectAllCheckbox(tableName);
-   updateBulkBar(tableName);
-}
-
-function updateSelectAllCheckbox(tableName) {
-   const selectAll = document.getElementById(`select-all-rows-${tableName}`);
+   });
    const cornerTh = document.getElementById(`th-row-header-${tableName}`);
-   if (!selectAll || !window.DataGrid) return;
-   const totalRows = (window.DataGrid.rows || []).length;
-   const selectedCount = (window.DataGrid.selectedRowIndices || new Set()).size;
-
-   if (selectedCount === 0) {
-      selectAll.checked = false;
-      selectAll.indeterminate = false;
-      cornerTh?.classList.remove('has-selection');
-   } else if (selectedCount === totalRows) {
-      selectAll.checked = true;
-      selectAll.indeterminate = false;
+   if (selectedIndices.size > 0) {
       cornerTh?.classList.add('has-selection');
    } else {
-      selectAll.checked = false;
-      selectAll.indeterminate = true;
-      cornerTh?.classList.add('has-selection');
+      cornerTh?.classList.remove('has-selection');
    }
 }
 

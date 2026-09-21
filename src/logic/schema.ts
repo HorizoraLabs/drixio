@@ -536,7 +536,13 @@ export async function applySchemaChanges(
          currentName = edits.name;
       }
 
-      const hasOtherChanges = Object.keys(edits).some((k) => k !== 'name');
+      // Exclude isPk / fkTarget — those only affect constraints, not column definition.
+      // Including them here would cause a spurious TYPE cast (defaulting to 'TEXT')
+      // which breaks FK references when the column type is e.g. INTEGER.
+      const CONSTRAINT_ONLY_KEYS = new Set(['isPk', 'fkTarget']);
+      const hasOtherChanges = Object.keys(edits).some(
+         (k) => k !== 'name' && !CONSTRAINT_ONLY_KEYS.has(k),
+      );
       if (hasOtherChanges) {
          const quotedCol = dialect.quoteIdentifier(currentName);
          const type = edits.type || 'TEXT';
@@ -745,9 +751,58 @@ export async function applySchemaChanges(
                );
             }
          }
+      }
 
-         // Step 2: Drop PK (after FK is cleared)
-         if (pkChanged && !newIsPk) {
+      // ── Step 2 & 3: Table-level Primary Key Update (Supports Composite PK / PFK) ──
+      const origPkCols: string[] = [];
+      const targetPkCols: string[] = [];
+
+      for (const col of origSchemaForCascade) {
+         if (col.isPk) {
+            origPkCols.push(col.name);
+         }
+         if (pendingDeletes.includes(col.name)) continue;
+
+         const edits = pendingEdits[col.name];
+         const currentColName = edits?.name || col.name;
+         let colIsPk = col.isPk;
+         if (edits) {
+            const rawPk = (edits as any).isPk;
+            if (rawPk !== undefined) {
+               if (typeof rawPk === 'string') {
+                  colIsPk = rawPk.includes('PK') || rawPk.includes('PFK');
+               } else {
+                  colIsPk = !!rawPk;
+               }
+            }
+         }
+         if (colIsPk) {
+            targetPkCols.push(currentColName);
+         }
+      }
+
+      for (const ins of pendingInserts) {
+         if (!ins.name || ins.name.trim() === '') continue;
+         let insIsPk = false;
+         const rawInsPk = (ins as any).isPk;
+         if (rawInsPk !== undefined) {
+            if (typeof rawInsPk === 'string') {
+               insIsPk = rawInsPk.includes('PK') || rawInsPk.includes('PFK');
+            } else {
+               insIsPk = !!rawInsPk;
+            }
+         }
+         if (insIsPk) {
+            targetPkCols.push(ins.name.trim());
+         }
+      }
+
+      const pkChanged =
+         origPkCols.length !== targetPkCols.length ||
+         origPkCols.some((c, i) => c !== targetPkCols[i]);
+
+      if (pkChanged) {
+         if (origPkCols.length > 0) {
             if (dbType === 'postgres') {
                sqls.push(
                   `DO $$\nDECLARE v_pk text;\nBEGIN\n  SELECT constraint_name INTO v_pk\n  FROM information_schema.table_constraints\n  WHERE table_schema = current_schema()\n    AND table_name = '${esc(tableName)}'\n    AND constraint_type = 'PRIMARY KEY';\n  IF v_pk IS NOT NULL THEN\n    EXECUTE format('ALTER TABLE ${quotedTable} DROP CONSTRAINT %I', v_pk);\n  END IF;\nEND$$;`,
@@ -761,14 +816,58 @@ export async function applySchemaChanges(
             }
          }
 
-         // Step 3: Add PK
-         if (pkChanged && newIsPk) {
+         if (targetPkCols.length > 0) {
+            const pkColsQuoted = targetPkCols
+               .map((c) => dialect.quoteIdentifier(c))
+               .join(', ');
             sqls.push(
-               `ALTER TABLE ${quotedTable} ADD PRIMARY KEY (${quotedCurrentCol});`,
+               `ALTER TABLE ${quotedTable} ADD PRIMARY KEY (${pkColsQuoted});`,
             );
          }
+      }
 
-         // Step 4: Add new FK constraint
+      // ── Step 4: Add new FK constraints ──
+      for (const [editColName, edits] of Object.entries(pendingEdits)) {
+         const origCol = origColMap.get(editColName);
+         if (!origCol) continue;
+
+         const currentColName = (edits as any).name || editColName;
+         const quotedCurrentCol = dialect.quoteIdentifier(currentColName);
+
+         let newFkTarget: ColumnSchema['fkTarget'] = origCol.fkTarget;
+         const rawPk = (edits as any).isPk;
+         if ((edits as any).fkTarget !== undefined) {
+            newFkTarget = (edits as any).fkTarget ?? undefined;
+         } else if (rawPk !== undefined && typeof rawPk === 'string') {
+            const fkStrMatch = rawPk.match(
+               /(?:FK|PFK)(?:\s*\(|:\s*|\s*→\s*|\s*->\s*)([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)(?:\s*\((CASCADE|SET NULL|RESTRICT|NO ACTION)\))?/i,
+            );
+            if (fkStrMatch) {
+               const act = fkStrMatch[3]
+                  ? fkStrMatch[3].toUpperCase()
+                  : undefined;
+               newFkTarget = {
+                  table: fkStrMatch[1],
+                  column: fkStrMatch[2],
+                  onDelete:
+                     act && act !== 'NO ACTION'
+                        ? act
+                        : origCol.fkTarget?.onDelete,
+                  onUpdate: origCol.fkTarget?.onUpdate,
+               };
+            } else if (rawPk === '' || rawPk === 'PK' || rawPk === '-') {
+               newFkTarget = undefined;
+            }
+         }
+
+         const origFkSig = origCol.fkTarget
+            ? `${origCol.fkTarget.table}.${origCol.fkTarget.column}|${origCol.fkTarget.onDelete ?? ''}|${origCol.fkTarget.onUpdate ?? ''}`
+            : '';
+         const newFkSig = newFkTarget
+            ? `${newFkTarget.table}.${newFkTarget.column}|${newFkTarget.onDelete ?? ''}|${newFkTarget.onUpdate ?? ''}`
+            : '';
+         const fkChanged = origFkSig !== newFkSig;
+
          if (fkChanged && newFkTarget?.table && newFkTarget?.column) {
             const newCon = dialect.quoteIdentifier(
                `fk_${tableName}_${currentColName}_${Date.now()}`,

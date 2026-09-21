@@ -424,8 +424,10 @@ fetchConfig().then((res) => {
 
       const envBadge = document.getElementById('env-badge');
       if (envBadge) {
+         envBadge.title =
+            res.data.badgeLabel;
          envBadge.textContent =
-            res.data.badgeLabel || (res.data.isRemote ? 'REMOTE' : 'LOCAL');
+            res.data.isRemote ? 'REMOTE' : 'LOCAL';
          envBadge.className = `env-badge ${res.data.isRemote ? 'remote' : 'local'}`;
       }
 

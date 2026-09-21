@@ -1,3 +1,5 @@
+import { updateBulkBar, syncRowSelectedClasses } from '../data/bulkBar.js';
+
 export function renderSelection(tableId, gridState) {
    document
       .querySelectorAll(
@@ -49,6 +51,7 @@ export function renderSelection(tableId, gridState) {
       });
    }
 }
+window.renderSelection = renderSelection;
 
 export function selectAllGridCells(tableId, gridState, columnsLength) {
    const rowElements = document.querySelectorAll(
@@ -83,6 +86,12 @@ export function bindCellSelection(
          const r = parseInt(rowHeader.dataset.rowIdx);
          if (isNaN(r)) return;
 
+         const tableName = tableId.replace(/^data-grid-table-/, '');
+         if (!window.DataGrid) window.DataGrid = {};
+         if (!window.DataGrid.selectedRowIndices) {
+            window.DataGrid.selectedRowIndices = new Set();
+         }
+
          if (
             e.shiftKey &&
             gridState.selection &&
@@ -95,7 +104,31 @@ export function bindCellSelection(
             gridState.selection.endRow = r;
             gridState.selection.startCol = 0;
             gridState.selection.endCol = columnsLength - 1;
+
+            const minR = Math.min(gridState.selection.startRow, r);
+            const maxR = Math.max(gridState.selection.startRow, r);
+            window.DataGrid.selectedRowIndices = new Set();
+            for (let i = minR; i <= maxR; i++) {
+               window.DataGrid.selectedRowIndices.add(i);
+            }
+         } else if (e.ctrlKey || e.metaKey) {
+            // Toggle row in multi-selection with Ctrl/Cmd+Click
+            if (window.DataGrid.selectedRowIndices.has(r)) {
+               window.DataGrid.selectedRowIndices.delete(r);
+            } else {
+               window.DataGrid.selectedRowIndices.add(r);
+            }
+            gridState.selection = {
+               isDragging: false,
+               isDraggingRow: false,
+               isRowSelection: true,
+               startRow: r,
+               endRow: r,
+               startCol: 0,
+               endCol: columnsLength - 1,
+            };
          } else {
+            // Click single row
             gridState.selection = {
                isDragging: false,
                isDraggingRow: true,
@@ -105,13 +138,24 @@ export function bindCellSelection(
                startCol: 0,
                endCol: columnsLength - 1,
             };
+            window.DataGrid.selectedRowIndices = new Set([r]);
          }
+
          renderSelection(tableId, gridState);
+         syncRowSelectedClasses(tableName, window.DataGrid.selectedRowIndices);
+         updateBulkBar(tableName);
          return;
       }
 
       const td = e.target.closest('td.data-cell');
       if (!td) return;
+
+      const tableName = tableId.replace(/^data-grid-table-/, '');
+      if (window.DataGrid?.selectedRowIndices?.size > 0) {
+         window.DataGrid.selectedRowIndices = new Set();
+         syncRowSelectedClasses(tableName, window.DataGrid.selectedRowIndices);
+         updateBulkBar(tableName);
+      }
 
       const r = parseInt(td.dataset.rowIdx);
       const c = parseInt(td.dataset.colIdx);
@@ -142,15 +186,28 @@ export function bindCellSelection(
    });
 
    tableContainer.addEventListener('mouseover', (e) => {
-      if (gridState.selection.isDraggingRow) {
+      if (gridState.selection?.isDraggingRow) {
          const rowHeader = e.target.closest('td.row-header');
          if (!rowHeader) return;
-         gridState.selection.endRow = parseInt(rowHeader.dataset.rowIdx);
+         const r = parseInt(rowHeader.dataset.rowIdx);
+         if (isNaN(r)) return;
+         gridState.selection.endRow = r;
+
+         const minR = Math.min(gridState.selection.startRow, r);
+         const maxR = Math.max(gridState.selection.startRow, r);
+         window.DataGrid.selectedRowIndices = new Set();
+         for (let i = minR; i <= maxR; i++) {
+            window.DataGrid.selectedRowIndices.add(i);
+         }
+
          renderSelection(tableId, gridState);
+         const tableName = tableId.replace(/^data-grid-table-/, '');
+         syncRowSelectedClasses(tableName, window.DataGrid.selectedRowIndices);
+         updateBulkBar(tableName);
          return;
       }
 
-      if (!gridState.selection.isDragging) return;
+      if (!gridState.selection?.isDragging) return;
       const td = e.target.closest('td.data-cell');
       if (!td) return;
       gridState.selection.endRow = parseInt(td.dataset.rowIdx);

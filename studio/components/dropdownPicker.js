@@ -1,6 +1,7 @@
 /**
  * Global Reusable Searchable Dropdown Picker Popover Component
  * Provides searchable, categorized option selection with keyboard navigation
+ * Supports Single-Select (menu/picker) and Multi-Select (checkbox list) modes
  */
 
 let activeDropdownPicker = null;
@@ -18,13 +19,28 @@ export function openDropdownPicker({
    searchable = true,
    allowCustom = false,
    emptyText = 'No matching options found',
+   multiple = false,
+   onToggle,
+   quickActions = [],
 }) {
+   // Toggle behavior: if clicking the same anchor while open, close it and return
+   if (activeDropdownPicker && activeDropdownPicker.anchorEl === anchorEl) {
+      closeDropdownPicker();
+      return;
+   }
    closeDropdownPicker();
 
    // Normalize items array
    const normalizedItems = items.map((it) => {
       if (typeof it === 'string' || typeof it === 'number') {
-         return { name: String(it), value: String(it), desc: '', icon: '' };
+         return {
+            name: String(it),
+            value: String(it),
+            desc: '',
+            icon: '',
+            checked: false,
+            disabled: false,
+         };
       }
       return {
          name: String(it.name ?? it.value ?? ''),
@@ -35,13 +51,34 @@ export function openDropdownPicker({
          badge: it.badge || '',
          badgeClass: it.badgeClass || '',
          group: it.group || '',
+         checked: !!it.checked,
+         disabled: !!it.disabled,
+         data: it.data,
       };
    });
 
    const popover = document.createElement('div');
-   popover.className = 'dropdown-picker-popover';
+   popover.className = `dropdown-picker-popover ${multiple ? 'is-multiple' : ''}`;
    if (width)
       popover.style.width = typeof width === 'number' ? `${width}px` : width;
+
+   const escapeHtml = (str) =>
+      String(str)
+         .replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;')
+         .replace(/"/g, '&quot;');
+
+   let quickActionsHtml = '';
+   if (quickActions && quickActions.length > 0) {
+      const actionsBtns = quickActions
+         .map(
+            (act, idx) =>
+               `<button type="button" class="dropdown-picker-action-btn" data-action-idx="${idx}">${escapeHtml(act.label)}</button>`,
+         )
+         .join('<span class="dropdown-picker-action-dot">&middot;</span>');
+      quickActionsHtml = `<div class="dropdown-picker-quick-actions">${actionsBtns}</div>`;
+   }
 
    popover.innerHTML = /* html */ `
       ${
@@ -59,6 +96,7 @@ export function openDropdownPicker({
       </div>`
             : ''
       }
+      ${quickActionsHtml}
       <div class="dropdown-picker-list-wrap" style="max-height: ${maxHeight}px;"></div>
    `;
 
@@ -69,13 +107,6 @@ export function openDropdownPicker({
 
    let activeIndex = -1;
    let flatMatching = [];
-
-   const escapeHtml = (str) =>
-      String(str)
-         .replace(/&/g, '&amp;')
-         .replace(/</g, '&lt;')
-         .replace(/>/g, '&gt;')
-         .replace(/"/g, '&quot;');
 
    const highlightMatch = (text, q) => {
       if (!q) return escapeHtml(text);
@@ -88,6 +119,50 @@ export function openDropdownPicker({
       return `${before}<mark class="dropdown-picker-mark">${match}</mark>${after}`;
    };
 
+   // Position calculation with dynamic height and viewport bounds checking
+   const positionPopover = () => {
+      if (!anchorEl || !popover.parentNode) return;
+      const rect = anchorEl.getBoundingClientRect();
+      const popoverWidth = popover.offsetWidth || (width && typeof width === 'number' ? width : 320);
+      const popoverHeight = popover.offsetHeight || (maxHeight + (searchable ? 44 : 0) + (title ? 28 : 0));
+      const pad = 8;
+
+      let top = rect.bottom + 4;
+      let left = rect.left;
+
+      // If overflowing bottom of viewport, flip upwards above anchor
+      if (top + popoverHeight > window.innerHeight - pad) {
+         const flippedTop = rect.top - popoverHeight - 4;
+         if (flippedTop >= pad) {
+            top = flippedTop;
+         } else {
+            // Not enough space above or below, clamp within viewport
+            top = Math.max(pad, window.innerHeight - popoverHeight - pad);
+         }
+      }
+
+      if (left + popoverWidth > window.innerWidth - pad) {
+         left = Math.max(pad, window.innerWidth - popoverWidth - pad);
+      }
+
+      popover.style.top = `${top}px`;
+      popover.style.left = `${left}px`;
+   };
+
+   const toggleItem = (itemObj) => {
+      if (itemObj.disabled) return;
+      itemObj.checked = !itemObj.checked;
+      renderList(searchInput ? searchInput.value : '');
+      if (onToggle) {
+         onToggle(itemObj, itemObj.checked, normalizedItems);
+      }
+   };
+
+   const selectItem = (itemObj) => {
+      closeDropdownPicker();
+      if (onSelect) onSelect(itemObj.value, itemObj);
+   };
+
    const renderList = (filter = '') => {
       const q = filter.trim().toLowerCase();
       flatMatching = normalizedItems.filter(
@@ -98,7 +173,7 @@ export function openDropdownPicker({
       );
 
       if (flatMatching.length === 0) {
-         if (allowCustom && q) {
+         if (allowCustom && q && !multiple) {
             flatMatching = [
                {
                   name: filter.trim(),
@@ -114,6 +189,7 @@ export function openDropdownPicker({
                </div>
             `;
             activeIndex = -1;
+            positionPopover();
             return;
          }
       }
@@ -148,6 +224,14 @@ export function openDropdownPicker({
          }
 
          const isActive = idx === activeIndex;
+         const isDisabled = !!it.disabled;
+         const isChecked = !!it.checked;
+
+         let checkboxHtml = '';
+         if (multiple) {
+            checkboxHtml = `<input type="checkbox" class="dropdown-picker-checkbox" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} tabindex="-1" />`;
+         }
+
          let iconHtml = '';
          if (it.icon) {
             iconHtml =
@@ -167,8 +251,9 @@ export function openDropdownPicker({
          }
 
          html += /* html */ `
-            <div class="dropdown-picker-item ${isActive ? 'active' : ''}" data-index="${idx}">
+            <div class="dropdown-picker-item ${isActive ? 'active' : ''} ${isDisabled ? 'is-disabled' : ''}" data-index="${idx}">
                <div class="dropdown-picker-item-left">
+                  ${checkboxHtml}
                   ${iconHtml}
                   <span class="dropdown-picker-item-name">${highlightMatch(it.name, q)}</span>
                </div>
@@ -192,12 +277,17 @@ export function openDropdownPicker({
             ev.stopPropagation();
             const idx = parseInt(itemEl.dataset.index, 10);
             if (flatMatching[idx]) {
-               selectItem(flatMatching[idx]);
+               if (multiple) {
+                  toggleItem(flatMatching[idx]);
+               } else {
+                  selectItem(flatMatching[idx]);
+               }
             }
          });
       });
 
       scrollActiveIntoView();
+      positionPopover();
    };
 
    const updateActiveItem = () => {
@@ -218,37 +308,24 @@ export function openDropdownPicker({
       }
    };
 
-   const selectItem = (itemObj) => {
-      closeDropdownPicker();
-      if (onSelect) onSelect(itemObj.value, itemObj);
-   };
+   // Bind Quick Actions
+   if (quickActions && quickActions.length > 0) {
+      popover.querySelectorAll('.dropdown-picker-action-btn').forEach((btn) => {
+         btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const actIdx = parseInt(btn.dataset.actionIdx, 10);
+            const act = quickActions[actIdx];
+            if (act && act.onClick) {
+               act.onClick(normalizedItems, () => {
+                  renderList(searchInput ? searchInput.value : '');
+               });
+            }
+         });
+      });
+   }
 
-   // Position calculation with viewport bounds checking
-   const positionPopover = () => {
-      if (!anchorEl) return;
-      const rect = anchorEl.getBoundingClientRect();
-      const popoverWidth = width && typeof width === 'number' ? width : 320;
-      const popoverHeight =
-         maxHeight + (searchable ? 50 : 0) + (title ? 30 : 0);
-      const pad = 8;
-
-      let top = rect.bottom + 4;
-      let left = rect.left;
-
-      if (top + popoverHeight > window.innerHeight - pad) {
-         top = Math.max(pad, rect.top - popoverHeight - 4);
-      }
-
-      if (left + popoverWidth > window.innerWidth - pad) {
-         left = Math.max(pad, window.innerWidth - popoverWidth - pad);
-      }
-
-      popover.style.top = `${top}px`;
-      popover.style.left = `${left}px`;
-   };
-
-   positionPopover();
    renderList();
+   positionPopover();
 
    // Event listeners
    if (searchInput) {
@@ -277,8 +354,12 @@ export function openDropdownPicker({
          } else if (e.key === 'Enter') {
             e.preventDefault();
             if (activeIndex >= 0 && flatMatching[activeIndex]) {
-               selectItem(flatMatching[activeIndex]);
-            } else if (allowCustom && searchInput.value.trim()) {
+               if (multiple) {
+                  toggleItem(flatMatching[activeIndex]);
+               } else {
+                  selectItem(flatMatching[activeIndex]);
+               }
+            } else if (!multiple && allowCustom && searchInput.value.trim()) {
                selectItem({
                   value: searchInput.value.trim(),
                   name: searchInput.value.trim(),
@@ -312,7 +393,11 @@ export function openDropdownPicker({
          } else if (e.key === 'Enter') {
             e.preventDefault();
             if (activeIndex >= 0 && flatMatching[activeIndex]) {
-               selectItem(flatMatching[activeIndex]);
+               if (multiple) {
+                  toggleItem(flatMatching[activeIndex]);
+               } else {
+                  selectItem(flatMatching[activeIndex]);
+               }
             }
          } else if (e.key === 'Escape') {
             e.preventDefault();
@@ -329,14 +414,21 @@ export function openDropdownPicker({
       }
    };
 
+   const onResize = () => {
+      positionPopover();
+   };
+
    setTimeout(() => {
       document.addEventListener('click', onDocClick);
+      window.addEventListener('resize', onResize);
    }, 50);
 
    activeDropdownPicker = {
       popover,
+      anchorEl,
       cleanup: () => {
          document.removeEventListener('click', onDocClick);
+         window.removeEventListener('resize', onResize);
          if (popover.parentNode) popover.remove();
          activeDropdownPicker = null;
       },

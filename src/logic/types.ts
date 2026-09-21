@@ -141,6 +141,14 @@ export interface DBAdapter {
    renameTable?(oldName: string, newName: string): Promise<void>;
    /** Discover soft-deleted trash tables. */
    getTrashTables?(): Promise<string[]>;
+   /**
+    * Execute a list of SQL statements atomically inside a single transaction.
+    * Adapters that manage a connection pool (e.g. Postgres) should check out a
+    * dedicated client so that BEGIN / statements / COMMIT all run on the same
+    * connection.  Adapters that don't implement this fall back to the sequential
+    * executeSql loop in the caller.
+    */
+   executeTransaction?(sqls: string[]): Promise<void>;
 }
 
 export interface DBConfig {

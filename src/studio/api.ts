@@ -837,14 +837,32 @@ export function registerApiRoutes(app: Hono, dbConfig: DBConfig) {
       }
 
       try {
-         const data = await getAdapter().getData(
+         const adapter = getAdapter();
+         const data = await adapter.getData(
             tableName,
             limit,
             offset,
             whereClause,
             orderBy,
          );
-         return c.json({ success: true, data });
+
+         let total = -1;
+         try {
+            const quotedTable = adapter.quoteTable
+               ? adapter.quoteTable(tableName)
+               : adapter.quoteIdentifier(tableName);
+            const countSql = `SELECT COUNT(*) as count FROM ${quotedTable}${whereClause ? ` WHERE ${whereClause}` : ''};`;
+            const countRes = await adapter.query(countSql);
+            const rawCount =
+               countRes.rows?.[0]?.count ?? countRes.rows?.[0]?.COUNT;
+            if (rawCount !== undefined && rawCount !== null) {
+               total = parseInt(String(rawCount), 10);
+            }
+         } catch {
+            // Ignore count query failure fallback
+         }
+
+         return c.json({ success: true, data: { ...data, total } });
       } catch (e: any) {
          return c.json({ success: false, error: e.message }, 500);
       }

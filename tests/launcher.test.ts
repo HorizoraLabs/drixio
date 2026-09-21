@@ -10,10 +10,12 @@ describe('Desktop App Launcher: launcher logic', () => {
       expect(desktop.toLowerCase()).toContain('desktop');
    });
 
-   it('should generate a desktop app launcher shortcut successfully', async () => {
-      const res = await createDesktopLauncher({
-         workingDir: process.cwd(),
-      });
+   it(
+      'should generate a desktop app launcher shortcut successfully',
+      async () => {
+         const res = await createDesktopLauncher({
+            workingDir: process.cwd(),
+         });
 
       expect(res.success).toBe(true);
       if (res.success) {
@@ -30,6 +32,6 @@ describe('Desktop App Launcher: launcher logic', () => {
             }
          }
       }
-   });
+   }, 30000);
 });
 

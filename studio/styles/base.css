@@ -117,11 +117,12 @@
 .refresh-btn .material-symbols-outlined {
    font-size: 18px;
    margin-bottom: 0.5px;
-   color: #10b981;
-   transition: transform 0.25s ease;
+   color: var(--color-text-secondary);
+   transition: transform 0.25s ease, color 0.15s ease;
 }
 
 .refresh-btn:hover .material-symbols-outlined {
+   color: var(--color-text);
    transform: rotate(60deg);
 }
 

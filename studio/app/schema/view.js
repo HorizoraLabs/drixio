@@ -85,7 +85,7 @@ export async function loadTableSchema(tableName, btnElement, container = null) {
             <div class="schema-autocomplete-popover hidden" id="schema-search-popover-${tableName}"></div>
           </div>
           <button id="btn-refresh-schema-${tableName}" class="refresh-btn" title="Refresh Schema (F5)">
-            <span class="material-symbols-outlined" style="color: #10b981;">refresh</span>
+            <span class="material-symbols-outlined">refresh</span>
           </button>
         </div>
         <div id="schema-grid-container-${tableName}" class="table-container"></div>

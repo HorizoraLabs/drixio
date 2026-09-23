@@ -288,8 +288,8 @@
    display: flex;
    align-items: center;
    justify-content: space-between;
-   padding: 0 14px;
-   height: 42px;
+   padding: 10px;
+   height: 51px;
    box-sizing: border-box;
    border-top: 1px solid var(--color-border);
    background-color: var(--color-bg-primary);
@@ -302,13 +302,13 @@
 }
 
 .console-sidebar-clear-btn {
-   height: 24px;
-   padding: 0 8px;
-   border-radius: 5px;
+   height: 30px;
+   padding: 0 10px;
+   border-radius: 8px;
    border: 1px solid var(--color-border);
    background-color: var(--color-bg-secondary);
    color: var(--color-text-secondary);
-   font-size: 11px;
+   font-size: 10px;
    cursor: pointer;
    display: inline-flex;
    align-items: center;

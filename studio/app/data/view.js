@@ -136,7 +136,7 @@ export async function loadTableData(
             ${backBtnHtml}
             <div id="filter-bar-mount-${tableName}" class="flex-1" style="height: 100%; display: flex; align-items: center; min-width: 0;"></div>
             <button id="btn-refresh-data-${tableName}" class="refresh-btn" title="Refresh Data (F5)">
-              <span class="material-symbols-outlined" style="color: #10b981;">refresh</span>
+              <span class="material-symbols-outlined">refresh</span>
             </button>
           </div>
           <div id="bulk-bar-mount-${tableName}"></div>
